@@ -1,0 +1,16 @@
+Token: sk_495…ec45 (61 belgi)
+[1] Hujjat sahifasi: status 0, 58 belgi
+    tavsif urinish: https://connect.ainur.app/docs/api-docs.json → 0
+    tavsif urinish: https://connect.ainur.app/docs?api-docs.json → 200
+[2] Tavsif saqlandi: ainur_api.json (https://connect.ainur.app/docs?api-docs.json)
+    Metodlar: /company, /company/settings, /company/statistic, /customers, /customers/{customer}, /documents/changes, /documents/purchases, /documents/return, /documents/sales, /product, /product/deleted, /product/ext-categories, /product/ext-tags, /product/updated, /product/{product}, /sales, /stores, /stores/{store}
+[3] Savdo so'rovi: https://connect.ainur.app/api/v4/documents/sales  parametrlar: {'limit': '50', 'time_start': '2026-09-22', 'time_end': '2026-09-25', 'to': '2026-09-25', 'from': '2026-09-22', 'contractors[]': '2026-09-25', 'access_stores[]': '2026-09-25', 'include_inventory_movements': '2026-09-25'}
+    auth ['Authorization'] → status 401
+       javob: {"status":false,"error":"Missing required header: X-AINUR-API-Access-Token"}
+    auth ['X-API-KEY'] → status 401
+       javob: {"status":false,"error":"Missing required header: X-AINUR-API-Access-Token"}
+    auth ['Authorization'] → status 401
+       javob: {"status":false,"error":"Missing required header: X-AINUR-API-Access-Token"}
+    auth ['X-Auth-Token'] → status 401
+       javob: {"status":false,"error":"Missing required header: X-AINUR-API-Access-Token"}
+!! Savdo ma'lumoti olinmadi. Token saqlanganini (Saqlash tugmasi) tekshiring.

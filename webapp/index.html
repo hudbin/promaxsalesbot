@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>PROMAX savdo</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --qogoz:#EEF1EE; --oq:#fff; --siyoh:#14251C; --suv:#5E6F66;
+  --chiziq:#DAE0DC; --yashil:#1F6F4A; --yashil-och:#E7F1EB;
+  --qizil:#A8481F; --sariq:#8A6B12; --sariq-och:#FBF3DC;
+  --r:14px; --pastki:calc(66px + env(safe-area-inset-bottom,0px));
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--qogoz);color:var(--siyoh);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
+body{padding-bottom:var(--pastki);overscroll-behavior-y:contain}
+.son{font-variant-numeric:tabular-nums}
+header{position:sticky;top:0;z-index:20;background:var(--qogoz);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px;border-bottom:1px solid var(--chiziq)}
+.qator{display:flex;gap:8px;align-items:center}
+select,input,textarea{font:inherit;color:inherit;background:var(--oq);
+  border:1px solid var(--chiziq);border-radius:10px;padding:11px 12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--yashil);outline-offset:-1px;border-color:transparent}
+.yangila{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--chiziq);background:var(--oq);
+  border-radius:10px;font-size:18px;line-height:1}
+main{padding:12px 14px 20px}
+.varaq{display:none} .varaq.faol{display:block}
+
+/* Tovar ro'yxati */
+.tovar{display:flex;gap:12px;align-items:center;background:var(--oq);border:1px solid var(--chiziq);
+  border-radius:var(--r);padding:12px;margin-bottom:8px}
+.tovar .ust{flex:1;min-width:0}
+.tovar b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tovar small{color:var(--suv);font-size:13px}
+.yoq{color:var(--qizil)}
+.qosh{flex:0 0 auto;width:46px;height:46px;border-radius:12px;border:none;background:var(--yashil);
+  color:#fff;font-size:24px;line-height:1}
+.qosh:disabled{background:var(--chiziq);color:var(--suv)}
+
+/* Savat */
+.savat{background:var(--oq);border:1px solid var(--chiziq);border-radius:var(--r);padding:12px;margin-bottom:8px}
+.savat .sarl{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:10px}
+.savat .sarl b{font-weight:600}
+.ochir{border:none;background:none;color:var(--qizil);font-size:15px;padding:0}
+.maydon{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}
+.maydon label{color:var(--suv);font-size:14px}
+.qadam{display:flex;gap:6px}
+.qadam button{width:44px;height:44px;border:1px solid var(--chiziq);background:var(--qogoz);
+  border-radius:10px;font-size:20px;line-height:1}
+.qadam input{text-align:center}
+.jamiq{margin-top:10px;text-align:right;font-weight:600}
+
+/* Pastki panel */
+.panel{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--oq);
+  border-top:1px solid var(--chiziq);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+.menyu{display:flex;gap:6px}
+.menyu button{flex:1;border:none;background:none;color:var(--suv);font-size:13px;padding:6px 2px;border-radius:10px}
+.menyu button .bel{display:block;font-size:20px;line-height:1.2}
+.menyu button.faol{color:var(--yashil);background:var(--yashil-och);font-weight:600}
+.asosiy{width:100%;border:none;background:var(--yashil);color:#fff;font-size:17px;font-weight:600;
+  padding:15px;border-radius:12px;margin-bottom:8px}
+.asosiy:disabled{background:var(--chiziq);color:var(--suv)}
+.asosiy.qizil{background:var(--qizil)}
+
+/* Modal */
+.parda{position:fixed;inset:0;z-index:40;background:rgba(20,37,28,.45);display:none;align-items:flex-end}
+.parda.ochiq{display:flex}
+.oyna{background:var(--qogoz);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
+  padding:16px 14px calc(16px + env(safe-area-inset-bottom,0px))}
+.oyna h2{margin:0 0 12px;font-size:19px}
+.tur{display:flex;gap:8px;margin:4px 0 12px}
+.tur button{flex:1;padding:12px 4px;border:1px solid var(--chiziq);background:var(--oq);
+  border-radius:10px;font-size:14px}
+.tur button.faol{border-color:var(--yashil);background:var(--yashil-och);color:var(--yashil);font-weight:600}
+.hisob{background:var(--oq);border:1px solid var(--chiziq);border-radius:var(--r);padding:12px;margin:12px 0}
+.hisob div{display:flex;justify-content:space-between;padding:3px 0}
+.hisob .katta{font-size:18px;font-weight:600;border-top:1px solid var(--chiziq);margin-top:6px;padding-top:8px}
+.qarzga{color:var(--qizil);font-weight:600}
+.tanla{width:100%;text-align:left;background:var(--oq);border:1px solid var(--chiziq);
+  border-radius:10px;padding:13px 12px;font:inherit;color:inherit}
+.tanla b{font-weight:600}
+.tanla small{color:var(--suv)}
+.eslatma{background:var(--sariq-och);border:1px solid #E8D9A8;color:var(--sariq);
+  border-radius:12px;padding:11px 12px;font-size:14px;margin-bottom:12px}
+.bosh{text-align:center;color:var(--suv);padding:40px 20px}
+.xato{background:#FBE9E2;border:1px solid #F0C4B2;color:var(--qizil);border-radius:12px;
+  padding:12px;margin-bottom:12px;font-size:15px}
+.mayda{color:var(--suv);font-size:13px;margin:2px 0 10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="qator" id="bosh-panel">
+    <select id="dokon"></select>
+    <button class="yangila" id="yangila" title="Qoldiqni yangilash">⟳</button>
+  </div>
+  <div class="qator" style="margin-top:8px" id="qidir-panel">
+    <input id="qidir" placeholder="Model nomi yoki shtrix-kod" autocomplete="off">
+  </div>
+</header>
+
+<main>
+  <div id="xabar"></div>
+
+  <section class="varaq faol" id="v-sotuv">
+    <div id="savat"></div>
+    <div id="tovarlar"><div class="bosh">Yuklanmoqda…</div></div>
+  </section>
+
+  <section class="varaq" id="v-qarz">
+    <div class="eslatma" id="q-eslatma"></div>
+    <label class="mayda">Mijoz</label>
+    <button class="tanla" id="q-mijoz"></button>
+    <div class="mayda" id="q-qarz"></div>
+    <label class="mayda">Summa</label>
+    <input id="q-summa" inputmode="numeric" placeholder="masalan 5 000 000">
+    <label class="mayda">To'lov turi</label>
+    <div class="tur" id="q-tur"></div>
+    <button class="asosiy" id="q-saqla">Qarz to'lovini qayd qilish</button>
+  </section>
+
+  <section class="varaq" id="v-ombor">
+    <div class="mayda" id="ombor-holat"></div>
+    <div id="ombor"></div>
+  </section>
+</main>
+
+<div class="panel">
+  <button class="asosiy" id="yakunla" style="display:none">Sotuvni yakunlash</button>
+  <div class="menyu">
+    <button class="faol" data-varaq="sotuv"><span class="bel">🛒</span>Sotuv</button>
+    <button data-varaq="qarz"><span class="bel">💳</span>Qarz to'lovi</button>
+    <button data-varaq="ombor"><span class="bel">📦</span>Ombor</button>
+  </div>
+</div>
+
+<div class="parda" id="parda"><div class="oyna" id="oyna"></div></div>
+
+<script>
+const TG = window.Telegram?.WebApp;
+const S = {tovarlar:[], savat:[], mijozlar:[], turlar:[], dokon:"", valyuta:"so'm",
+           varaq:"sotuv", dokonNomlari:{}};
+const $ = s => document.querySelector(s);
+const KALIT = new URLSearchParams(location.search).get("k") || "";
+const pul = n => Math.round(n||0).toLocaleString("ru-RU").replace(/\u00a0/g," ");
+const son = t => { const v = parseFloat(String(t).replace(/[^\d.]/g,"")); return isNaN(v)?0:v; };
+const esc = t => String(t??"").replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+async function api(yol, tan){
+  const j = {headers:{"X-Init-Data": TG?.initData || "", "X-App-Key": KALIT}};
+  if(tan){ j.method="POST"; j.headers["Content-Type"]="application/json"; j.body=JSON.stringify(tan); }
+  let r;
+  try{ r = await fetch(yol, j); }
+  catch(e){ throw new Error("Internet uzildi yoki bot o'chiq (" + e.message + ")"); }
+  const matn = await r.text();
+  let d = null;
+  try{ d = JSON.parse(matn); }catch(e){}
+  if(!d) throw new Error(`Server javobi tushunarsiz (${r.status}): ` + matn.slice(0,150));
+  if(!r.ok) throw new Error(d.xato || ("Xato " + r.status));
+  return d;
+}
+function xabar(matn){
+  $("#xabar").innerHTML = matn ? `<div class="xato">${esc(matn)}</div>` : "";
+  if(matn) window.scrollTo({top:0, behavior:"smooth"});
+}
+function tebrat(x){ try{ TG?.HapticFeedback?.notificationOccurred(x); }catch(e){} }
+
+/* ---- Varaqlar ---- */
+document.querySelectorAll(".menyu button").forEach(b => b.onclick = () => {
+  S.varaq = b.dataset.varaq;
+  document.querySelectorAll(".menyu button").forEach(x => x.classList.toggle("faol", x===b));
+  document.querySelectorAll(".varaq").forEach(v => v.classList.toggle("faol", v.id==="v-"+S.varaq));
+  $("#qidir-panel").style.display = S.varaq==="qarz" ? "none" : "flex";
+  $("#qidir").placeholder = S.varaq==="ombor" ? "Omborda qidirish" : "Model nomi yoki shtrix-kod";
+  if(S.varaq==="ombor") omborChiz();
+  yakunlaKorsat();
+});
+
+/* ---- Tovarlar ---- */
+function qoldiqMatn(t){
+  const shu = t.qoldiq || 0;
+  const boshqa = Object.entries(t.qoldiqlar || {})
+    .filter(([k,v]) => k !== S.dokon && v > 0)
+    .map(([k,v]) => `${esc(S.dokonNomlari[k] || "boshqa")} ${pul(v)}`);
+  if(shu > 0) return `<span class="son">qoldiq ${pul(shu)}</span>` +
+    (boshqa.length ? ` <span style="color:var(--suv)">· ${boshqa.join(" · ")}</span>` : "");
+  if(boshqa.length) return `<span class="yoq">shu do'konda yo'q</span>
+    <span style="color:var(--suv)">· ${boshqa.join(" · ")}</span>`;
+  return `<span class="yoq">qoldiq yo'q</span>`;
+}
+
+function tovarlarChiz(){
+  const q = $("#qidir").value.trim().toLowerCase();
+  const royxat = S.tovarlar
+    .filter(t => !q || t.nom.toLowerCase().includes(q) || (t.shtrix||"").includes(q))
+    .sort((a,b) => (b.qoldiq||0) - (a.qoldiq||0) || (b.jami_qoldiq||0) - (a.jami_qoldiq||0))
+    .slice(0, 60);
+  if(!royxat.length){ $("#tovarlar").innerHTML = `<div class="bosh">Tovar topilmadi</div>`; return; }
+  $("#tovarlar").innerHTML = royxat.map(t => {
+    return `<div class="tovar">
+      <div class="ust">
+        <b>${esc(t.nom)}</b>
+        <small>${qoldiqMatn(t)} · ${t.narx ? '<span class="son">'+pul(t.narx)+"</span>"
+          : '<span style="color:var(--suv)">narxni yozasiz</span>'}</small>
+      </div>
+      <button class="qosh" data-id="${t.id}">+</button></div>`;
+  }).join("");
+  $("#tovarlar").querySelectorAll(".qosh").forEach(b => b.onclick = () => savatgaQosh(b.dataset.id));
+}
+function savatgaQosh(id){
+  const t = S.tovarlar.find(x => x.id===id); if(!t) return;
+  const bor = S.savat.find(x => x.id===id);
+  if(bor){ bor.soni += 1; }
+  else S.savat.unshift({id:t.id, nom:t.nom, narx:t.narx||0, soni:1,
+                        birlik:t.birlik, qoldiq:t.qoldiq});
+  tebrat("success"); savatChiz(); $("#qidir").value=""; tovarlarChiz();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function savatChiz(){
+  $("#savat").innerHTML = S.savat.map((x,i) => `
+    <div class="savat">
+      <div class="sarl"><b>${esc(x.nom)}</b><button class="ochir" data-o="${i}">O'chirish</button></div>
+      <div class="maydon">
+        <label>Dona</label>
+        <div class="qadam">
+          <button data-k="${i}">−</button>
+          <input class="son" inputmode="numeric" data-s="${i}" value="${x.soni}">
+          <button data-p="${i}">+</button>
+        </div>
+        <label>Narx</label>
+        <input class="son" inputmode="numeric" data-n="${i}" value="${x.narx?pul(x.narx):""}"
+               placeholder="narxni yozing"${x.narx?"":' style="border-color:var(--qizil)"'}>
+      </div>
+      <div class="jamiq son">${pul(x.soni*x.narx)} ${S.valyuta}${
+        x.soni > x.qoldiq ? ` <span class="yoq">· qoldiqdan ${pul(x.soni-x.qoldiq)} ko'p</span>` : ""}</div>
+    </div>`).join("");
+  const s = $("#savat");
+  s.querySelectorAll("[data-o]").forEach(b => b.onclick = () => { S.savat.splice(+b.dataset.o,1); savatChiz(); });
+  s.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { S.savat[+b.dataset.p].soni += 1; savatChiz(); });
+  s.querySelectorAll("[data-k]").forEach(b => b.onclick = () => {
+    const x = S.savat[+b.dataset.k]; x.soni = Math.max(1, x.soni-1); savatChiz(); });
+  s.querySelectorAll("[data-s]").forEach(i => i.onchange = () => {
+    S.savat[+i.dataset.s].soni = Math.max(1, son(i.value)); savatChiz(); });
+  s.querySelectorAll("[data-n]").forEach(i => i.onchange = () => {
+    S.savat[+i.dataset.n].narx = son(i.value); savatChiz(); });
+  yakunlaKorsat();
+}
+const jami = () => S.savat.reduce((a,x) => a + x.soni*x.narx, 0);
+function yakunlaKorsat(){
+  const k = S.varaq==="sotuv" && S.savat.length;
+  const b = $("#yakunla");
+  b.style.display = k ? "block" : "none";
+  if(!k) return;
+  const narxsiz = S.savat.some(x => !x.narx);
+  b.disabled = narxsiz;
+  b.textContent = narxsiz ? "Narxi yozilmagan tovar bor"
+    : `Sotuvni yakunlash · ${pul(jami())} ${S.valyuta}`;
+}
+
+/* ---- Ombor ---- */
+function omborChiz(){
+  const q = $("#qidir").value.trim().toLowerCase();
+  const r = S.tovarlar.filter(t => !q || t.nom.toLowerCase().includes(q))
+    .sort((a,b) => (b.jami_qoldiq||0) - (a.jami_qoldiq||0)).slice(0, 200);
+  $("#ombor-holat").textContent = `${S.tovarlar.length} pozitsiya · jami ${
+    pul(S.tovarlar.reduce((a,t)=>a+(t.jami_qoldiq||0),0))} dona (barcha do'konlar)`;
+  $("#ombor").innerHTML = r.map(t => `<div class="tovar"><div class="ust">
+      <b>${esc(t.nom)}</b><small>${qoldiqMatn(t)}</small></div>
+      <div class="son" style="font-weight:600${t.jami_qoldiq>0?"":";color:var(--qizil)"}">${
+        pul(t.jami_qoldiq||0)}</div></div>`).join("") || `<div class="bosh">Topilmadi</div>`;
+}
+
+/* ---- Sotuvni yakunlash ---- */
+function oyna(html){ $("#oyna").innerHTML = html; $("#parda").classList.add("ochiq"); }
+function yop(){ $("#parda").classList.remove("ochiq"); }
+$("#parda").onclick = e => { if(e.target.id==="parda") yop(); };
+
+$("#yakunla").onclick = () => {
+  const j = jami();
+  oyna(`<h2>Sotuvni yakunlash</h2>
+    <label class="mayda">Mijoz</label>
+    <button class="tanla" id="s-mijoz"></button>
+    <label class="mayda" style="margin-top:8px">To'langan summa</label>
+    <input id="s-summa" class="son" inputmode="numeric" value="0">
+    <div class="tur" style="margin-top:6px">
+      <button id="s-toliq">To'liq to'ladi</button><button id="s-qarz">Hammasi qarzga</button></div>
+    <label class="mayda">To'lov turi</label>
+    <div class="tur" id="s-tur"></div>
+    <div class="hisob son">
+      <div><span>Tovarlar</span><span>${pul(S.savat.reduce((a,x)=>a+x.soni,0))} dona</span></div>
+      <div><span>Jami</span><span>${pul(j)}</span></div>
+      <div><span>To'landi</span><span id="s-t">0</span></div>
+      <div class="katta"><span>Qarzga</span><span class="qarzga" id="s-q">${pul(j)}</span></div>
+    </div>
+    <input id="s-izoh" placeholder="Izoh (ixtiyoriy)">
+    <button class="asosiy" id="s-ok" style="margin-top:12px">AinurPOS'ga yuborish</button>
+    <button class="asosiy" style="background:var(--chiziq);color:var(--siyoh)" id="s-bekor">Bekor</button>`);
+  const mel = $("#s-mijoz");
+  mijozTugma(mel, S.oxirgiMijoz);
+  if(S.oxirgiMijoz) mel.dataset.qarz = S.oxirgiMijoz.qarz || 0;
+  turTanla($("#s-tur"));
+  const yangi = () => {
+    const t = Math.min(son($("#s-summa").value), j);
+    $("#s-t").textContent = pul(t); $("#s-q").textContent = pul(j-t);
+  };
+  $("#s-summa").oninput = yangi;
+  $("#s-toliq").onclick = () => { $("#s-summa").value = pul(j); yangi(); };
+  $("#s-qarz").onclick = () => { $("#s-summa").value = "0"; yangi(); };
+  $("#s-bekor").onclick = yop;
+  $("#s-ok").onclick = sotuvYubor;
+};
+
+/* Mijoz tanlash — qidiruvli ro'yxat (select emas) */
+function mijozTugma(el, boshlangich){
+  el.dataset.mid = boshlangich?.id || "";
+  el.dataset.nom = boshlangich?.nom || "";
+  chizMijoz(el);
+  el.onclick = () => mijozOyna(el);
+}
+function chizMijoz(el){
+  const nom = el.dataset.nom;
+  el.innerHTML = nom
+    ? `<b>${esc(nom)}</b>${el.dataset.qarz>=1?`<small> · qarz ${pul(el.dataset.qarz)}</small>`:""}`
+    : `<span style="color:var(--suv)">Mijozni tanlang yoki qidiring</span>`;
+}
+async function mijozOyna(el){
+  oyna(`<h2>Mijozni tanlang</h2>
+    <input id="m-qidir" placeholder="Ism, shahar yoki telefon" autocomplete="off">
+    <div class="mayda" id="m-holat">Yuklanmoqda…</div>
+    <div id="m-royxat"></div>
+    <button class="asosiy" id="m-yangi" style="background:var(--qogoz);color:var(--siyoh);
+      border:1px solid var(--chiziq)">➕ Yangi mijoz qo'shish</button>
+    <button class="asosiy" id="m-chakana" style="background:var(--chiziq);color:var(--siyoh)">
+      Mijozsiz (chakana)</button>`);
+  const chiz = r => {
+    $("#m-holat").textContent = r.length ? `${r.length} ta mijoz` : "Topilmadi";
+    $("#m-royxat").innerHTML = r.map(m => `<div class="tovar" data-m="${m.id}"
+        data-n="${esc(m.nom)}" data-q="${m.qarz||0}" style="cursor:pointer">
+        <div class="ust"><b>${esc(m.nom)}</b><small>${
+          m.qarz>=1 ? `<span class="yoq son">qarz ${pul(m.qarz)}</span>` : "qarzi yo'q"}${
+          m.telefon ? " · "+esc(m.telefon) : ""}</small></div></div>`).join("");
+    $("#m-royxat").querySelectorAll("[data-m]").forEach(d => d.onclick = () => {
+      el.dataset.mid = d.dataset.m; el.dataset.nom = d.dataset.n; el.dataset.qarz = d.dataset.q;
+      chizMijoz(el); yop(); tebrat("success");
+      if(el.onTanlandi) el.onTanlandi();
+    });
+  };
+  let kutish;
+  const qidir = async () => {
+    const q = $("#m-qidir").value.trim();
+    $("#m-holat").textContent = "Qidirilmoqda…";
+    try{ chiz((await api("/api/mijozlar?q=" + encodeURIComponent(q))).mijozlar); }
+    catch(e){ $("#m-holat").textContent = e.message; }
+  };
+  $("#m-qidir").oninput = () => { clearTimeout(kutish); kutish = setTimeout(qidir, 250); };
+  $("#m-chakana").onclick = () => {
+    el.dataset.mid = ""; el.dataset.nom = ""; el.dataset.qarz = 0;
+    chizMijoz(el); yop(); if(el.onTanlandi) el.onTanlandi();
+  };
+  $("#m-yangi").onclick = () => yangiMijoz(el);
+  qidir();
+  setTimeout(() => $("#m-qidir").focus(), 100);
+}
+function turTanla(box, joriy){
+  box.innerHTML = S.turlar.map((t,i) =>
+    `<button data-t="${esc(t)}" class="${(joriy?t===joriy:i===0)?"faol":""}">${esc(t)}</button>`).join("");
+  box.querySelectorAll("button").forEach(b => b.onclick = () => {
+    box.querySelectorAll("button").forEach(x => x.classList.toggle("faol", x===b)); });
+}
+const turOl = box => box.querySelector("button.faol")?.dataset.t || S.turlar[0];
+
+function yangiMijoz(el){
+  const nom = prompt("Yangi mijoz ismi (shahari bilan):"); if(!nom || nom.trim().length<2) return;
+  const tel = prompt("Telefon (ixtiyoriy):") || "";
+  api("/api/mijoz", {nom:nom.trim(), telefon:tel.trim()}).then(d => {
+    el.dataset.mid = d.id; el.dataset.nom = d.nom; el.dataset.qarz = 0;
+    chizMijoz(el); yop(); tebrat("success");
+    if(el.onTanlandi) el.onTanlandi();
+  }).catch(e => alert(e.message));
+}
+
+async function sotuvYubor(){
+  const b = $("#s-ok"); b.disabled = true; b.textContent = "Yuborilmoqda…";
+  const sel = $("#s-mijoz");
+  try{
+    const d = await api("/api/sotuv", {
+      dokon: S.dokon,
+      mijoz_id: sel.dataset.mid || "",
+      mijoz_nom: sel.dataset.nom || "",
+      qatorlar: S.savat.map(x => ({id:x.id, soni:x.soni, narx:x.narx, birlik:x.birlik, nom:x.nom})),
+      tolov: {summa: Math.min(son($("#s-summa").value), jami()), turi: turOl($("#s-tur"))},
+      izoh: $("#s-izoh").value.trim()});
+    S.oxirgiMijoz = sel.dataset.mid ? {id:sel.dataset.mid, nom:sel.dataset.nom} : null;
+    S.savat = []; savatChiz(); yop(); tebrat("success");
+    oyna(`<h2>✅ Sotuv AinurPOS'ga yozildi</h2>
+      <div class="hisob son">
+        <div><span>Mijoz</span><span>${esc(d.mijoz || "Chakana")}</span></div>
+        <div><span>Tovarlar</span><span>${pul(d.dona)} dona</span></div>
+        <div><span>Jami</span><span>${pul(d.jami)}</span></div>
+        <div><span>To'landi</span><span>${pul(d.tolangan)}</span></div>
+        <div class="katta"><span>Qarzga</span><span class="qarzga">${pul(d.jami-d.tolangan)}</span></div>
+      </div>
+      <button class="asosiy" onclick="yop()">Yopish</button>`);
+    yangilaTovar(true);
+  }catch(e){
+    yop(); xabar(e.message); tebrat("error");
+  }finally{ b.disabled=false; b.textContent="AinurPOS'ga yuborish"; }
+}
+
+/* ---- Qarz to'lovi ---- */
+function qarzSozla(){
+  const el = $("#q-mijoz");
+  mijozTugma(el);
+  el.onTanlandi = () => {
+    $("#q-qarz").textContent = el.dataset.qarz >= 1
+      ? `Joriy qarz: ${pul(el.dataset.qarz)} ${S.valyuta}` : "";
+  };
+  turTanla($("#q-tur"));
+  $("#q-saqla").onclick = async () => {
+    const b = $("#q-saqla"), sel = $("#q-mijoz");
+    if(!sel.dataset.mid){ xabar("Mijozni tanlang"); return; }
+    const summa = son($("#q-summa").value);
+    if(summa <= 0){ xabar("Summani yozing"); return; }
+    b.disabled = true; b.textContent = "Saqlanmoqda…";
+    try{
+      const d = await api("/api/qarz", {mijoz_id: sel.dataset.mid, mijoz_nom: sel.dataset.nom,
+        summa, turi: turOl($("#q-tur"))});
+      $("#q-summa").value = ""; tebrat("success");
+      el.dataset.qarz = d.qarz || 0; if(el.onTanlandi) el.onTanlandi();
+      oyna(`<h2>✅ Qarz to'lovi qayd qilindi</h2>
+        <div class="hisob son">
+          <div><span>Mijoz</span><span>${esc(d.mijoz)}</span></div>
+          <div><span>To'lov</span><span>${pul(d.summa)} · ${esc(d.turi)}</span></div>
+          ${d.daftar ? `<div class="katta"><span>Qolgan qarz</span>
+            <span class="qarzga">${pul(d.qarz)}</span></div>` : ""}
+        </div>
+        ${d.daftar ? "" : `<div class="eslatma">Bu to'lovni AinurPOS'da ham kiriting.</div>`}
+        <button class="asosiy" onclick="yop()">Yopish</button>`);
+    }catch(e){ xabar(e.message); tebrat("error"); }
+    finally{ b.disabled=false; b.textContent="Qarz to'lovini qayd qilish"; }
+  };
+}
+
+/* ---- Yuklash ---- */
+async function yangilaTovar(majburiy){
+  const t = $(S.varaq==="ombor" ? "#ombor" : "#tovarlar");
+  if(!S.tovarlar.length) t.innerHTML = `<div class="bosh">Katalog yuklanmoqda…</div>`;
+  try{
+    const d = await api(`/api/tovarlar?dokon=${encodeURIComponent(S.dokon)}${majburiy?"&yangi=1":""}`);
+    S.tovarlar = d.tovarlar;
+    S.dokonNomlari = d.dokon_nomlari || S.dokonNomlari;
+    S.varaq==="ombor" ? omborChiz() : tovarlarChiz();
+    xabar(S.tovarlar.length ? "" : "Bu do'konda tovar topilmadi. AinurPOS'da tovarlar shu "
+      + "do'konga biriktirilganini tekshiring yoki ⟳ tugmasi bilan qayta yuklang.");
+  }catch(e){ t.innerHTML = ""; xabar(e.message); }
+}
+$("#qidir").oninput = () => S.varaq==="ombor" ? omborChiz() : tovarlarChiz();
+$("#yangila").onclick = () => yangilaTovar(true);
+$("#dokon").onchange = () => { S.dokon = $("#dokon").value; S.tovarlar=[]; yangilaTovar(true); };
+
+(async function(){
+  try{ TG?.ready(); TG?.expand(); }catch(e){}
+  try{
+    const d = await api("/api/boshlash");
+    S.mijozlar = d.mijozlar; S.turlar = d.turlar; S.valyuta = d.valyuta; S.dokon = d.dokon_id;
+    $("#dokon").innerHTML = d.dokonlar.map(x =>
+      `<option value="${x.id}"${x.id===S.dokon?" selected":""}>${esc(x.nom)}</option>`).join("");
+    $("#dokon").style.display = d.dokonlar.length > 1 ? "block" : "none";
+    if(!d.dokonlar.length){ xabar("AinurPOS do'kon bermadi — sotuv qilib bo'lmaydi."); return; }
+    $("#q-eslatma").style.display = d.daftar ? "none" : "block";
+    $("#q-eslatma").textContent = "Qarz to'lovi AinurPOS'ga avtomatik tushmaydi — "
+      + "bot qayd qiladi, keyin AinurPOS'da ham kiriting.";
+    qarzSozla(); savatChiz(); await yangilaTovar(false);
+  }catch(e){
+    $("#tovarlar").innerHTML = ""; xabar(e.message);
+  }
+})();
+</script>
+</body>
+</html>
