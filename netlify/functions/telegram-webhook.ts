@@ -87,10 +87,12 @@ Qoidalar:
   const contents: any[] = [];
   const parts: any[] = [{ text: prompt }];
 
-  if (audioBase64 && mimeType) {
+  if (audioBase64) {
+    // Telegram audio formati: toza audio/ogg
+    const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
     parts.push({
-      inline_data: {
-        mime_type: mimeType,
+      inlineData: {
+        mimeType: cleanMimeType,
         data: audioBase64,
       },
     });
@@ -100,50 +102,43 @@ Qoidalar:
 
   contents.push({ parts });
 
-  // Fallback modellari: agar bittasi band bo'lsa (high demand), boshqasiga o'tadi
-  const modelsToTry = [
-    GEMINI_MODEL,
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
-  ];
-  const uniqueModels = Array.from(new Set(modelsToTry.filter(Boolean)));
-
   let lastError = "";
 
-  for (const model of uniqueModels) {
-    // Har bir model uchun 2 martagacha urinish (spikes/yuklama payti 1-2 soniyada o'tib ketadi)
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents }),
-        });
+  // 3 martagacha qayta urinish (agar serverda vaqtinchalik yuklama bo'lsa)
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents }),
+      });
 
-        const data = await resp.json();
-        if (data?.error) {
-          const errMsg = data.error.message || JSON.stringify(data.error);
-          lastError = errMsg;
-          const isHighDemand = errMsg.toLowerCase().includes("high demand") || resp.status === 503 || resp.status === 429;
-          if (isHighDemand && attempt === 1) {
-            // 1.2 soniya kutib qayta urinish
-            await new Promise((r) => setTimeout(r, 1200));
-            continue;
-          }
-          break; // Keyingi fallback modelga o'tish
-        }
+      const data = await resp.json();
+      if (data?.error) {
+        const errMsg = data.error.message || JSON.stringify(data.error);
+        lastError = errMsg;
+        const isRetryable =
+          errMsg.toLowerCase().includes("high demand") ||
+          resp.status === 503 ||
+          resp.status === 429;
 
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleaned);
-        return { ok: true, data: parsed };
-      } catch (e: any) {
-        lastError = e?.message || "Bog'lanish xatosi";
-        if (attempt === 1) {
-          await new Promise((r) => setTimeout(r, 1000));
+        if (isRetryable && attempt < 3) {
+          await new Promise((r) => setTimeout(r, attempt * 1500));
           continue;
         }
+        return { ok: false, error: errMsg };
+      }
+
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return { ok: true, data: parsed };
+    } catch (e: any) {
+      lastError = e?.message || "Bog'lanish xatosi";
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, attempt * 1200));
+        continue;
       }
     }
   }
@@ -313,12 +308,20 @@ export const handler: Handler = async (event) => {
   }
 
   if (text === "/status" || text === "/tekshir") {
+    let botUsername = "Faol";
+    try {
+      const me = await tgPost("getMe", {});
+      if (me?.result?.username) {
+        botUsername = `@${me.result.username}`;
+      }
+    } catch {}
+
     const isGeminiSet = !!GEMINI_API_KEY && GEMINI_API_KEY.length > 5;
     const isSupabaseSet = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
     const isGroupSet = !!GROUP_CHAT_ID;
 
     const statusMsg = `🔍 <b>PROMAX TIZIM HOLATI:</b>\n\n` +
-      `🤖 <b>Telegram Bot:</b> ✅ Faol (@Promaxsavdobot)\n` +
+      `🤖 <b>Telegram Bot:</b> ✅ Faol (${botUsername})\n` +
       `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (${GEMINI_MODEL})` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
       `🗄 <b>Supabase Baza:</b> ${isSupabaseSet ? "✅ Ulangan" : "❌ Kiritilmagan (SUPABASE_URL yo'q)"}\n` +
       `👥 <b>Guruh xabarnomasi:</b> ${isGroupSet ? `✅ Guruh ID: <code>${GROUP_CHAT_ID}</code>` : "⚠️ Sozlanmagan"}\n\n` +
