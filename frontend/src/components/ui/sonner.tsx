@@ -10,7 +10,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position="top-center"
       richColors
       closeButton
+      style={{
+        top: "calc(var(--tg-viewport-stable-height, 0px) > 0 ? 64px : 56px)",
+      }}
       toastOptions={{
+        style: {
+          marginTop: "12px",
+        },
         classNames: {
           toast:
             "group toast group-[.toaster]:bg-white dark:group-[.toaster]:bg-slate-900 group-[.toaster]:text-slate-900 dark:group-[.toaster]:text-white group-[.toaster]:border-slate-200 dark:group-[.toaster]:border-slate-800 group-[.toaster]:shadow-lg group-[.toaster]:rounded-2xl group-[.toaster]:font-sans",

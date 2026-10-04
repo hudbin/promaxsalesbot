@@ -214,242 +214,6 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
     }
   };
 
-  // Brauzer orqali XLSX yuklab olish
-  const brauzerdaYuklabOlishXLSX = () => {
-    haptic("light");
-    try {
-      const wb = XLSX.utils.book_new();
-
-      // Xulosa varag'i
-      const xulosaData = [
-        ["PROMAX B2B STORE - MOLIYAVIY HISOBOT"],
-        ["Davr:", `${boshlanishSana} dan ${tugashSana} gacha`],
-        ["Filtr turi:", hisobotTuri.toUpperCase()],
-        ["Tuzilgan vaqt:", new Date().toLocaleString("ru-RU")],
-        [],
-        ["KO'RSATKICH", "SO'M (UZS)", "DOLLAR (USD)"],
-      ];
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
-        xulosaData.push(["Jami Savdo", String(jamiSavdoUZS), String(jamiSavdoUSD)]);
-        xulosaData.push(["Kassaga tushgan savdo summasi", String(tushganNaqdUZS), String(tushganNaqdUSD)]);
-        xulosaData.push(["Berilgan qarz (nasiya)", String(berilganQarzUZS), String(berilganQarzUSD)]);
-      }
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
-        xulosaData.push(["Qaytarilgan eski qarzlar", String(qaytganQarzUZS), String(qaytganQarzUSD)]);
-      }
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
-        xulosaData.push(["Jami Chiqim (Xarajatlar)", String(jamiChiqimUZS), String(jamiChiqimUSD)]);
-      }
-
-      if (hisobotTuri === "hammasi") {
-        xulosaData.push(["Sof Kassa Oqimi", String((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS), String((tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD)]);
-      }
-
-      const wsXulosa = XLSX.utils.aoa_to_sheet(xulosaData);
-      XLSX.utils.book_append_sheet(wb, wsXulosa, "Umumiy Xulosa");
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
-        const sRows = savdolar.map((s) => ({
-          "Chek #": s.raqam ? `#${s.raqam}` : "-",
-          "Sana": new Date(s.sana_vaqt).toLocaleString("ru-RU"),
-          "Mijoz": s.mijoz?.nom || "Noma'lum",
-          "Telefon": s.mijoz?.telefon || "-",
-          "Xodim": s.xodim || "-",
-          "Jami": Number(s.jami_summa || 0),
-          "To'langan": Number(s.tolangan_summa || 0),
-          "Qarz": Number(s.qarz_summa || 0),
-          "Valyuta": s.valyuta,
-          "To'lov turi": s.tolov_turi || "-",
-          "Holat": s.holat,
-        }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sRows), "Savdolar");
-      }
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
-        const rRows = rasxodlar.map((r) => ({
-          "Sana": new Date(r.sana_vaqt).toLocaleString("ru-RU"),
-          "Kategoriya": r.kategoriya,
-          "Summa": Number(r.summa || 0),
-          "Valyuta": r.valyuta,
-          "To'lov turi": r.tolov_turi || "-",
-          "Xodim": r.xodim || "-",
-          "Izoh": r.izoh || "",
-        }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rRows), "Xarajatlar");
-      }
-
-      if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
-        const qRows = qarzTolovlari.map((q) => ({
-          "Sana": new Date(q.sana_vaqt).toLocaleString("ru-RU"),
-          "Mijoz": q.mijoz?.nom || "Noma'lum",
-          "Summa": Number(q.summa || 0),
-          "Valyuta": q.valyuta,
-          "Xodim": q.xodim || "-",
-          "Izoh": q.izoh || "",
-        }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qRows), "Qarz To'lovlari");
-      }
-
-      XLSX.writeFile(wb, `PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.xlsx`);
-      toast.success("Excel (.xlsx) fayli yuklab olindi!");
-    } catch (e: any) {
-      toast.error("Yuklab olishda xatolik", {
-        description: "Telegram ilovasidan bo'lsangiz 'Telegramga yuborish' tugmasidan foydalaning.",
-      });
-    }
-  };
-
-  // Brauzer orqali PDF yuklab olish
-  const brauzerdaYuklabOlishPDF = async () => {
-    haptic("light");
-    try {
-      const { jsPDF } = await import("jspdf");
-      const autoTableModule = await import("jspdf-autotable");
-      const autoTable = (autoTableModule.default || autoTableModule) as any;
-
-      const doc = new jsPDF();
-      
-      // Header
-      doc.setFontSize(16);
-      doc.setTextColor(30, 41, 59);
-      doc.text("PROMAX B2B STORE - MOLIYAVIY HISOBOT", 14, 18);
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`Davr: ${boshlanishSana} dan ${tugashSana} gacha`, 14, 25);
-      doc.text(`Hisobot turi: ${hisobotTuri.toUpperCase()} | Tuzilgan vaqt: ${new Date().toLocaleString("ru-RU")}`, 14, 31);
-
-      // Xulosa jadvali
-      const summaryRows = [];
-      if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
-        summaryRows.push(["Jami Savdo", `${pul(jamiSavdoUZS)} so'm`, `$${pul(jamiSavdoUSD)}`]);
-        summaryRows.push(["Kassaga Tushum (Savdo)", `${pul(tushganNaqdUZS)} so'm`, `$${pul(tushganNaqdUSD)}`]);
-        summaryRows.push(["Berilgan Qarz (Nasiya)", `${pul(berilganQarzUZS)} so'm`, `$${pul(berilganQarzUSD)}`]);
-      }
-      if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
-        summaryRows.push(["Qaytarilgan Eski Qarzlar", `${pul(qaytganQarzUZS)} so'm`, `$${pul(qaytganQarzUSD)}`]);
-      }
-      if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
-        summaryRows.push(["Jami Chiqim (Xarajatlar)", `${pul(jamiChiqimUZS)} so'm`, `$${pul(jamiChiqimUSD)}`]);
-      }
-      if (hisobotTuri === "hammasi") {
-        summaryRows.push(["Sof Kassa Oqimi", `${pul((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS)} so'm`, `$${pul((tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD)}`]);
-      }
-
-      autoTable(doc, {
-        startY: 36,
-        head: [["Ko'rsatkich", "So'm (UZS)", "Dollar (USD)"]],
-        body: summaryRows,
-        theme: "striped",
-        headStyles: { fillColor: [79, 70, 229] },
-        styles: { fontSize: 9 },
-      });
-
-      let nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 70;
-
-      // Savdolar jadvali
-      if ((hisobotTuri === "hammasi" || hisobotTuri === "savdolar") && savdolar.length > 0) {
-        if (nextY > 230) {
-          doc.addPage();
-          nextY = 20;
-        }
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`Savdolar ro'yxati (${savdolar.length} ta)`, 14, nextY);
-
-        const sData = savdolar.map(s => [
-          s.raqam ? `#${s.raqam}` : "-",
-          new Date(s.sana_vaqt).toLocaleDateString("ru-RU"),
-          s.mijoz?.nom || "Noma'lum",
-          `${pul(s.jami_summa)} ${s.valyuta}`,
-          `${pul(s.tolangan_summa)} ${s.valyuta}`,
-          Number(s.qarz_summa) > 0 ? `${pul(s.qarz_summa)} ${s.valyuta}` : "-",
-          s.tolov_turi || "naqd"
-        ]);
-
-        autoTable(doc, {
-          startY: nextY + 4,
-          head: [["Chek", "Sana", "Mijoz", "Jami", "To'langan", "Qarz", "To'lov"]],
-          body: sData,
-          theme: "grid",
-          headStyles: { fillColor: [16, 185, 129] },
-          styles: { fontSize: 8 },
-        });
-
-        nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
-      }
-
-      // Chiqimlar jadvali
-      if ((hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") && rasxodlar.length > 0) {
-        if (nextY > 230) {
-          doc.addPage();
-          nextY = 20;
-        }
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`Chiqimlar ro'yxati (${rasxodlar.length} ta)`, 14, nextY);
-
-        const rData = rasxodlar.map(r => [
-          new Date(r.sana_vaqt).toLocaleDateString("ru-RU"),
-          r.kategoriya || "Chiqim",
-          r.izoh || "-",
-          `${pul(r.summa)} ${r.valyuta}`,
-          r.tolov_turi || "naqd"
-        ]);
-
-        autoTable(doc, {
-          startY: nextY + 4,
-          head: [["Sana", "Kategoriya", "Izoh", "Summa", "Kassa"]],
-          body: rData,
-          theme: "grid",
-          headStyles: { fillColor: [244, 63, 94] },
-          styles: { fontSize: 8 },
-        });
-
-        nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
-      }
-
-      // Qarz to'lovlari jadvali
-      if ((hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") && qarzTolovlari.length > 0) {
-        if (nextY > 230) {
-          doc.addPage();
-          nextY = 20;
-        }
-        doc.setFontSize(12);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`Qaytarilgan qarzlar (${qarzTolovlari.length} ta)`, 14, nextY);
-
-        const qData = qarzTolovlari.map(q => [
-          new Date(q.sana_vaqt).toLocaleDateString("ru-RU"),
-          q.mijoz?.nom || "Noma'lum",
-          `${pul(q.summa)} ${q.valyuta}`,
-          q.tolov_turi || "naqd",
-          q.izoh || "-"
-        ]);
-
-        autoTable(doc, {
-          startY: nextY + 4,
-          head: [["Sana", "Mijoz", "Summa", "To'lov turi", "Izoh"]],
-          body: qData,
-          theme: "grid",
-          headStyles: { fillColor: [245, 158, 11] },
-          styles: { fontSize: 8 },
-        });
-      }
-
-      doc.save(`PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.pdf`);
-      toast.success("PDF hisobot yuklab olindi!");
-    } catch (e: any) {
-      console.error("PDF yaratishda xatolik:", e);
-      toast.error("PDF yaratishda xatolik", {
-        description: e.message,
-      });
-    }
-  };
-
   return (
     <div className="space-y-3.5 pb-6">
       {/* Yuqori sarlavha va tushuntirish */}
@@ -697,70 +461,63 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
         )}
       </div>
 
-      {/* 4. Hisobotni Yuklab Olish (XLSX & PDF) va Telegramga Yuborish */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xs space-y-2.5">
-        <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-          Hisobotni olish va yuklab olish:
-        </label>
+      {/* 4. Hisobotni Telegramga Yuborish (XLSX & PDF) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+            Hisobotni yuborish:
+          </label>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Excel (.xlsx) & PDF (.pdf)</span>
+        </div>
 
         {/* TELEGRAM BOTGA YUBORISH (XLSX / PDF) */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => telegramgaYuborish("shaxsiy", "xlsx")}
-            disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-          >
-            <Send className="w-3.5 h-3.5" />
-            Botga (Excel)
-          </button>
-          <button
-            onClick={() => telegramgaYuborish("shaxsiy", "pdf")}
-            disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-          >
-            <Send className="w-3.5 h-3.5" />
-            Botga (PDF)
-          </button>
+        <div>
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1.5 uppercase">
+            1. Shaxsiy Telegram botingizga:
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => telegramgaYuborish("shaxsiy", "xlsx")}
+              disabled={yuborilmoqda || yuklanmoqda}
+              className="py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Botga (Excel)
+            </button>
+            <button
+              onClick={() => telegramgaYuborish("shaxsiy", "pdf")}
+              disabled={yuborilmoqda || yuklanmoqda}
+              className="py-3 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Botga (PDF)
+            </button>
+          </div>
         </div>
 
         {/* GURUHGA YUBORISH */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => telegramgaYuborish("guruh", "xlsx")}
-            disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <Share2 className="w-3.5 h-3.5 text-indigo-500" />
-            Guruhga (Excel)
-          </button>
-          <button
-            onClick={() => telegramgaYuborish("guruh", "pdf")}
-            disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <Share2 className="w-3.5 h-3.5 text-rose-500" />
-            Guruhga (PDF)
-          </button>
-        </div>
-
-        {/* QURILMAGA TO'G'RIDAN-TO'G'RI YUKLAB OLISH (XLSX & PDF) */}
-        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={brauzerdaYuklabOlishXLSX}
-            disabled={yuklanmoqda}
-            className="py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            Excel (.xlsx)
-          </button>
-          <button
-            onClick={brauzerdaYuklabOlishPDF}
-            disabled={yuklanmoqda}
-            className="py-2.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <FileText className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-            PDF fayl (.pdf)
-          </button>
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1.5 uppercase">
+            2. Ishchi Telegram guruhiga:
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => telegramgaYuborish("guruh", "xlsx")}
+              disabled={yuborilmoqda || yuklanmoqda}
+              className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Share2 className="w-3.5 h-3.5 text-indigo-500" />
+              Guruhga (Excel)
+            </button>
+            <button
+              onClick={() => telegramgaYuborish("guruh", "pdf")}
+              disabled={yuborilmoqda || yuklanmoqda}
+              className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Share2 className="w-3.5 h-3.5 text-rose-500" />
+              Guruhga (PDF)
+            </button>
+          </div>
         </div>
       </div>
 
