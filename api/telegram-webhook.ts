@@ -606,6 +606,7 @@ export default async function handler(req: any, res: any) {
   // 2. MATN, OVOZ YOKI KONTAKT KELGANDA
   const message = update.message;
   if (!message) return res.status(200).send("No message");
+  if (message.from?.is_bot) return res.status(200).send("OK");
 
   const chatId = message.chat.id;
   const fromUser = message.from;
