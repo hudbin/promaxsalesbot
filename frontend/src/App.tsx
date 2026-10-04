@@ -84,22 +84,9 @@ export default function App() {
           setFoydalanuvchiRasm(user.photo_url);
         }
 
-        // Supabase xodimlar jadvalidan tekshirish
         const numId = Number(user.id);
-        const { data: xodim, error } = await supabase
-          .from("xodimlar")
-          .select("*")
-          .eq("telegram_id", !isNaN(numId) ? numId : user.id)
-          .maybeSingle();
 
-        if (error) {
-          console.error("Xodimlarni tekshirishda xatolik:", error);
-          setIsBlocked(true);
-          setBlokSababi("Baza bilan bog'lanishda xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.");
-          setTekshirilmoqda(false);
-          return;
-        }
-
+        // 1. BOSH ADMINISTRATORNI DARHOL TASDIQLASH (Baza tekshiruvini kutmasdan)
         const adminIdList = [
           "580858047",
           ...(import.meta.env.VITE_ADMIN_TELEGRAM_ID || "").split(","),
@@ -111,27 +98,37 @@ export default function App() {
           setCurrentUserRole("admin");
           setIsBlocked(false);
           setBlokSababi("");
+          setTekshirilmoqda(false);
 
-          // Bazada ham xodimlar ro'yxatiga admin sifatida kiritib qo'yamiz (agar hali yo'q bo'lsa)
-          try {
-            if (!xodim) {
-              await supabase.from("xodimlar").insert({
-                telegram_id: !isNaN(numId) ? numId : user.id,
-                ism: fullName,
-                rol: "admin",
-                faol: true,
-                telegram_username: user.username ? `@${user.username}` : null,
-              });
-            } else if (xodim.rol !== "admin" || !xodim.faol) {
-              await supabase.from("xodimlar").update({
-                rol: "admin",
-                faol: true,
-                ism: fullName,
-              }).eq("id", xodim.id);
-            }
-          } catch (upsertErr) {
-            console.warn("Adminni bazaga avtomatik kiritishda xato (davom etiladi):", upsertErr);
-          }
+          // Bazada ham xodimlar ro'yxatiga admin sifatida kiritib qo'yamiz (orqa fonda)
+          (async () => {
+            try {
+              await supabase
+                .from("xodimlar")
+                .upsert({
+                  telegram_id: !isNaN(numId) ? numId : user.id,
+                  ism: fullName,
+                  rol: "admin",
+                  faol: true,
+                  telegram_username: user.username ? `@${user.username}` : null,
+                }, { onConflict: "telegram_id" });
+            } catch {}
+          })();
+          return;
+        }
+
+        // 2. Qolgan xodimlar uchun Supabase tekshiruvi
+        const { data: xodim, error } = await supabase
+          .from("xodimlar")
+          .select("*")
+          .eq("telegram_id", !isNaN(numId) ? numId : user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Xodimlarni tekshirishda xatolik:", error);
+          setIsBlocked(true);
+          setBlokSababi("Baza bilan bog'lanishda xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.");
+          setTekshirilmoqda(false);
           return;
         }
 
