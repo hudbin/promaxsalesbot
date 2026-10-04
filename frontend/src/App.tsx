@@ -100,6 +100,41 @@ export default function App() {
           return;
         }
 
+        const adminIdList = [
+          "580858047",
+          ...(import.meta.env.VITE_ADMIN_TELEGRAM_ID || "").split(","),
+        ].map((s) => s.trim()).filter(Boolean);
+
+        const isEnvAdmin = adminIdList.includes(String(user.id));
+
+        if (isEnvAdmin) {
+          setCurrentUserRole("admin");
+          setIsBlocked(false);
+          setBlokSababi("");
+
+          // Bazada ham xodimlar ro'yxatiga admin sifatida kiritib qo'yamiz (agar hali yo'q bo'lsa)
+          try {
+            if (!xodim) {
+              await supabase.from("xodimlar").insert({
+                telegram_id: !isNaN(numId) ? numId : user.id,
+                ism: fullName,
+                rol: "admin",
+                faol: true,
+                telegram_username: user.username ? `@${user.username}` : null,
+              });
+            } else if (xodim.rol !== "admin" || !xodim.faol) {
+              await supabase.from("xodimlar").update({
+                rol: "admin",
+                faol: true,
+                ism: fullName,
+              }).eq("id", xodim.id);
+            }
+          } catch (upsertErr) {
+            console.warn("Adminni bazaga avtomatik kiritishda xato (davom etiladi):", upsertErr);
+          }
+          return;
+        }
+
         if (xodim) {
           if (xodim.faol) {
             setCurrentUserRole(xodim.rol || "sotuvchi");
