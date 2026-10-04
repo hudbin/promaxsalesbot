@@ -53,6 +53,30 @@ function pul(n: number): string {
   return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
 }
 
+// Yordamchi: Markdown formatdagi matnni Telegram HTML ga xavfsiz o'tkazish
+function formatTelegramHtml(text: string): string {
+  if (!text) return "";
+  let out = text;
+
+  // 1. **qalin** yoki __qalin__ -> <b>qalin</b>
+  out = out.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+  out = out.replace(/__(.*?)__/g, "<b>$1</b>");
+
+  // 2. ```kod``` -> <pre>kod</pre>
+  out = out.replace(/```(?:html|sql|json)?\s*([\s\S]*?)```/gi, "<pre>$1</pre>");
+
+  // 3. `kod` -> <code>kod</code>
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // 4. *qiya* -> <i>qiya</i> (so'z boshida yoki qator boshida)
+  out = out.replace(/(?<=^|\s)\*([^*]+)\*(?=\s|$|[.,!?:])/g, "<i>$1</i>");
+
+  // 5. > Iqtibos (Quote) -> <blockquote>Iqtibos</blockquote>
+  out = out.replace(/^>\s?(.*)$/gm, "<blockquote>$1</blockquote>");
+
+  return out;
+}
+
 // Yordamchi: Telefon raqamni standart formatga keltirish (+998901234567)
 function normalizePhone(raw: string): string {
   if (!raw) return "";
@@ -964,23 +988,42 @@ export const handler: Handler = async (event) => {
 
         if (dbErr) throw dbErr;
 
-        const answerPrompt = `Siz PROMAX do'koni uchun buxgalter tahlilchisiz.
+        const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional buxgalter-tahlilchi AIsiz.
 Foydalanuvchi savoli: "${text}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
 
-Qoidalar:
-1. Foydalanuvchiga inson tushunadigan, o'ta aniq va samimiy o'zbek tilida javob bering.
-2. Agar natija bo'sh bo'lsa, "Bu bo'yicha hech qanday ma'lumot topilmadi" deb ayting.
-3. Raqamlarni chiroyli formatlang (masalan, 1 500 000 so'm, $200).
-4. Hech qanday SQL kodi yoki texnik JSON ko'rsatmang, faqat yakuniy xulosa bering.`;
-        
-        const finalAns = await geminiTabiiyJavob(answerPrompt);
+JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
+1. EMOJILARDAN UNUMLI VA MAZMUNLI FOYDALANING:
+   - 📦 Tovarlar va ombor mahsulotlari
+   - 💰, 💵 Narxlar, summalar va kassa
+   - ⚠️ Kamomad, minus qoldiq yoki katta qarz ogohlantirishlari
+   - 📊 Statistika, xulosa va hisobotlar
+   - 👤 Mijozlar va sotuvchilar
+   - 📈, 📉 O'sish yoki pasayish
+2. TELEGRAM HTML FORMATIDAN FOYDALANING:
+   - Sarlavha va asosiy nomlar: <b>Qalin matn</b>
+   - Barcha raqamlar, sonlar va summalar: <code>180 dona</code>, <code>55 000 so'm</code>, <code>$25</code>
+   - Qo'shimcha tushuntirish va izohlar: <i>Qiya matn</i>
+   - Muhim ogohlantirishlar (masalan minus qoldiq, qarzdorlik) va yakuniy xulosalar: <blockquote>⚠️ Ogohlantirish yoki asosiy xulosa matni</blockquote>
+3. Ro'yxatni chiroyli tartiblang, har bir band orasida qator tashlang.
+4. Markdown (** yoki *) belgilarini ishlatmang, faqat toza Telegram HTML (<b>, <i>, <code>, <blockquote>) ishlating.`;
 
-        await tgPost("sendMessage", {
+        const finalAns = await geminiTabiiyJavob(answerPrompt);
+        const formattedHtml = formatTelegramHtml(finalAns);
+
+        const sendRes = await tgPost("sendMessage", {
           chat_id: chatId,
-          text: finalAns,
+          text: formattedHtml,
           parse_mode: "HTML",
         });
+
+        // Agar HTML teglarda kutilmagan xato bo'lsa, xavfsiz holda oddiy matn qilib yuboramiz
+        if (!sendRes?.ok) {
+          await tgPost("sendMessage", {
+            chat_id: chatId,
+            text: finalAns,
+          });
+        }
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
         await tgPost("sendMessage", {
