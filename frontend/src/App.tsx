@@ -371,7 +371,12 @@ export default function App() {
         )}
         {faolTab === "kassa" && <KassaTab />}
         {faolTab === "ombor" && <OmborTab />}
-        {faolTab === "hisobotlar" && <HisobotlarTab />}
+        {faolTab === "hisobotlar" && (
+          <HisobotlarTab
+            telegramUserId={currentUserTgId}
+            xodimNomi={telegramFoydalanuvchi}
+          />
+        )}
       </main>
 
       {/* Xodimlar boshqaruvi Modali */}
