@@ -302,6 +302,12 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
         <ChiqimDetailsModal
           rasxod={tanlanganChiqim}
           onClose={() => setTanlanganChiqim(null)}
+          onOchirildi={() => {
+            setTanlanganChiqim(null);
+            yuklaRasxodlar();
+            setXabar("Chiqim o'chirildi va pul kassa balansiga qaytarildi!");
+            setTimeout(() => setXabar(null), 3500);
+          }}
         />
       )}
     </div>
