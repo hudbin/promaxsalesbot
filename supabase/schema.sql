@@ -334,3 +334,25 @@ SELECT
     COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'USD'), 0) AS rasxod_usd,
     COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE sana_vaqt::date = CURRENT_DATE AND valyuta = 'UZS'), 0) AS qarz_tolov_uzs,
     COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE sana_vaqt::date = CURRENT_DATE AND valyuta = 'USD'), 0) AS qarz_tolov_usd;
+
+-- ==============================================================================
+-- ROW LEVEL SECURITY (RLS) - MINI APP HUQUQLARI
+-- ==============================================================================
+ALTER TABLE tovarlar ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mijozlar ENABLE ROW LEVEL SECURITY;
+ALTER TABLE savdolar ENABLE ROW LEVEL SECURITY;
+ALTER TABLE savdo_qatorlari ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rasxodlar ENABLE ROW LEVEL SECURITY;
+ALTER TABLE qarz_tolovlari ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kassa_harakatlari ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xodimlar ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public all for tovarlar" ON tovarlar FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for mijozlar" ON mijozlar FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for savdolar" ON savdolar FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for savdo_qatorlari" ON savdo_qatorlari FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for rasxodlar" ON rasxodlar FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for qarz_tolovlari" ON qarz_tolovlari FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for kassa_harakatlari" ON kassa_harakatlari FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public all for xodimlar" ON xodimlar FOR ALL USING (true) WITH CHECK (true);
+
