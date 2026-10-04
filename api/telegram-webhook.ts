@@ -4,7 +4,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Muhit o'zgaruvchilari
-const BOT_TOKEN = process.env.BOT_TOKEN || "8909794013:AAEJB9hhM3OpIQoKRYlyML-gDodXgOgGDn0";
+const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEMINI_API_KEYS = Array.from(
