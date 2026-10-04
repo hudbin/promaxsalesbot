@@ -84,46 +84,71 @@ Qoidalar:
 - Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", kassa_turi: "naqd_usd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
 `;
 
-  try {
-    const contents: any[] = [];
-    const parts: any[] = [{ text: prompt }];
+  const contents: any[] = [];
+  const parts: any[] = [{ text: prompt }];
 
-    if (audioBase64 && mimeType) {
-      parts.push({
-        inline_data: {
-          mime_type: mimeType,
-          data: audioBase64,
-        },
-      });
-    } else if (matn) {
-      parts.push({ text: `Foydalanuvchi xabari: "${matn}"` });
-    }
-
-    contents.push({ parts });
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents }),
+  if (audioBase64 && mimeType) {
+    parts.push({
+      inline_data: {
+        mime_type: mimeType,
+        data: audioBase64,
+      },
     });
-
-    const data = await resp.json();
-    if (data?.error) {
-      return {
-        ok: false,
-        error: `Gemini API xatosi: ${data.error.message || JSON.stringify(data.error)}`,
-      };
-    }
-
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned);
-    return { ok: true, data: parsed };
-  } catch (e: any) {
-    console.error("Gemini parse xatosi:", e);
-    return { ok: false, error: e?.message || "Gemini bilan bog'lanishda xatolik yuz berdi" };
+  } else if (matn) {
+    parts.push({ text: `Foydalanuvchi xabari: "${matn}"` });
   }
+
+  contents.push({ parts });
+
+  // Fallback modellari: agar bittasi band bo'lsa (high demand), boshqasiga o'tadi
+  const modelsToTry = [
+    GEMINI_MODEL,
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+  ];
+  const uniqueModels = Array.from(new Set(modelsToTry.filter(Boolean)));
+
+  let lastError = "";
+
+  for (const model of uniqueModels) {
+    // Har bir model uchun 2 martagacha urinish (spikes/yuklama payti 1-2 soniyada o'tib ketadi)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents }),
+        });
+
+        const data = await resp.json();
+        if (data?.error) {
+          const errMsg = data.error.message || JSON.stringify(data.error);
+          lastError = errMsg;
+          const isHighDemand = errMsg.toLowerCase().includes("high demand") || resp.status === 503 || resp.status === 429;
+          if (isHighDemand && attempt === 1) {
+            // 1.2 soniya kutib qayta urinish
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
+          break; // Keyingi fallback modelga o'tish
+        }
+
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return { ok: true, data: parsed };
+      } catch (e: any) {
+        lastError = e?.message || "Bog'lanish xatosi";
+        if (attempt === 1) {
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+      }
+    }
+  }
+
+  return { ok: false, error: lastError || "Google AI serverlarida vaqtinchalik yuqori yuklama. Iltimos, yana bir bor urinib ko'ring." };
 }
 
 // -----------------------------------------------------------------------------
@@ -348,9 +373,21 @@ export const handler: Handler = async (event) => {
 
   if (geminiRes) {
     if (!geminiRes.ok) {
+      const isMissingKey = !GEMINI_API_KEY;
+      const isHighDemand = geminiRes.error?.toLowerCase().includes("high demand") || geminiRes.error?.includes("503");
+
+      let maslahat = "";
+      if (isMissingKey) {
+        maslahat = "<i>Eslatma:</i> aistudio.google.com dan bepul <b>GEMINI_API_KEY</b> olib, Netlify Dashboard -> Environment variables ga kiriting.";
+      } else if (isHighDemand) {
+        maslahat = "<i>Google serverlarida vaqtinchalik yuqori yuklama kuzatildi. Iltimos, 5-10 soniya kutib xabaringizni qayta yuboring.</i>";
+      } else {
+        maslahat = "<i>Iltimos, qayta urinib ko'ring yoki /status buyrug'ini tekshiring.</i>";
+      }
+
       await tgPost("sendMessage", {
         chat_id: chatId,
-        text: `⚠️ <b>AI TAHLIL XATOSI:</b>\n${geminiRes.error}\n\n<i>Eslatma:</i> aistudio.google.com dan bepul <b>GEMINI_API_KEY</b> olib, Netlify Dashboard -> Site configuration -> Environment variables ga kiriting.`,
+        text: `⚠️ <b>AI TAHLIL XATOSI:</b>\n${geminiRes.error}\n\n${maslahat}`,
         parse_mode: "HTML",
       });
       return { statusCode: 200, body: "OK" };
