@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS kassa_harakatlari (
     sana_vaqt TIMESTAMPTZ NOT NULL DEFAULT now(),
     kassa_turi TEXT NOT NULL CHECK (kassa_turi IN ('naqd_uzs', 'naqd_usd', 'plastik_uzs', 'bank_uzs')),
     amal TEXT NOT NULL CHECK (amal IN ('kirim', 'chiqim')),
-    summa NUMERIC(15, 2) NOT NULL CHECK (summa > 0),
+    summa NUMERIC(15, 2) NOT NULL CHECK (summa >= 0),
     valyuta TEXT NOT NULL CHECK (valyuta IN ('UZS', 'USD')),
     manba_turi TEXT NOT NULL CHECK (manba_turi IN ('savdo', 'rasxod', 'qarz_tolov', 'kassalar_aro', 'boshlangich')),
     manba_id UUID,

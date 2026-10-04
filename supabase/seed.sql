@@ -8,7 +8,7 @@ VALUES
     ('naqd_uzs', 'kirim', 5000000, 'UZS', 'boshlangich', 'Boshlang''ich naqd so''m qoldig''i'),
     ('naqd_usd', 'kirim', 1000, 'USD', 'boshlangich', 'Boshlang''ich naqd dollar qoldig''i'),
     ('plastik_uzs', 'kirim', 2000000, 'UZS', 'boshlangich', 'Boshlang''ich plastik karta qoldig''i'),
-    ('bank_uzs', 'kirim', 0, 'UZS', 'boshlangich', 'Boshlang''ich bank hisobi');
+    ('bank_uzs', 'kirim', 500000, 'UZS', 'boshlangich', 'Boshlang''ich bank hisobi');
 
 -- 2. Namunaviy Mahsulotlar (B2B Kiyim/Mato/Profil)
 INSERT INTO tovarlar (nom, model, shtrixkod, rasm_url, birlik, tannarx, narx_optom, narx_chakana, valyuta, qoldiq, ogohlantirish_qoldiq)
