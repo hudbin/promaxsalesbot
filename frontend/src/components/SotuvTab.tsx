@@ -4,10 +4,11 @@ import { ShoppingCart, Plus, Trash2, Search, CheckCircle, UserPlus, DollarSign }
 import { Combobox } from "./ui/Combobox";
 
 interface SotuvTabProps {
-  telegramFoydalanuvchi?: string;
+  xodimNomi?: string;
+  telegramUserId?: number | string | null;
 }
 
-export function SotuvTab({ telegramFoydalanuvchi }: SotuvTabProps) {
+export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
   const [tovarlar, setTovarlar] = useState<any[]>([]);
   const [mijozlar, setMijozlar] = useState<any[]>([]);
   const [qidiruv, setQidiruv] = useState("");
@@ -134,8 +135,8 @@ export function SotuvTab({ telegramFoydalanuvchi }: SotuvTabProps) {
         p_tolov_turi: tolovTuri,
         p_kassa_turi: kassaTuri,
         p_izoh: izoh,
-        p_xodim: "Mini App",
-        p_telegram_user_id: null,
+        p_xodim: xodimNomi || "Mini App",
+        p_telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
         p_qatorlar: qatorlar,
       });
 
@@ -190,14 +191,17 @@ export function SotuvTab({ telegramFoydalanuvchi }: SotuvTabProps) {
 
   return (
     <div className="space-y-3">
-      {/* Salom, Foydalanuvchi qatori (Faqat Sotuv bo'limida) */}
+      {/* Savdo Bo'limi Sarlavhasi */}
       <div className="flex items-center justify-between pb-0.5">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <p className="text-xs font-bold text-slate-700">
-            Salom, {telegramFoydalanuvchi || "Foydalanuvchi"} 👋
+          <p className="text-xs font-bold text-slate-800">
+            Savdo Terminali
           </p>
         </div>
+        <span className="text-[11px] text-slate-400 font-medium">
+          {tovarlar.length} ta mahsulot
+        </span>
       </div>
 
       {/* Muvaffaqiyat xabari */}

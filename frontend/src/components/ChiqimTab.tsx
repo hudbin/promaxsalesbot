@@ -14,7 +14,12 @@ const KATEGORIYALAR = [
   { nom: "Boshqa", belgi: "📝", rang: "bg-slate-50 border-slate-200 text-slate-950" },
 ];
 
-export function ChiqimTab() {
+interface ChiqimTabProps {
+  xodimNomi?: string;
+  telegramUserId?: number | string | null;
+}
+
+export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
   const [summa, setSumma] = useState("");
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
   const [tanlanganKat, setTanlanganKat] = useState("Obed");
@@ -60,8 +65,8 @@ export function ChiqimTab() {
         p_tolov_turi: tolovTuri,
         p_kassa_turi: kassaTuri,
         p_izoh: izoh.trim() || null,
-        p_xodim: "Mini App",
-        p_telegram_user_id: null,
+        p_xodim: xodimNomi || "Mini App",
+        p_telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
       });
 
       if (error) throw error;

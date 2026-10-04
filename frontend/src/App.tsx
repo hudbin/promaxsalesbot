@@ -12,81 +12,173 @@ type TabTur = "sotuv" | "chiqim" | "qarzlar" | "kassa" | "ombor";
 
 export default function App() {
   const [faolTab, setFaolTab] = useState<TabTur>("sotuv");
-  const [telegramFoydalanuvchi, setTelegramFoydalanuvchi] = useState<string>("Boshqaruv");
+  const [telegramFoydalanuvchi, setTelegramFoydalanuvchi] = useState<string>("Xodim");
   const [xodimModalOchiq, setXodimModalOchiq] = useState(false);
-  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
+  const [currentUserRole, setCurrentUserRole] = useState<string>("sotuvchi");
   const [currentUserTgId, setCurrentUserTgId] = useState<number | string | null>(null);
-  const [isBlocked, setIsBlocked] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(true);
+  const [blokSababi, setBlokSababi] = useState<string>("");
   const [tekshirilmoqda, setTekshirilmoqda] = useState(true);
+  const [adminParolModal, setAdminParolModal] = useState(false);
+  const [adminParolInput, setAdminParolInput] = useState("");
+  const [adminParolXato, setAdminParolXato] = useState("");
 
   const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
 
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        if (tg) {
-          tg.ready();
-          tg.expand();
-          try {
-            if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
-              tg.requestFullscreen();
-            }
-            tg.setHeaderColor?.("#ffffff");
-            tg.setBackgroundColor?.("#f8fafc");
-            tg.enableClosingConfirmation?.();
-          } catch {}
+  async function checkAuth() {
+    setTekshirilmoqda(true);
+    try {
+      // 1. Localhost muhitida dasturlash uchun ruxsat
+      const isLocal =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1");
 
-          const onFirstInteract = () => {
-            if (tg && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
-              try {
-                tg.requestFullscreen();
-              } catch {}
-            }
-          };
-          window.addEventListener("touchstart", onFirstInteract, { once: true });
-          window.addEventListener("click", onFirstInteract, { once: true });
-
-          const user = tg.initDataUnsafe?.user;
-          if (user) {
-            if (user.first_name) {
-              setTelegramFoydalanuvchi(user.first_name);
-            }
-            setCurrentUserTgId(user.id);
-
-            // Supabase'dan xodimlarni tekshirish
-            const { data: xodimlar } = await supabase
-              .from("xodimlar")
-              .select("*");
-
-            // Agar bazada umuman xodimlar kiritilmagan bo'lsa (boshlang'ich holat)
-            if (!xodimlar || xodimlar.length === 0) {
-              setCurrentUserRole("admin");
-              setIsBlocked(false);
-            } else {
-              const current = xodimlar.find((x: any) => String(x.telegram_id) === String(user.id));
-              if (current) {
-                if (current.faol) {
-                  setCurrentUserRole(current.rol || "sotuvchi");
-                  setIsBlocked(false);
-                } else {
-                  setIsBlocked(true); // Ruxsati to'xtatilgan
-                }
-              } else {
-                // Notanish shaxs
-                setIsBlocked(true);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Auth xatosi:", err);
-      } finally {
+      if (isLocal) {
+        setCurrentUserRole("admin");
+        setTelegramFoydalanuvchi("Dasturchi (Local)");
+        setIsBlocked(false);
         setTekshirilmoqda(false);
+        return;
       }
-    }
 
+      // 2. Telegram WebApp muhitini sozlash
+      if (tg) {
+        tg.ready();
+        tg.expand();
+        try {
+          if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+            tg.requestFullscreen();
+          }
+          tg.setHeaderColor?.("#ffffff");
+          tg.setBackgroundColor?.("#f8fafc");
+          tg.enableClosingConfirmation?.();
+        } catch {}
+
+        const onFirstInteract = () => {
+          if (tg && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+            try {
+              tg.requestFullscreen();
+            } catch {}
+          }
+        };
+        window.addEventListener("touchstart", onFirstInteract, { once: true });
+        window.addEventListener("click", onFirstInteract, { once: true });
+
+        const user = tg.initDataUnsafe?.user;
+        if (!user || !user.id) {
+          setIsBlocked(true);
+          setBlokSababi(
+            "Telegram foydalanuvchi ma'lumoti aniqlanmadi. Mini App faqat rasmiy Telegram orqali ochilishi kerak."
+          );
+          setTekshirilmoqda(false);
+          return;
+        }
+
+        const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Foydalanuvchi";
+        setTelegramFoydalanuvchi(fullName);
+        setCurrentUserTgId(user.id);
+
+        // Supabase xodimlar jadvalidan tekshirish
+        const numId = Number(user.id);
+        const { data: xodim, error } = await supabase
+          .from("xodimlar")
+          .select("*")
+          .eq("telegram_id", !isNaN(numId) ? numId : user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Xodimlarni tekshirishda xatolik:", error);
+          setIsBlocked(true);
+          setBlokSababi("Baza bilan bog'lanishda xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.");
+          setTekshirilmoqda(false);
+          return;
+        }
+
+        if (xodim) {
+          if (xodim.faol) {
+            setCurrentUserRole(xodim.rol || "sotuvchi");
+            if (xodim.ism) {
+              setTelegramFoydalanuvchi(xodim.ism);
+            }
+            setIsBlocked(false);
+          } else {
+            setIsBlocked(true);
+            setBlokSababi("Sizning profilingiz administrator tomonidan vaqtincha to'xtatilgan.");
+          }
+        } else {
+          // Xodimlar ro'yxatida yo'q
+          setIsBlocked(true);
+          setBlokSababi("Siz PROMAX xodimlari ro'yxatida emassiz.");
+        }
+      } else {
+        setIsBlocked(true);
+        setBlokSababi("Ilova faqat Telegram orqali ishlaydi.");
+      }
+    } catch (err: any) {
+      console.error("Auth xatosi:", err);
+      setIsBlocked(true);
+      setBlokSababi("Xavfsizlik tekshiruvida xatolik yuz berdi.");
+    } finally {
+      setTekshirilmoqda(false);
+    }
+  }
+
+  useEffect(() => {
     checkAuth();
   }, []);
+
+  async function adminParolBilanKirish() {
+    if (!adminParolInput.trim()) return;
+    if (adminParolInput.trim() !== "promax2026") {
+      setAdminParolXato("Parol noto'g'ri!");
+      return;
+    }
+
+    try {
+      const user = tg?.initDataUnsafe?.user;
+      const tgId = user?.id || currentUserTgId;
+      const ism = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() : "Bosh Admin";
+      const username = user?.username ? `@${user.username}` : null;
+
+      if (tgId) {
+        const numId = Number(tgId);
+        const { data: mavjud } = await supabase
+          .from("xodimlar")
+          .select("id")
+          .eq("telegram_id", !isNaN(numId) ? numId : tgId)
+          .maybeSingle();
+
+        if (mavjud) {
+          await supabase
+            .from("xodimlar")
+            .update({
+              rol: "admin",
+              faol: true,
+              ism: ism || "Bosh Admin",
+              telegram_username: username,
+            })
+            .eq("id", mavjud.id);
+        } else {
+          await supabase.from("xodimlar").insert({
+            telegram_id: !isNaN(numId) ? numId : tgId,
+            ism: ism || "Bosh Admin",
+            rol: "admin",
+            faol: true,
+            telegram_username: username,
+          });
+        }
+      }
+
+      setCurrentUserRole("admin");
+      setTelegramFoydalanuvchi(ism || "Bosh Admin");
+      setIsBlocked(false);
+      setAdminParolModal(false);
+      haptic("success");
+    } catch (err: any) {
+      setAdminParolXato("Xatolik: " + err.message);
+    }
+  }
 
   function tabOzgarti(tab: TabTur) {
     haptic("light");
@@ -94,8 +186,21 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Ruxsat yo'q holatidagi bloklash ekrani
-  if (!tekshirilmoqda && isBlocked) {
+  // 1. Yuklanmoqda holati (Splash Screen)
+  if (tekshirilmoqda) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-base mb-3 shadow-md animate-pulse">
+          PX
+        </div>
+        <p className="text-sm font-black text-slate-800">PROMAX STORE</p>
+        <p className="text-xs text-slate-500 mt-1">Xavfsizlik va ruxsat tekshirilmoqda...</p>
+      </div>
+    );
+  }
+
+  // 2. Ruxsat yo'q holatidagi bloklash ekrani (Lock Screen)
+  if (isBlocked) {
     return (
       <div
         className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center"
@@ -106,18 +211,100 @@ export default function App() {
         </div>
         <h2 className="text-lg font-black text-slate-900 mb-1.5">Ruxsat Cheklangan</h2>
         <p className="text-xs text-slate-600 leading-relaxed max-w-xs mb-4">
-          Ushbu do'kon tizimidan faqat ro'yxatdan o'tgan PROMAX xodimlari foydalana oladi.
+          {blokSababi || "Ushbu do'kon tizimidan faqat ro'yxatdan o'tgan PROMAX xodimlari foydalana oladi."}
         </p>
-        <div className="bg-white border border-slate-200 rounded-xl p-3 w-full text-left space-y-1.5 text-xs mb-4 shadow-2xs">
-          <p className="text-slate-500 font-medium">Sizning Telegram profilingiz:</p>
-          <p className="font-bold text-slate-900">{telegramFoydalanuvchi}</p>
-          {currentUserTgId && (
-            <p className="font-mono text-slate-600">ID: <span className="font-bold text-indigo-700">{currentUserTgId}</span></p>
-          )}
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 w-full text-left space-y-2 text-xs mb-4 shadow-2xs">
+          <p className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Telegram profilingiz</p>
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-900 text-sm">{telegramFoydalanuvchi}</span>
+            {currentUserTgId && (
+              <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 rounded-md text-slate-700 font-semibold">
+                ID: {currentUserTgId}
+              </span>
+            )}
+          </div>
         </div>
-        <p className="text-[11px] text-slate-400">
-          Botga o'tib (/start) telefon raqamingizni tasdiqlang yoki administratorga murojaat qiling.
-        </p>
+
+        {/* Yo'riqnoma */}
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 w-full text-left space-y-1.5 text-xs mb-5">
+          <p className="font-bold text-amber-900">Qanday qilib ruxsat olish mumkin?</p>
+          <ol className="list-decimal list-inside text-amber-800 space-y-1 text-[11px] leading-relaxed">
+            <li>Telegram botga kiring: <b>@promax_sotuv_bot</b></li>
+            <li><b>"📲 Telefon raqamimni yuborish"</b> tugmasini bosing</li>
+            <li>Administrator tasdiqlashi bilanoq dastur ochiladi</li>
+          </ol>
+        </div>
+
+        {/* Tugmalar */}
+        <div className="w-full space-y-2">
+          <button
+            onClick={() => checkAuth()}
+            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm"
+          >
+            🔄 Qayta tekshirish
+          </button>
+
+          {tg && (
+            <button
+              onClick={() => {
+                try {
+                  tg.close();
+                } catch {}
+              }}
+              className="w-full py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all active:scale-95"
+            >
+              Botga qaytish
+            </button>
+          )}
+
+          {/* Bosh admin uchun maxfiy kalit orqali tezkor kirish */}
+          <div className="pt-2">
+            {!adminParolModal ? (
+              <button
+                onClick={() => setAdminParolModal(true)}
+                className="text-[11px] text-slate-500 hover:text-slate-700 font-semibold underline underline-offset-2"
+              >
+                🔑 Bosh administrator paroli orqali kirish
+              </button>
+            ) : (
+              <div className="bg-white border border-slate-200 p-3 rounded-2xl shadow-sm text-left space-y-2 animate-fade-in">
+                <p className="text-xs font-bold text-slate-900">Bosh Administrator Paroli</p>
+                <input
+                  type="password"
+                  placeholder="Maxfiy parolni kiriting..."
+                  value={adminParolInput}
+                  onChange={(e) => {
+                    setAdminParolInput(e.target.value);
+                    setAdminParolXato("");
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+                {adminParolXato && (
+                  <p className="text-[11px] text-rose-600 font-medium">{adminParolXato}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={adminParolBilanKirish}
+                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all"
+                  >
+                    Tasdiqlash & Kirish
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAdminParolModal(false);
+                      setAdminParolInput("");
+                      setAdminParolXato("");
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                  >
+                    Bekor
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -136,7 +323,7 @@ export default function App() {
           <div>
             <h1 className="text-xs font-black text-slate-900 leading-tight">PROMAX STORE</h1>
             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold">
-              <span>{telegramFoydalanuvchi}</span>
+              <span className="truncate max-w-[130px]">{telegramFoydalanuvchi}</span>
               <span className={`px-1.5 py-0.2 rounded-full font-extrabold text-[9px] uppercase ${
                 currentUserRole === "admin" ? "bg-purple-100 text-purple-800" : "bg-emerald-100 text-emerald-800"
               }`}>
@@ -163,9 +350,24 @@ export default function App() {
 
       {/* Asosiy Kontent */}
       <main className="flex-1 px-3 py-2 pb-24">
-        {faolTab === "sotuv" && <SotuvTab telegramFoydalanuvchi={telegramFoydalanuvchi} />}
-        {faolTab === "chiqim" && <ChiqimTab />}
-        {faolTab === "qarzlar" && <QarzlarTab />}
+        {faolTab === "sotuv" && (
+          <SotuvTab
+            xodimNomi={telegramFoydalanuvchi}
+            telegramUserId={currentUserTgId}
+          />
+        )}
+        {faolTab === "chiqim" && (
+          <ChiqimTab
+            xodimNomi={telegramFoydalanuvchi}
+            telegramUserId={currentUserTgId}
+          />
+        )}
+        {faolTab === "qarzlar" && (
+          <QarzlarTab
+            xodimNomi={telegramFoydalanuvchi}
+            telegramUserId={currentUserTgId}
+          />
+        )}
         {faolTab === "kassa" && <KassaTab />}
         {faolTab === "ombor" && <OmborTab />}
       </main>

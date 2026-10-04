@@ -66,10 +66,11 @@ async function checkUserPermission(
   // 2. Supabase xodimlar jadvali
   if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     try {
+      const numId = Number(telegramId);
       const { data: x } = await supabase
         .from("xodimlar")
         .select("*")
-        .eq("telegram_id", telegramId)
+        .eq("telegram_id", !isNaN(numId) ? numId : telegramId)
         .eq("faol", true)
         .maybeSingle();
 
@@ -519,12 +520,13 @@ export const handler: Handler = async (event) => {
 
   // 2.1 BOSH ADMIN BOOTSTRAP PAROLI (/admin_parol <parol>)
   if (text.startsWith("/admin_parol")) {
-    const kiritilganParol = text.replace("/admin_parol", "").trim();
+    const kiritilganParol = text.replace(/^\/admin_parol(@\w+)?/i, "").trim();
     if (kiritilganParol && kiritilganParol === ADMIN_SECRET_KEY) {
+      const numSenderId = Number(senderId);
       const { data: mavjud } = await supabase
         .from("xodimlar")
         .select("id")
-        .eq("telegram_id", senderId)
+        .eq("telegram_id", !isNaN(numSenderId) ? numSenderId : senderId)
         .maybeSingle();
 
       if (mavjud) {
@@ -534,7 +536,7 @@ export const handler: Handler = async (event) => {
           .eq("id", mavjud.id);
       } else {
         await supabase.from("xodimlar").insert({
-          telegram_id: senderId,
+          telegram_id: !isNaN(numSenderId) ? numSenderId : senderId,
           ism: senderName,
           telegram_username: senderUsername,
           rol: "admin",
@@ -544,7 +546,7 @@ export const handler: Handler = async (event) => {
 
       await tgPost("sendMessage", {
         chat_id: chatId,
-        text: `👑 <b>Tabriklaymiz, ${senderName}!</b>\n\nAdmin paroli to'g'ri tasdiqlandi. Siz PROMAX tizimida <b>Bosh Administrator</b> sifatida ro'yxatdan o'tdingiz!\n\nEndi bot orqali va Mini App'da barcha funksiyalar (kassa, ombor, xodimlarni boshqarish) siz uchun ochiq.\n🆔 Sizning Telegram ID: <code>${senderId}</code>`,
+        text: `👑 <b>Tabriklaymiz, ${senderName}!</b>\n\nAdmin paroli to'g'ri tasdiqlandi. Siz PROMAX tizimida <b>Bosh Administrator</b> sifatida ro'yxatdan o'tdingiz!\n\nEndi bot orqali va Mini App'da barcha funksiyalar (kassa, ombor, xodimlarni tasdiqlash) siz uchun ochiq.\n🆔 Sizning Telegram ID: <code>${senderId}</code>`,
         parse_mode: "HTML",
         reply_markup: { remove_keyboard: true },
       });
@@ -563,22 +565,31 @@ export const handler: Handler = async (event) => {
   if (contact) {
     const phone = normalizePhone(contact.phone_number);
     const last9 = phone.slice(-9);
+    const numSenderId = Number(senderId);
 
-    // 1. Allaqachon tasdiqlanganmi?
+    // 1. Allaqachon telegram_id bo'yicha mavjudmi?
     const { data: borXodim } = await supabase
       .from("xodimlar")
       .select("*")
-      .eq("telegram_id", senderId)
-      .eq("faol", true)
+      .eq("telegram_id", !isNaN(numSenderId) ? numSenderId : senderId)
       .maybeSingle();
 
     if (borXodim) {
-      await tgPost("sendMessage", {
-        chat_id: chatId,
-        text: `✅ <b>Siz allaqachon tizimda ro'yxatdan o'tgansiz!</b>\n\n👤 Ism: <b>${borXodim.ism}</b>\n🎭 Roli: <b>${borXodim.rol === "admin" ? "👑 Admin" : "💼 Sotuvchi"}</b>\n\nOvozli yoki matnli xabarlar yuborishingiz mumkin.`,
-        parse_mode: "HTML",
-        reply_markup: { remove_keyboard: true },
-      });
+      if (borXodim.faol) {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: `✅ <b>Siz allaqachon tizimda ro'yxatdan o'tgansiz!</b>\n\n👤 Ism: <b>${borXodim.ism}</b>\n🎭 Roli: <b>${borXodim.rol === "admin" ? "👑 Admin" : "💼 Sotuvchi"}</b>\n\nOvozli yoki matnli xabarlar yuborishingiz va Mini App'dan to'liq foydalanishingiz mumkin.`,
+          parse_mode: "HTML",
+          reply_markup: { remove_keyboard: true },
+        });
+      } else {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: `⛔️ <b>Sizning profilingiz administrator tomonidan to'xtatilgan.</b>\n\nQayta faollashtirish uchun do'kon ma'muriyatiga murojaat qiling.\n🆔 Sizning ID: <code>${senderId}</code>`,
+          parse_mode: "HTML",
+          reply_markup: { remove_keyboard: true },
+        });
+      }
       return { statusCode: 200, body: "OK" };
     }
 
@@ -590,11 +601,21 @@ export const handler: Handler = async (event) => {
       .maybeSingle();
 
     if (matched) {
+      if (!matched.faol) {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: `⛔️ <b>Ushbu telefon raqamiga tegishli profil administrator tomonidan to'xtatilgan.</b>\n\nQayta faollashtirish uchun ma'muriyatga murojaat qiling.`,
+          parse_mode: "HTML",
+          reply_markup: { remove_keyboard: true },
+        });
+        return { statusCode: 200, body: "OK" };
+      }
+
       // Bog'lash va faollashtirish
       await supabase
         .from("xodimlar")
         .update({
-          telegram_id: senderId,
+          telegram_id: !isNaN(numSenderId) ? numSenderId : senderId,
           telegram_username: senderUsername,
           faol: true,
         })
@@ -609,7 +630,7 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, body: "OK" };
     }
 
-    // 3. Notanish raqam -> Adminga tasdiqlash so'rovini yuborish
+    // 3. Notanish raqam -> Bazaga so'rov yozish va barcha Adminlarga xabar yuborish
     const draftId = `xod_${Math.random().toString(36).substring(2, 9)}`;
     await supabase.from("tranzaksiya_qoralama").insert({
       id: draftId,
@@ -643,34 +664,77 @@ export const handler: Handler = async (event) => {
       ],
     };
 
-    // Barcha adminlarga yuborish
+    // Barcha adminlarning Telegram ID larini yig'ish (Env + Supabase xodimlar)
+    const adminTargets = new Set<string>();
+
     if (ADMIN_TELEGRAM_ID) {
-      for (const aId of ADMIN_TELEGRAM_ID.split(",")) {
-        if (aId.trim()) {
-          await tgPost("sendMessage", {
-            chat_id: aId.trim(),
-            text: adminMsg,
-            parse_mode: "HTML",
-            reply_markup: adminKeyboard,
-          });
+      ADMIN_TELEGRAM_ID.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((id) => adminTargets.add(id));
+    }
+
+    try {
+      const { data: dbAdmins } = await supabase
+        .from("xodimlar")
+        .select("telegram_id")
+        .eq("rol", "admin")
+        .eq("faol", true);
+
+      if (dbAdmins) {
+        for (const a of dbAdmins) {
+          if (a.telegram_id) {
+            adminTargets.add(String(a.telegram_id));
+          }
         }
+      }
+    } catch (err) {
+      console.error("DB adminlarni olishda xato:", err);
+    }
+
+    // Agar tizimda umuman bitta ham admin yo'q bo'lsa
+    if (adminTargets.size === 0 && !GROUP_CHAT_ID) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>Tizimda hali administrator tayinlanmagan.</b>\n\nAgar siz do'kon egasi bo'lsangiz, botga <code>/admin_parol promax2026</code> buyrug'ini yuboring va bosh administrator huquqini oling.`,
+        parse_mode: "HTML",
+        reply_markup: { remove_keyboard: true },
+      });
+      return { statusCode: 200, body: "OK" };
+    }
+
+    // Barcha adminlarga tasdiqlash xabarnomasini yuborish
+    for (const aId of adminTargets) {
+      try {
+        await tgPost("sendMessage", {
+          chat_id: aId,
+          text: adminMsg,
+          parse_mode: "HTML",
+          reply_markup: adminKeyboard,
+        });
+      } catch (err) {
+        console.error(`Adminga (${aId}) yuborishda xato:`, err);
       }
     }
 
     // Guruhga yuborish (agar guruh sozlangan bo'lsa)
     if (GROUP_CHAT_ID) {
-      await tgPost("sendMessage", {
-        chat_id: GROUP_CHAT_ID,
-        text: adminMsg,
-        parse_mode: "HTML",
-        reply_markup: adminKeyboard,
-      });
+      try {
+        await tgPost("sendMessage", {
+          chat_id: GROUP_CHAT_ID,
+          text: adminMsg,
+          parse_mode: "HTML",
+          reply_markup: adminKeyboard,
+        });
+      } catch (err) {
+        console.error("Guruhga yuborishda xato:", err);
+      }
     }
 
     // Xodimga xabar
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `⏳ <b>Ruxsat so'rovingiz qabul qilindi!</b>\n\nTelefon raqamingiz (<code>${phone}</code>) administratorga yuborildi. Administrator ruxsat berishi bilan sizga xabar keladi.`,
+      text: `⏳ <b>Ruxsat so'rovingiz qabul qilindi!</b>\n\nTelefon raqamingiz (<code>${phone}</code>) administratorga yuborildi. Administrator tasdiqlashi bilan sizga xabar keladi.`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });

@@ -4,7 +4,12 @@ import { Search, Phone, MapPin, HandCoins, CheckCircle, ChevronRight } from "luc
 import { MijozDetailsModal } from "./MijozDetailsModal";
 import { Combobox } from "./ui/Combobox";
 
-export function QarzlarTab() {
+interface QarzlarTabProps {
+  xodimNomi?: string;
+  telegramUserId?: number | string | null;
+}
+
+export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) {
   const [mijozlar, setMijozlar] = useState<any[]>([]);
   const [qidiruv, setQidiruv] = useState("");
   const [tanlanganMijoz, setTanlanganMijoz] = useState<any>(null);
@@ -49,8 +54,8 @@ export function QarzlarTab() {
         p_tolov_turi: tolovTuri,
         p_kassa_turi: kassaTuri,
         p_izoh: izoh.trim() || null,
-        p_xodim: "Mini App",
-        p_telegram_user_id: null,
+        p_xodim: xodimNomi || "Mini App",
+        p_telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
       });
 
       if (error) throw error;
