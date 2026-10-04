@@ -27,6 +27,40 @@ export default function App() {
 
   const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
 
+  // Telegram Tungi / Kunduzgi rejimini avtomatik aniqlash va real vaqtda moslash
+  useEffect(() => {
+    function sinxronlashtirRejim() {
+      const isDark =
+        tg?.colorScheme === "dark" ||
+        (!tg && typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+        try {
+          tg?.setHeaderColor?.("#0b1120");
+          tg?.setBackgroundColor?.("#0b1120");
+        } catch {}
+      } else {
+        document.documentElement.classList.remove("dark");
+        try {
+          tg?.setHeaderColor?.("#ffffff");
+          tg?.setBackgroundColor?.("#f8fafc");
+        } catch {}
+      }
+    }
+
+    sinxronlashtirRejim();
+
+    if (tg?.onEvent) {
+      tg.onEvent("themeChanged", sinxronlashtirRejim);
+      return () => {
+        try {
+          tg.offEvent("themeChanged", sinxronlashtirRejim);
+        } catch {}
+      };
+    }
+  }, [tg]);
+
   async function checkAuth() {
     setTekshirilmoqda(true);
     try {
@@ -52,8 +86,6 @@ export default function App() {
           if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
             tg.requestFullscreen();
           }
-          tg.setHeaderColor?.("#ffffff");
-          tg.setBackgroundColor?.("#f8fafc");
           tg.enableClosingConfirmation?.();
         } catch {}
 
@@ -240,37 +272,37 @@ export default function App() {
   if (isBlocked) {
     return (
       <div
-        className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center"
+        className="max-w-md mx-auto min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-6 text-center transition-colors"
         style={{ paddingTop: "max(84px, calc(env(safe-area-inset-top, 0px) + 72px))" }}
       >
-        <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mb-4 shadow-sm">
+        <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 rounded-3xl flex items-center justify-center mb-4 shadow-sm">
           <Lock className="w-8 h-8" />
         </div>
-        <h2 className="text-lg font-black text-slate-900 mb-1.5">Ruxsat Cheklangan</h2>
-        <p className="text-xs text-slate-600 leading-relaxed max-w-xs mb-4">
+        <h2 className="text-lg font-black text-slate-900 dark:text-white mb-1.5">Ruxsat Cheklangan</h2>
+        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-xs mb-4">
           {blokSababi || "Ushbu do'kon tizimidan faqat ro'yxatdan o'tgan PROMAX xodimlari foydalana oladi."}
         </p>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 w-full text-left space-y-2 text-xs mb-4 shadow-2xs">
-          <p className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Telegram profilingiz</p>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 w-full text-left space-y-2 text-xs mb-4 shadow-2xs">
+          <p className="text-slate-400 dark:text-slate-500 font-semibold text-[11px] uppercase tracking-wider">Telegram profilingiz</p>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {foydalanuvchiRasm ? (
                 <img
                   src={foydalanuvchiRasm}
                   alt={telegramFoydalanuvchi}
-                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs"
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"
                   onError={() => setFoydalanuvchiRasm(null)}
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-2xs">
+                <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center font-black text-xs shadow-2xs">
                   {telegramFoydalanuvchi ? telegramFoydalanuvchi.charAt(0).toUpperCase() : "U"}
                 </div>
               )}
-              <span className="font-bold text-slate-900 text-sm">{telegramFoydalanuvchi}</span>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">{telegramFoydalanuvchi}</span>
             </div>
             {currentUserTgId && (
-              <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 rounded-md text-slate-700 font-semibold">
+              <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md font-semibold">
                 ID: {currentUserTgId}
               </span>
             )}
@@ -278,9 +310,9 @@ export default function App() {
         </div>
 
         {/* Yo'riqnoma */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 w-full text-left space-y-1.5 text-xs mb-5">
-          <p className="font-bold text-amber-900">Qanday qilib ruxsat olish mumkin?</p>
-          <ol className="list-decimal list-inside text-amber-800 space-y-1 text-[11px] leading-relaxed">
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-3.5 w-full text-left space-y-1.5 text-xs mb-5">
+          <p className="font-bold text-amber-900 dark:text-amber-300">Qanday qilib ruxsat olish mumkin?</p>
+          <ol className="list-decimal list-inside text-amber-800 dark:text-amber-400/90 space-y-1 text-[11px] leading-relaxed">
             <li>Telegram botga kiring: <b>@promax_sotuv_bot</b></li>
             <li><b>"📲 Telefon raqamimni yuborish"</b> tugmasini bosing</li>
             <li>Administrator tasdiqlashi bilanoq dastur ochiladi</li>
@@ -291,7 +323,7 @@ export default function App() {
         <div className="w-full space-y-2">
           <button
             onClick={() => checkAuth()}
-            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm"
+            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm"
           >
             🔄 Qayta tekshirish
           </button>
@@ -303,7 +335,7 @@ export default function App() {
                   tg.close();
                 } catch {}
               }}
-              className="w-full py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-all active:scale-95"
+              className="w-full py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all active:scale-95"
             >
               Botga qaytish
             </button>
@@ -314,13 +346,13 @@ export default function App() {
             {!adminParolModal ? (
               <button
                 onClick={() => setAdminParolModal(true)}
-                className="text-[11px] text-slate-500 hover:text-slate-700 font-semibold underline underline-offset-2"
+                className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-semibold underline underline-offset-2"
               >
                 🔑 Bosh administrator paroli orqali kirish
               </button>
             ) : (
-              <div className="bg-white border border-slate-200 p-3 rounded-2xl shadow-sm text-left space-y-2 animate-fade-in">
-                <p className="text-xs font-bold text-slate-900">Bosh Administrator Paroli</p>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-sm text-left space-y-2 animate-fade-in">
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Bosh Administrator Paroli</p>
                 <input
                   type="password"
                   placeholder="Maxfiy parolni kiriting..."
@@ -329,7 +361,7 @@ export default function App() {
                     setAdminParolInput(e.target.value);
                     setAdminParolXato("");
                   }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-indigo-500"
                 />
                 {adminParolXato && (
                   <p className="text-[11px] text-rose-600 font-medium">{adminParolXato}</p>
@@ -347,7 +379,7 @@ export default function App() {
                       setAdminParolInput("");
                       setAdminParolXato("");
                     }}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                    className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
                   >
                     Bekor
                   </button>
@@ -362,7 +394,7 @@ export default function App() {
 
   return (
     <div
-      className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col"
+      className="max-w-md mx-auto min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200"
       style={{ paddingTop: "max(84px, calc(env(safe-area-inset-top, 0px) + 72px))" }}
     >
       {/* Yuqori Profil & Boshqaruv Satri */}
@@ -372,20 +404,22 @@ export default function App() {
             <img
               src={foydalanuvchiRasm}
               alt={telegramFoydalanuvchi}
-              className="w-8 h-8 rounded-xl object-cover border border-slate-200 shadow-2xs"
+              className="w-8 h-8 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shadow-2xs"
               onError={() => setFoydalanuvchiRasm(null)}
             />
           ) : (
-            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center font-black text-xs shadow-2xs">
               {telegramFoydalanuvchi ? telegramFoydalanuvchi.charAt(0).toUpperCase() : "PX"}
             </div>
           )}
           <div>
-            <h1 className="text-xs font-black text-slate-900 leading-tight">PROMAX STORE</h1>
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold">
+            <h1 className="text-xs font-black text-slate-900 dark:text-white leading-tight">PROMAX STORE</h1>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
               <span className="truncate max-w-[130px]">{telegramFoydalanuvchi}</span>
               <span className={`px-1.5 py-0.2 rounded-full font-extrabold text-[9px] uppercase ${
-                currentUserRole === "admin" ? "bg-purple-100 text-purple-800" : "bg-emerald-100 text-emerald-800"
+                currentUserRole === "admin" 
+                  ? "bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300" 
+                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
               }`}>
                 {currentUserRole === "admin" ? "👑 Admin" : "💼 Sotuvchi"}
               </span>
@@ -400,9 +434,9 @@ export default function App() {
               setXodimModalOchiq(true);
               haptic("light");
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 shadow-2xs active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-600 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-400 shadow-2xs active:scale-95 transition-all"
           >
-            <Users className="w-3.5 h-3.5 text-indigo-600" />
+            <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>Xodimlar</span>
           </button>
         )}
@@ -447,15 +481,15 @@ export default function App() {
       )}
 
       {/* Pastki Katta Navigatsiya Paneli (Ixcham va qulay) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-md overflow-x-auto">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-md overflow-x-auto">
         <div className="max-w-md mx-auto grid grid-cols-6 px-1 py-1 pb-[calc(4px+env(safe-area-inset-bottom,0px))] min-w-[320px]">
           {/* 1. Sotuv */}
           <button
             onClick={() => tabOzgarti("sotuv")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "sotuv"
-                ? "bg-emerald-50 text-emerald-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <ShoppingCart className={`w-5 h-5 ${faolTab === "sotuv" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
@@ -467,8 +501,8 @@ export default function App() {
             onClick={() => tabOzgarti("chiqim")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "chiqim"
-                ? "bg-rose-50 text-rose-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <TrendingDown className={`w-5 h-5 ${faolTab === "chiqim" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
@@ -480,8 +514,8 @@ export default function App() {
             onClick={() => tabOzgarti("qarzlar")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "qarzlar"
-                ? "bg-amber-50 text-amber-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <Users className={`w-5 h-5 ${faolTab === "qarzlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
@@ -493,8 +527,8 @@ export default function App() {
             onClick={() => tabOzgarti("kassa")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "kassa"
-                ? "bg-blue-50 text-blue-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <Wallet className={`w-5 h-5 ${faolTab === "kassa" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
@@ -506,8 +540,8 @@ export default function App() {
             onClick={() => tabOzgarti("ombor")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "ombor"
-                ? "bg-purple-50 text-purple-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <Package className={`w-5 h-5 ${faolTab === "ombor" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
@@ -519,8 +553,8 @@ export default function App() {
             onClick={() => tabOzgarti("hisobotlar")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "hisobotlar"
-                ? "bg-indigo-50 text-indigo-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
+                ? "bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 font-bold"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
             }`}
           >
             <BarChart className={`w-5 h-5 ${faolTab === "hisobotlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
