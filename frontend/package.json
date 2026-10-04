@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@netlify/functions": "^2.8.2",
     "@supabase/supabase-js": "^2.49.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",

@@ -1,13 +1,11 @@
 [build]
-  base = "frontend"
-  publish = "dist"
-  command = "npm run build"
+  command = "npm --prefix frontend install && npm --prefix frontend run build"
+  publish = "frontend/dist"
 
 [functions]
-  directory = "../netlify/functions"
+  directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Telegram Mini App SPA marshrutizatsiyasi
 [[redirects]]
   from = "/*"
   to = "/index.html"
