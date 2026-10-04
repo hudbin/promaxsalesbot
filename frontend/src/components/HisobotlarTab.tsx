@@ -172,7 +172,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
     setXabar(null);
 
     try {
-      const res = await fetch("/.netlify/functions/send-report", {
+      const res = await fetch("/api/send-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

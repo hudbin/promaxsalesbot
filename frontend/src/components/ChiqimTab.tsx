@@ -81,7 +81,7 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
           (izoh.trim() ? `📝 Izoh: <i>${izoh.trim()}</i>\n` : "") +
           `👤 Kiritdi: <b>${xodimNomi || "Mini App"}</b>`;
           
-        await fetch("/.netlify/functions/notify", {
+        await fetch("/api/notify", {
           method: "POST",
           body: JSON.stringify({ text: matn }),
         });
