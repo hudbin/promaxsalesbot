@@ -55,106 +55,87 @@ export default function App() {
   return (
     <div
       className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col"
-      style={{ paddingTop: "max(4px, env(safe-area-inset-top, 0px))" }}
+      style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 46px))" }}
     >
-      {/* Telegram sarlavhasi ostidagi ixcham va toza xush kelibsiz qatori */}
-      <div className="px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-          <p className="text-sm font-extrabold text-slate-800">
-            Salom, {telegramFoydalanuvchi} 👋
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            haptic("light");
-            window.location.reload();
-          }}
-          className="p-1.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-slate-800 transition-colors shadow-2xs"
-          title="Yangilash"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
       {/* Asosiy Kontent */}
-      <main className="flex-1 p-4">
-        {faolTab === "sotuv" && <SotuvTab />}
+      <main className="flex-1 px-3 py-2">
+        {faolTab === "sotuv" && <SotuvTab telegramFoydalanuvchi={telegramFoydalanuvchi} />}
         {faolTab === "chiqim" && <ChiqimTab />}
         {faolTab === "qarzlar" && <QarzlarTab />}
         {faolTab === "kassa" && <KassaTab />}
         {faolTab === "ombor" && <OmborTab />}
       </main>
 
-      {/* Pastki Katta Navigatsiya Paneli (40+ yoshdagilar uchun qulay) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg">
-        <div className="max-w-md mx-auto grid grid-cols-5 px-1 py-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))]">
+      {/* Pastki Katta Navigatsiya Paneli (Ixcham va qulay) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-md">
+        <div className="max-w-md mx-auto grid grid-cols-5 px-1 py-1 pb-[calc(4px+env(safe-area-inset-bottom,0px))]">
           {/* 1. Sotuv */}
           <button
             onClick={() => tabOzgarti("sotuv")}
-            className={`flex flex-col items-center justify-center py-2 rounded-2xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "sotuv"
-                ? "bg-emerald-50 text-emerald-700 font-extrabold"
+                ? "bg-emerald-50 text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
             }`}
           >
-            <ShoppingCart className={`w-6 h-6 ${faolTab === "sotuv" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[11px] mt-1 tracking-tight">Sotuv</span>
+            <ShoppingCart className={`w-5 h-5 ${faolTab === "sotuv" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Sotuv</span>
           </button>
 
           {/* 2. Chiqim */}
           <button
             onClick={() => tabOzgarti("chiqim")}
-            className={`flex flex-col items-center justify-center py-2 rounded-2xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "chiqim"
-                ? "bg-rose-50 text-rose-700 font-extrabold"
+                ? "bg-rose-50 text-rose-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
             }`}
           >
-            <TrendingDown className={`w-6 h-6 ${faolTab === "chiqim" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[11px] mt-1 tracking-tight">Chiqim</span>
+            <TrendingDown className={`w-5 h-5 ${faolTab === "chiqim" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Chiqim</span>
           </button>
 
           {/* 3. Qarzlar */}
           <button
             onClick={() => tabOzgarti("qarzlar")}
-            className={`flex flex-col items-center justify-center py-2 rounded-2xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "qarzlar"
-                ? "bg-amber-50 text-amber-700 font-extrabold"
+                ? "bg-amber-50 text-amber-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
             }`}
           >
-            <Users className={`w-6 h-6 ${faolTab === "qarzlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[11px] mt-1 tracking-tight">Qarzlar</span>
+            <Users className={`w-5 h-5 ${faolTab === "qarzlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Qarzlar</span>
           </button>
 
           {/* 4. Kassa */}
           <button
             onClick={() => tabOzgarti("kassa")}
-            className={`flex flex-col items-center justify-center py-2 rounded-2xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "kassa"
-                ? "bg-blue-50 text-blue-700 font-extrabold"
+                ? "bg-blue-50 text-blue-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
             }`}
           >
-            <Wallet className={`w-6 h-6 ${faolTab === "kassa" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[11px] mt-1 tracking-tight">Kassa</span>
+            <Wallet className={`w-5 h-5 ${faolTab === "kassa" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Kassa</span>
           </button>
 
           {/* 5. Ombor */}
           <button
             onClick={() => tabOzgarti("ombor")}
-            className={`flex flex-col items-center justify-center py-2 rounded-2xl transition-all ${
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
               faolTab === "ombor"
-                ? "bg-purple-50 text-purple-700 font-extrabold"
+                ? "bg-purple-50 text-purple-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
             }`}
           >
-            <Package className={`w-6 h-6 ${faolTab === "ombor" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[11px] mt-1 tracking-tight">Ombor</span>
+            <Package className={`w-5 h-5 ${faolTab === "ombor" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Ombor</span>
           </button>
         </div>
       </nav>
     </div>
   );
 }
+
