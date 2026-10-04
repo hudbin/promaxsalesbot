@@ -71,6 +71,24 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
 
       if (error) throw error;
 
+      // 🚨 GURUHGA XABAR YUBORISH (HAR QANDAY CHIQIM UCHUN)
+      try {
+        const matn = 
+          `🚨 <b>YANGI CHIQIM (XARAJAT) QAYD ETILDI</b>\n\n` +
+          `💰 Summa: <b>${pul(sonSumma)} ${valyuta}</b>\n` +
+          `📂 Kategoriya: <b>${tanlanganKat}</b>\n` +
+          `💳 To'lov turi: <b>${tolovTuri}</b>\n` +
+          (izoh.trim() ? `📝 Izoh: <i>${izoh.trim()}</i>\n` : "") +
+          `👤 Kiritdi: <b>${xodimNomi || "Mini App"}</b>`;
+          
+        await fetch("/.netlify/functions/notify", {
+          method: "POST",
+          body: JSON.stringify({ text: matn }),
+        });
+      } catch (notifyErr) {
+        console.error("Xabarnoma yuborishda xatolik:", notifyErr);
+      }
+
       haptic("success");
       setXabar(`${pul(sonSumma)} ${valyuta} xarajat saqlandi!`);
       setSumma("");

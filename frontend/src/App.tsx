@@ -4,11 +4,12 @@ import { ChiqimTab } from "./components/ChiqimTab";
 import { QarzlarTab } from "./components/QarzlarTab";
 import { KassaTab } from "./components/KassaTab";
 import { OmborTab } from "./components/OmborTab";
+import { HisobotlarTab } from "./components/HisobotlarTab";
 import { XodimlarModal } from "./components/XodimlarModal";
-import { ShoppingCart, TrendingDown, Users, Wallet, Package, Lock } from "lucide-react";
+import { ShoppingCart, TrendingDown, Users, Wallet, Package, Lock, BarChart } from "lucide-react";
 import { supabase, haptic } from "./lib/supabase";
 
-type TabTur = "sotuv" | "chiqim" | "qarzlar" | "kassa" | "ombor";
+type TabTur = "sotuv" | "chiqim" | "qarzlar" | "kassa" | "ombor" | "hisobotlar";
 
 export default function App() {
   const [faolTab, setFaolTab] = useState<TabTur>("sotuv");
@@ -370,6 +371,7 @@ export default function App() {
         )}
         {faolTab === "kassa" && <KassaTab />}
         {faolTab === "ombor" && <OmborTab />}
+        {faolTab === "hisobotlar" && <HisobotlarTab />}
       </main>
 
       {/* Xodimlar boshqaruvi Modali */}
@@ -381,8 +383,8 @@ export default function App() {
       )}
 
       {/* Pastki Katta Navigatsiya Paneli (Ixcham va qulay) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-md">
-        <div className="max-w-md mx-auto grid grid-cols-5 px-1 py-1 pb-[calc(4px+env(safe-area-inset-bottom,0px))]">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-md overflow-x-auto">
+        <div className="max-w-md mx-auto grid grid-cols-6 px-1 py-1 pb-[calc(4px+env(safe-area-inset-bottom,0px))] min-w-[320px]">
           {/* 1. Sotuv */}
           <button
             onClick={() => tabOzgarti("sotuv")}
@@ -446,6 +448,19 @@ export default function App() {
           >
             <Package className={`w-5 h-5 ${faolTab === "ombor" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
             <span className="text-[10px] mt-0.5 tracking-tight">Ombor</span>
+          </button>
+
+          {/* 6. Hisobotlar */}
+          <button
+            onClick={() => tabOzgarti("hisobotlar")}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
+              faolTab === "hisobotlar"
+                ? "bg-indigo-50 text-indigo-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <BarChart className={`w-5 h-5 ${faolTab === "hisobotlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Hisobot</span>
           </button>
         </div>
       </nav>

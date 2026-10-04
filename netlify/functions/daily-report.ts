@@ -16,8 +16,8 @@ function pul(n: number): string {
   return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
 }
 
-// Har kuni 15:00 UTC = 20:00 Toshkent vaqti
-export const handler = schedule("0 15 * * *", async () => {
+// Har kuni 16:00 UTC = 21:00 Toshkent vaqti
+export const handler = schedule("0 16 * * *", async () => {
   if (!BOT_TOKEN || !GROUP_CHAT_ID) {
     console.error("BOT_TOKEN yoki TELEGRAM_GROUP_ID sozlanmagan.");
     return { statusCode: 500 };
@@ -94,7 +94,7 @@ export const handler = schedule("0 15 * * *", async () => {
 
     const matn =
       `📊 <b>PROMAX · KUNLIK YAKUNIY HISOBOT</b>\n` +
-      `📅 <b>Sana: ${kun} (20:00)</b>\n\n` +
+      `📅 <b>Sana: ${kun} (21:00)</b>\n\n` +
       `🛒 <b>SAVDO:</b>\n` +
       `   • Jami savdo: <b>${pul(savdoUZS)} so'm</b> ${savdoUSD > 0 ? `| <b>$${pul(savdoUSD)}</b>` : ""}\n` +
       `   • Kassaga tushdi: <b>${pul(naqdUZS)} so'm</b> ${naqdUSD > 0 ? `| <b>$${pul(naqdUSD)}</b>` : ""}\n` +
