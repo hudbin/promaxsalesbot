@@ -55,10 +55,10 @@ export default function App() {
   return (
     <div
       className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col"
-      style={{ paddingTop: "max(52px, calc(env(safe-area-inset-top, 0px) + 46px))" }}
+      style={{ paddingTop: "max(84px, calc(env(safe-area-inset-top, 0px) + 72px))" }}
     >
       {/* Asosiy Kontent */}
-      <main className="flex-1 px-3 py-2">
+      <main className="flex-1 px-3 py-2 pb-24">
         {faolTab === "sotuv" && <SotuvTab telegramFoydalanuvchi={telegramFoydalanuvchi} />}
         {faolTab === "chiqim" && <ChiqimTab />}
         {faolTab === "qarzlar" && <QarzlarTab />}

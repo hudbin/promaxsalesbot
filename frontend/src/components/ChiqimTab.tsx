@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
-import { DollarSign, CheckCircle, Clock } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, ChevronRight } from "lucide-react";
+import { ChiqimDetailsModal } from "./ChiqimDetailsModal";
+import { Combobox } from "./ui/Combobox";
 
 const KATEGORIYALAR = [
   { nom: "Obed", belgi: "🍲", rang: "bg-orange-50 border-orange-200 text-orange-950" },
@@ -20,6 +22,7 @@ export function ChiqimTab() {
   const [kassaTuri, setKassaTuri] = useState("naqd_uzs");
   const [izoh, setIzoh] = useState("");
   const [bugungiRasxodlar, setBugungiRasxodlar] = useState<any[]>([]);
+  const [tanlanganChiqim, setTanlanganChiqim] = useState<any>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
   const [xabar, setXabar] = useState<string | null>(null);
 
@@ -181,33 +184,35 @@ export function ChiqimTab() {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[11px] font-bold text-slate-600 mb-1 block">To'lov turi:</label>
-          <select
+          <Combobox
+            title="To'lov turini tanlang"
             value={tolovTuri}
-            onChange={(e) => {
-              setTolovTuri(e.target.value);
-              if (e.target.value === "plastik") setKassaTuri("plastik_uzs");
+            onChange={(val) => {
+              setTolovTuri(val);
+              if (val === "plastik") setKassaTuri("plastik_uzs");
               else if (valyuta === "USD") setKassaTuri("naqd_usd");
               else setKassaTuri("naqd_uzs");
             }}
-            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-2xs"
-          >
-            <option value="naqd">💵 Naqd pul</option>
-            <option value="plastik">💳 Plastik karta</option>
-            <option value="perechisleniya">🏦 Perechisleniya</option>
-          </select>
+            options={[
+              { value: "naqd", label: "Naqd pul", icon: "💵" },
+              { value: "plastik", label: "Plastik karta", icon: "💳" },
+              { value: "perechisleniya", label: "Perechisleniya", icon: "🏦" },
+            ]}
+          />
         </div>
         <div>
           <label className="text-[11px] font-bold text-slate-600 mb-1 block">Qaysi kassadan chiqdi:</label>
-          <select
+          <Combobox
+            title="Kassani tanlang"
             value={kassaTuri}
-            onChange={(e) => setKassaTuri(e.target.value)}
-            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-2xs"
-          >
-            <option value="naqd_uzs">Naqd (So'm)</option>
-            <option value="naqd_usd">Naqd (Dollar)</option>
-            <option value="plastik_uzs">Plastik karta</option>
-            <option value="bank_uzs">Bank hisobi</option>
-          </select>
+            onChange={setKassaTuri}
+            options={[
+              { value: "naqd_uzs", label: "Naqd (So'm)" },
+              { value: "naqd_usd", label: "Naqd (Dollar)" },
+              { value: "plastik_uzs", label: "Plastik karta" },
+              { value: "bank_uzs", label: "Bank hisobi" },
+            ]}
+          />
         </div>
       </div>
 
@@ -241,11 +246,15 @@ export function ChiqimTab() {
             bugungiRasxodlar.map((r) => (
               <div
                 key={r.id}
-                className="p-2.5 bg-white border border-slate-200 rounded-xl flex justify-between items-center shadow-2xs"
+                onClick={() => {
+                  setTanlanganChiqim(r);
+                  haptic("light");
+                }}
+                className="p-2.5 bg-white border border-slate-200 hover:border-rose-300 rounded-xl flex justify-between items-center shadow-2xs cursor-pointer active:bg-slate-50 transition-all group"
               >
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-xs text-slate-900">{r.kategoriya}</span>
+                    <span className="font-bold text-xs text-slate-900 group-hover:text-rose-800">{r.kategoriya}</span>
                     {r.izoh && <span className="text-[11px] text-slate-500 truncate max-w-[150px]">· {r.izoh}</span>}
                   </div>
                   <span className="text-[10px] text-slate-400">
@@ -253,14 +262,25 @@ export function ChiqimTab() {
                     {r.tolov_turi}
                   </span>
                 </div>
-                <span className="font-extrabold text-xs text-rose-700 tabular-nums">
-                  −{pul(r.summa)} {r.valyuta}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-xs text-rose-700 tabular-nums">
+                    −{pul(r.summa)} {r.valyuta}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-600 transition-colors" />
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Chiqim Tafsilotlari Modali */}
+      {tanlanganChiqim && (
+        <ChiqimDetailsModal
+          rasxod={tanlanganChiqim}
+          onClose={() => setTanlanganChiqim(null)}
+        />
+      )}
     </div>
   );
 }

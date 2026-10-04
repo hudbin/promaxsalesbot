@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { supabase, pul } from "../lib/supabase";
-import { ArrowDownLeft, ArrowUpRight, Wallet, CreditCard, Building2, DollarSign, History } from "lucide-react";
+import { supabase, pul, haptic } from "../lib/supabase";
+import { ArrowDownLeft, ArrowUpRight, Wallet, CreditCard, Building2, DollarSign, History, ChevronRight } from "lucide-react";
+import { KassaDetailsModal } from "./KassaDetailsModal";
 
 export function KassaTab() {
   const [balanslar, setBalanslar] = useState<Record<string, number>>({});
   const [harakatlar, setHarakatlar] = useState<any[]>([]);
+  const [tanlanganHarakat, setTanlanganHarakat] = useState<any>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
 
   useEffect(() => {
@@ -101,8 +103,15 @@ export function KassaTab() {
             harakatlar.map((h) => {
               const kirimmi = h.amal === "kirim";
               return (
-                <div key={h.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-2">
+                <div
+                  key={h.id}
+                  onClick={() => {
+                    setTanlanganHarakat(h);
+                    haptic("light");
+                  }}
+                  className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100 hover:border-slate-300 cursor-pointer active:bg-slate-100 transition-all group"
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-1">
                     <div
                       className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         kirimmi ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
@@ -110,31 +119,34 @@ export function KassaTab() {
                     >
                       {kirimmi ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-900">
+                        <span className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 truncate">
                           {kirimmi ? "Kirim" : "Chiqim"} ({h.manba_turi})
                         </span>
-                        <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-200 text-slate-600 uppercase">
+                        <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-slate-200 text-slate-600 uppercase flex-shrink-0">
                           {h.kassa_turi.replace("_uzs", "").replace("_usd", "")}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 truncate max-w-[170px]">{h.izoh || "Izohsiz"}</p>
+                      <p className="text-[11px] text-slate-500 truncate max-w-[150px]">{h.izoh || "Izohsiz"}</p>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span
-                      className={`font-black text-xs tabular-nums ${
-                        kirimmi ? "text-emerald-700" : "text-rose-700"
-                      }`}
-                    >
-                      {kirimmi ? "+" : "−"}
-                      {pul(h.summa)} {h.valyuta}
-                    </span>
-                    <p className="text-[9px] font-medium text-slate-400">
-                      {new Date(h.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                  <div className="text-right flex items-center gap-1.5 flex-shrink-0">
+                    <div>
+                      <span
+                        className={`font-black text-xs tabular-nums block ${
+                          kirimmi ? "text-emerald-700" : "text-rose-700"
+                        }`}
+                      >
+                        {kirimmi ? "+" : "−"}
+                        {pul(h.summa)} {h.valyuta}
+                      </span>
+                      <p className="text-[9px] font-medium text-slate-400">
+                        {new Date(h.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 transition-colors" />
                   </div>
                 </div>
               );
@@ -142,6 +154,14 @@ export function KassaTab() {
           )}
         </div>
       </div>
+
+      {/* Kassa Harakati Tafsilotlari Modali */}
+      {tanlanganHarakat && (
+        <KassaDetailsModal
+          harakat={tanlanganHarakat}
+          onClose={() => setTanlanganHarakat(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
-import { Search, Phone, MapPin, HandCoins, CheckCircle } from "lucide-react";
+import { Search, Phone, MapPin, HandCoins, CheckCircle, ChevronRight } from "lucide-react";
+import { MijozDetailsModal } from "./MijozDetailsModal";
+import { Combobox } from "./ui/Combobox";
 
 export function QarzlarTab() {
   const [mijozlar, setMijozlar] = useState<any[]>([]);
   const [qidiruv, setQidiruv] = useState("");
   const [tanlanganMijoz, setTanlanganMijoz] = useState<any>(null);
+  const [tanlanganMijozDetali, setTanlanganMijozDetali] = useState<any>(null);
   const [tolovSumma, setTolovSumma] = useState("");
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
   const [tolovTuri, setTolovTuri] = useState("naqd");
@@ -78,6 +81,27 @@ export function QarzlarTab() {
       (m.manzil && m.manzil.toLowerCase().includes(qidiruv.toLowerCase()))
   );
 
+  function ochTolovModali(m: any) {
+    setTanlanganMijoz(m);
+    if (m.qarz_usd > 0 && m.qarz_uzs <= 0) {
+      setValyuta("USD");
+      setKassaTuri("naqd_usd");
+      setTolovSumma(String(m.qarz_usd));
+    } else {
+      setValyuta("UZS");
+      setKassaTuri("naqd_uzs");
+      setTolovSumma(String(m.qarz_uzs));
+    }
+    haptic("medium");
+  }
+
+  const kassaOptions = [
+    { value: "naqd_uzs", label: "Naqd (So'm)" },
+    { value: "naqd_usd", label: "Naqd (Dollar)" },
+    { value: "plastik_uzs", label: "Plastik karta" },
+    { value: "bank_uzs", label: "Bank hisobi" },
+  ];
+
   return (
     <div className="space-y-3">
       {/* Muvaffaqiyat xabari */}
@@ -120,10 +144,17 @@ export function QarzlarTab() {
           saralangan.map((m) => (
             <div
               key={m.id}
-              className="bg-white border border-slate-200 p-2.5 rounded-xl shadow-2xs flex justify-between items-center"
+              onClick={() => {
+                setTanlanganMijozDetali(m);
+                haptic("light");
+              }}
+              className="bg-white border border-slate-200 hover:border-amber-300 p-2.5 rounded-xl shadow-2xs flex justify-between items-center cursor-pointer active:bg-slate-50 transition-all group"
             >
               <div className="min-w-0 pr-2">
-                <h4 className="font-bold text-sm text-slate-900 truncate leading-snug">{m.nom}</h4>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-bold text-sm text-slate-900 group-hover:text-amber-800 truncate leading-snug">{m.nom}</h4>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 transition-colors flex-shrink-0" />
+                </div>
                 <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-500 mt-0.5">
                   {m.telefon && (
                     <span className="flex items-center gap-1">
@@ -145,18 +176,9 @@ export function QarzlarTab() {
 
               {/* Qarz to'lash tugmasi */}
               <button
-                onClick={() => {
-                  setTanlanganMijoz(m);
-                  if (m.qarz_usd > 0 && m.qarz_uzs <= 0) {
-                    setValyuta("USD");
-                    setKassaTuri("naqd_usd");
-                    setTolovSumma(String(m.qarz_usd));
-                  } else {
-                    setValyuta("UZS");
-                    setKassaTuri("naqd_uzs");
-                    setTolovSumma(String(m.qarz_uzs));
-                  }
-                  haptic("medium");
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ochTolovModali(m);
                 }}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs flex-shrink-0 active:scale-95 transition-transform text-xs"
               >
@@ -169,7 +191,7 @@ export function QarzlarTab() {
 
       {/* Qarz To'lovini Qabul Qilish Modali */}
       {tanlanganMijoz && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-3">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
           <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-3 shadow-2xl">
             <div className="flex justify-between items-center pb-2 border-b">
               <div>
@@ -230,19 +252,15 @@ export function QarzlarTab() {
               />
             </div>
 
-            {/* Kassa */}
+            {/* Kassa Combobox */}
             <div>
               <label className="text-[11px] font-bold text-slate-600 mb-1 block">Qaysi kassaga tushdi:</label>
-              <select
+              <Combobox
+                title="Kassani tanlang"
                 value={kassaTuri}
-                onChange={(e) => setKassaTuri(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs"
-              >
-                <option value="naqd_uzs">Naqd (So'm)</option>
-                <option value="naqd_usd">Naqd (Dollar)</option>
-                <option value="plastik_uzs">Plastik karta</option>
-                <option value="bank_uzs">Bank hisobi</option>
-              </select>
+                onChange={setKassaTuri}
+                options={kassaOptions}
+              />
             </div>
 
             {/* Izoh */}
@@ -264,6 +282,18 @@ export function QarzlarTab() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Mijoz Tafsilotlari Modali */}
+      {tanlanganMijozDetali && (
+        <MijozDetailsModal
+          mijoz={tanlanganMijozDetali}
+          onClose={() => setTanlanganMijozDetali(null)}
+          onTolovOchish={(m) => {
+            setTanlanganMijozDetali(null);
+            ochTolovModali(m);
+          }}
+        />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { ShoppingCart, Plus, Trash2, Search, CheckCircle, UserPlus, DollarSign } from "lucide-react";
+import { Combobox } from "./ui/Combobox";
 
 interface SotuvTabProps {
   telegramFoydalanuvchi?: string;
@@ -478,26 +479,36 @@ export function SotuvTab({ telegramFoydalanuvchi }: SotuvTabProps) {
                 <label className="text-xs font-bold text-slate-700">Mijoz (Kontragent):</label>
                 <button
                   onClick={() => setMijozModalOchiq(true)}
-                  className="text-emerald-700 font-bold text-[11px] flex items-center gap-1"
+                  className="text-emerald-700 font-bold text-[11px] flex items-center gap-1 hover:underline"
                 >
                   <UserPlus className="w-3 h-3" /> + Yangi mijoz
                 </button>
               </div>
-              <select
+              <Combobox
+                title="Mijozni tanlang"
+                placeholder="Mijozni tanlang (yoki Chakana)..."
+                searchPlaceholder="Mijoz ismi yoki telefoni..."
                 value={tanlanganMijoz?.id || ""}
-                onChange={(e) => {
-                  const m = mijozlar.find((x) => x.id === e.target.value);
+                onChange={(val) => {
+                  const m = mijozlar.find((x) => x.id === val);
                   setTanlanganMijoz(m || null);
                 }}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Chakana (Nomsiz xaridor)</option>
-                {mijozlar.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nom} {m.qarz_uzs > 0 ? `(Qarzi: ${pul(m.qarz_uzs)} so'm)` : ""}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "Chakana (Nomsiz xaridor)", subLabel: "Oddiy xaridor" },
+                  ...mijozlar.map((m) => {
+                    const qarzMatnlari = [];
+                    if (m.qarz_uzs > 0) qarzMatnlari.push(`${pul(m.qarz_uzs)} so'm`);
+                    if (m.qarz_usd > 0) qarzMatnlari.push(`$${pul(m.qarz_usd)}`);
+                    return {
+                      value: m.id,
+                      label: m.nom,
+                      subLabel: m.telefon || m.manzil || undefined,
+                      badge: qarzMatnlari.length > 0 ? `Qarzi: ${qarzMatnlari.join(" / ")}` : undefined,
+                      badgeColor: "bg-amber-100 text-amber-800",
+                    };
+                  }),
+                ]}
+              />
             </div>
 
             {/* To'langan summa va qarz hisobi */}
@@ -548,28 +559,35 @@ export function SotuvTab({ telegramFoydalanuvchi }: SotuvTabProps) {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">To'lov turi:</label>
-                <select
+                <Combobox
+                  title="To'lov turi"
                   value={tolovTuri}
-                  onChange={(e) => setTolovTuri(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border rounded-lg text-xs font-bold"
-                >
-                  <option value="naqd">💵 Naqd pul</option>
-                  <option value="plastik">💳 Plastik karta</option>
-                  <option value="perechisleniya">🏦 Perechisleniya</option>
-                </select>
+                  onChange={(val) => {
+                    setTolovTuri(val);
+                    if (val === "plastik") setKassaTuri("plastik_uzs");
+                    else if (valyuta === "USD") setKassaTuri("naqd_usd");
+                    else setKassaTuri("naqd_uzs");
+                  }}
+                  options={[
+                    { value: "naqd", label: "Naqd pul", icon: "💵" },
+                    { value: "plastik", label: "Plastik", icon: "💳" },
+                    { value: "perechisleniya", label: "Bank", icon: "🏦" },
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-[11px] font-bold text-slate-600 mb-1 block">Tushadigan Kassa:</label>
-                <select
+                <Combobox
+                  title="Kassani tanlang"
                   value={kassaTuri}
-                  onChange={(e) => setKassaTuri(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border rounded-lg text-xs font-bold"
-                >
-                  <option value="naqd_uzs">Naqd (So'm)</option>
-                  <option value="naqd_usd">Naqd (Dollar)</option>
-                  <option value="plastik_uzs">Plastik (So'm)</option>
-                  <option value="bank_uzs">Bank (So'm)</option>
-                </select>
+                  onChange={setKassaTuri}
+                  options={[
+                    { value: "naqd_uzs", label: "Naqd (So'm)" },
+                    { value: "naqd_usd", label: "Naqd (Dollar)" },
+                    { value: "plastik_uzs", label: "Plastik (So'm)" },
+                    { value: "bank_uzs", label: "Bank (So'm)" },
+                  ]}
+                />
               </div>
             </div>
 

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
-import { Search, Plus, AlertTriangle, Package, CheckCircle } from "lucide-react";
+import { Search, Plus, AlertTriangle, Package, CheckCircle, ChevronRight } from "lucide-react";
+import { TovarDetailsModal } from "./TovarDetailsModal";
+import { Combobox } from "./ui/Combobox";
 
 export function OmborTab() {
   const [tovarlar, setTovarlar] = useState<any[]>([]);
   const [qidiruv, setQidiruv] = useState("");
+  const [tanlanganTovarDetali, setTanlanganTovarDetali] = useState<any>(null);
   const [modalOchiq, setModalOchiq] = useState(false);
   const [nom, setNom] = useState("");
   const [model, setModel] = useState("");
@@ -147,7 +150,11 @@ export function OmborTab() {
           saralangan.map((t) => (
             <div
               key={t.id}
-              className="bg-white border border-slate-200 p-2.5 rounded-xl shadow-2xs flex items-center gap-2.5"
+              onClick={() => {
+                haptic("light");
+                setTanlanganTovarDetali(t);
+              }}
+              className="bg-white border border-slate-200 hover:border-emerald-300 p-2.5 rounded-xl shadow-2xs flex items-center gap-2.5 cursor-pointer active:scale-[0.99] transition-all"
             >
               {/* Tovar rasmi */}
               <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-100">
@@ -178,16 +185,19 @@ export function OmborTab() {
                 )}
               </div>
 
-              {/* Qoldiq */}
-              <div className="text-right flex-shrink-0">
-                <span
-                  className={`text-sm font-black tabular-nums ${
-                    t.qoldiq <= 5 ? "text-rose-600" : "text-slate-900"
-                  }`}
-                >
-                  {pul(t.qoldiq)}
-                </span>
-                <p className="text-[10px] font-semibold text-slate-500">{t.birlik}</p>
+              {/* Qoldiq va o'tish ko'rsatkichi */}
+              <div className="text-right flex-shrink-0 flex items-center gap-1.5">
+                <div>
+                  <span
+                    className={`text-sm font-black tabular-nums block ${
+                      t.qoldiq <= 5 ? "text-rose-600" : "text-slate-900"
+                    }`}
+                  >
+                    {pul(t.qoldiq)}
+                  </span>
+                  <p className="text-[10px] font-semibold text-slate-500">{t.birlik}</p>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
               </div>
             </div>
           ))
@@ -276,14 +286,15 @@ export function OmborTab() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-slate-600 block mb-1">Valyuta:</label>
-                <select
+                <Combobox
+                  title="Valyutani tanlang"
                   value={valyuta}
-                  onChange={(e) => setValyuta(e.target.value as any)}
-                  className="w-full p-2 border rounded-lg font-bold text-xs"
-                >
-                  <option value="UZS">So'm (UZS)</option>
-                  <option value="USD">Dollar (USD)</option>
-                </select>
+                  onChange={(v) => setValyuta(v as any)}
+                  options={[
+                    { value: "UZS", label: "So'm (UZS)" },
+                    { value: "USD", label: "Dollar (USD)" },
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-[11px] font-bold text-slate-600 block mb-1">Boshlang'ich qoldiq:</label>
@@ -306,6 +317,15 @@ export function OmborTab() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Tovar Tafsilotlari Modali */}
+      {tanlanganTovarDetali && (
+        <TovarDetailsModal
+          tovar={tanlanganTovarDetali}
+          onClose={() => setTanlanganTovarDetali(null)}
+          onUpdate={yuklaTovarlar}
+        />
       )}
     </div>
   );
