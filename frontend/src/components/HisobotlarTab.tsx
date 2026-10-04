@@ -453,15 +453,15 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
   return (
     <div className="space-y-3.5 pb-6">
       {/* Yuqori sarlavha va tushuntirish */}
-      <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-2xs">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs">
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-black text-slate-900 leading-tight">Moliyaviy Hisobotlar</h2>
-              <p className="text-[11px] text-slate-500 font-medium">Davr bo'yicha ko'rsatkichlar va Excel eksport</p>
+              <h2 className="text-sm font-black text-slate-900 dark:text-white leading-tight">Moliyaviy Hisobotlar</h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Davr bo'yicha ko'rsatkichlar va Excel eksport</p>
             </div>
           </div>
           <button
