@@ -4,7 +4,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Muhit o'zgaruvchilari
-const BOT_TOKEN = process.env.BOT_TOKEN || "";
+const BOT_TOKEN = process.env.BOT_TOKEN || "8909794013:AAEJB9hhM3OpIQoKRYlyML-gDodXgOgGDn0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEMINI_API_KEYS = Array.from(
@@ -31,7 +31,7 @@ const GEMINI_MODELS = Array.from(
   )
 ) as string[];
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
-const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "";
+const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "580858047";
 const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "promax2026";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -39,12 +39,23 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 // Yordamchi: Telegram API ga xabar yuborish
 async function tgPost(method: string, body: Record<string, any>) {
-  const res = await fetch(`${TELEGRAM_API}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${TELEGRAM_API}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error(`[tgPost XATO] ${method}:`, JSON.stringify(data), "Body:", JSON.stringify(body));
+    } else {
+      console.log(`[tgPost Muvaffaqiyatli] ${method}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error(`[tgPost Tarmoq Xatosi] ${method}:`, err?.message || err);
+    return { ok: false, error: err?.message };
+  }
 }
 
 // Yordamchi: Pulni chiroyli formatlash (1 500 000)
@@ -321,6 +332,8 @@ export default async function handler(req: any, res: any) {
   } catch {
     return res.status(400).send("Invalid JSON");
   }
+
+  console.log("[Webhook Update Keldi]:", JSON.stringify(update));
 
   // 1. TUGMA BOSILGANDA (CALLBACK QUERY - TASDIQLASH / BEKOR QILISH)
   if (update.callback_query) {
@@ -861,7 +874,10 @@ export default async function handler(req: any, res: any) {
   }
 
   // 2.4 RUXSATLI XODIM BUYRUQLARI
-  if (text === "/start") {
+  const isStartCmd = text === "/start" || text.startsWith("/start ") || text.startsWith("/start@");
+  const isStatusCmd = text === "/status" || text.startsWith("/status ") || text.startsWith("/status@") || text === "/tekshir";
+
+  if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
       text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status`,
@@ -871,7 +887,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).send("OK");
   }
 
-  if (text === "/status" || text === "/tekshir") {
+  if (isStatusCmd) {
     let botUsername = "Faol";
     try {
       const me = await tgPost("getMe", {});
