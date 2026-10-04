@@ -14,10 +14,18 @@ CREATE TABLE IF NOT EXISTS xodimlar (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     telegram_id BIGINT UNIQUE,
     ism TEXT NOT NULL,
+    telefon TEXT,                           -- Telefon raqami (+998901234567)
+    telegram_username TEXT,
     rol TEXT NOT NULL DEFAULT 'sotuvchi' CHECK (rol IN ('admin', 'sotuvchi')),
     faol BOOLEAN NOT NULL DEFAULT true,
     yaratilgan TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Mavjud jadval bo'lsa yangi ustunlarni qo'shish
+ALTER TABLE xodimlar ADD COLUMN IF NOT EXISTS telefon TEXT;
+ALTER TABLE xodimlar ADD COLUMN IF NOT EXISTS telegram_username TEXT;
+CREATE INDEX IF NOT EXISTS ix_xodimlar_tel ON xodimlar(telefon);
+CREATE INDEX IF NOT EXISTS ix_xodimlar_tg ON xodimlar(telegram_id);
 
 -- 2. Mahsulotlar (Tovarlar va Ombor)
 CREATE TABLE IF NOT EXISTS tovarlar (

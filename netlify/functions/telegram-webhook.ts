@@ -11,6 +11,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
+const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "";
+const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "promax2026";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -28,6 +30,58 @@ async function tgPost(method: string, body: Record<string, any>) {
 // Yordamchi: Pulni chiroyli formatlash (1 500 000)
 function pul(n: number): string {
   return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+}
+
+// Yordamchi: Telefon raqamni standart formatga keltirish (+998901234567)
+function normalizePhone(raw: string): string {
+  if (!raw) return "";
+  let digits = raw.replace(/[^\d+]/g, "");
+  if (!digits.startsWith("+")) {
+    if (digits.length === 12 && digits.startsWith("998")) {
+      digits = "+" + digits;
+    } else if (digits.length === 9) {
+      digits = "+998" + digits;
+    } else {
+      digits = "+" + digits;
+    }
+  }
+  return digits;
+}
+
+// Yordamchi: Foydalanuvchi ruxsatini tekshirish
+async function checkUserPermission(
+  telegramId?: number | string
+): Promise<{ isAllowed: boolean; role: string; xodim?: any }> {
+  if (!telegramId) return { isAllowed: false, role: "" };
+  const idStr = String(telegramId);
+
+  // 1. Netlify muhit o'zgaruvchisidagi ADMIN_TELEGRAM_ID
+  if (ADMIN_TELEGRAM_ID) {
+    const adminIds = ADMIN_TELEGRAM_ID.split(",").map((s) => s.trim());
+    if (adminIds.includes(idStr)) {
+      return { isAllowed: true, role: "admin" };
+    }
+  }
+
+  // 2. Supabase xodimlar jadvali
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const { data: x } = await supabase
+        .from("xodimlar")
+        .select("*")
+        .eq("telegram_id", telegramId)
+        .eq("faol", true)
+        .maybeSingle();
+
+      if (x) {
+        return { isAllowed: true, role: x.rol || "sotuvchi", xodim: x };
+      }
+    } catch (e) {
+      console.error("Xodim ruxsatini tekshirish xatosi:", e);
+    }
+  }
+
+  return { isAllowed: false, role: "" };
 }
 
 // -----------------------------------------------------------------------------
@@ -350,22 +404,306 @@ export const handler: Handler = async (event) => {
       await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Bekor qilindi" });
       return { statusCode: 200, body: "OK" };
     }
+
+    // 1.2 XODIM RUXSATINI TASDIQLASH (xod:appr:draftId:role)
+    if (data.startsWith("xod:appr:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const role = parts[3] || "sotuvchi";
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return { statusCode: 200, body: "OK" };
+      }
+
+      const req = draft.malumot;
+
+      // xodimlar jadvaliga qo'shish yoki yangilash
+      const { data: mavjudXodim } = await supabase
+        .from("xodimlar")
+        .select("id")
+        .or(`telegram_id.eq.${req.telegram_id},telefon.eq.${req.telefon}`)
+        .maybeSingle();
+
+      if (mavjudXodim) {
+        await supabase
+          .from("xodimlar")
+          .update({
+            telegram_id: req.telegram_id,
+            ism: req.ism,
+            telefon: req.telefon,
+            telegram_username: req.username || null,
+            rol: role,
+            faol: true,
+          })
+          .eq("id", mavjudXodim.id);
+      } else {
+        await supabase.from("xodimlar").insert({
+          telegram_id: req.telegram_id,
+          ism: req.ism,
+          telefon: req.telefon,
+          telegram_username: req.username || null,
+          rol: role,
+          faol: true,
+        });
+      }
+
+      // Admindagi xabarni yangilash
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: `✅ <b>Xodim tasdiqlandi!</b>\n\n👤 <b>Ism:</b> ${req.ism} ${req.username || ""}\n📞 <b>Tel:</b> <code>${req.telefon}</code>\n🎭 <b>Roli:</b> <b>${role === "admin" ? "👑 Admin" : "💼 Sotuvchi"}</b>\n✍️ <b>Tasdiqladi:</b> ${fromName}`,
+        parse_mode: "HTML",
+      });
+
+      // Xodimning o'ziga xushxabar yuborish
+      await tgPost("sendMessage", {
+        chat_id: req.telegram_id,
+        text: `🎉 <b>Assalomu alaykum, ${req.ism}!</b>\n\nAdministrator sizga PROMAX tizimidan foydalanish uchun ruxsat berdi.\n🎭 Sizning rolingiz: <b>${role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>.\n\nEndi botga ovozli/matnli xabar yuborishingiz yoki do'kon Mini App ilovasidan to'liq foydalanishingiz mumkin!`,
+        parse_mode: "HTML",
+        reply_markup: { remove_keyboard: true },
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xodim muvaffaqiyatli qabul qilindi!" });
+      return { statusCode: 200, body: "OK" };
+    }
+
+    // 1.3 XODIM RUXSATINI RAD ETISH (xod:rej:draftId)
+    if (data.startsWith("xod:rej:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (draft && draft.malumot) {
+        await tgPost("sendMessage", {
+          chat_id: draft.malumot.telegram_id,
+          text: `❌ <b>Kechirasiz, administrator ruxsat so'rovingizni rad etdi.</b>\n\nSavollar bo'lsa, do'kon ma'muriyati bilan bog'laning.`,
+          parse_mode: "HTML",
+        });
+      }
+
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: `❌ <i>Xodimning ruxsat so'rovi rad etildi.</i>`,
+        parse_mode: "HTML",
+      });
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Rad etildi" });
+      return { statusCode: 200, body: "OK" };
+    }
   }
 
-  // 2. MATN YOKI OVOZLI XABAR KELGANDA
+  // 2. MATN, OVOZ YOKI KONTAKT KELGANDA
   const message = update.message;
   if (!message) return { statusCode: 200, body: "No message" };
 
   const chatId = message.chat.id;
-  const text = message.text || message.caption || "";
+  const fromUser = message.from;
+  const senderId = fromUser?.id;
+  const senderName = `${fromUser?.first_name || ""} ${fromUser?.last_name || ""}`.trim() || "Foydalanuvchi";
+  const senderUsername = fromUser?.username ? `@${fromUser.username}` : "";
+  const text = (message.text || message.caption || "").trim();
   const voice = message.voice || message.audio;
+  const contact = message.contact;
 
-  // Buyruqlar (/start, /status, /tekshir)
+  // 2.1 BOSH ADMIN BOOTSTRAP PAROLI (/admin_parol <parol>)
+  if (text.startsWith("/admin_parol")) {
+    const kiritilganParol = text.replace("/admin_parol", "").trim();
+    if (kiritilganParol && kiritilganParol === ADMIN_SECRET_KEY) {
+      const { data: mavjud } = await supabase
+        .from("xodimlar")
+        .select("id")
+        .eq("telegram_id", senderId)
+        .maybeSingle();
+
+      if (mavjud) {
+        await supabase
+          .from("xodimlar")
+          .update({ ism: senderName, telegram_username: senderUsername, rol: "admin", faol: true })
+          .eq("id", mavjud.id);
+      } else {
+        await supabase.from("xodimlar").insert({
+          telegram_id: senderId,
+          ism: senderName,
+          telegram_username: senderUsername,
+          rol: "admin",
+          faol: true,
+        });
+      }
+
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `👑 <b>Tabriklaymiz, ${senderName}!</b>\n\nAdmin paroli to'g'ri tasdiqlandi. Siz PROMAX tizimida <b>Bosh Administrator</b> sifatida ro'yxatdan o'tdingiz!\n\nEndi bot orqali va Mini App'da barcha funksiyalar (kassa, ombor, xodimlarni boshqarish) siz uchun ochiq.\n🆔 Sizning Telegram ID: <code>${senderId}</code>`,
+        parse_mode: "HTML",
+        reply_markup: { remove_keyboard: true },
+      });
+      return { statusCode: 200, body: "OK" };
+    } else {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `❌ <i>Admin paroli noto'g'ri.</i>`,
+        parse_mode: "HTML",
+      });
+      return { statusCode: 200, body: "OK" };
+    }
+  }
+
+  // 2.2 KONTAKT (TELEFON RAQAM) KELGANDA
+  if (contact) {
+    const phone = normalizePhone(contact.phone_number);
+    const last9 = phone.slice(-9);
+
+    // 1. Allaqachon tasdiqlanganmi?
+    const { data: borXodim } = await supabase
+      .from("xodimlar")
+      .select("*")
+      .eq("telegram_id", senderId)
+      .eq("faol", true)
+      .maybeSingle();
+
+    if (borXodim) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `✅ <b>Siz allaqachon tizimda ro'yxatdan o'tgansiz!</b>\n\n👤 Ism: <b>${borXodim.ism}</b>\n🎭 Roli: <b>${borXodim.rol === "admin" ? "👑 Admin" : "💼 Sotuvchi"}</b>\n\nOvozli yoki matnli xabarlar yuborishingiz mumkin.`,
+        parse_mode: "HTML",
+        reply_markup: { remove_keyboard: true },
+      });
+      return { statusCode: 200, body: "OK" };
+    }
+
+    // 2. Admin oldindan kiritib qo'ygan telefon raqam bormi?
+    const { data: matched } = await supabase
+      .from("xodimlar")
+      .select("*")
+      .or(`telefon.eq.${phone},telefon.ilike.%${last9}`)
+      .maybeSingle();
+
+    if (matched) {
+      // Bog'lash va faollashtirish
+      await supabase
+        .from("xodimlar")
+        .update({
+          telegram_id: senderId,
+          telegram_username: senderUsername,
+          faol: true,
+        })
+        .eq("id", matched.id);
+
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `🎉 <b>Xush kelibsiz, ${matched.ism}!</b>\n\nTelefon raqamingiz (<code>${phone}</code>) orqali shaxsingiz muvaffaqiyatli tasdiqlandi!\n🎭 Roli: <b>${matched.rol === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>.\n\nEndi bot va do'kon Mini App'idan to'liq foydalanishingiz mumkin!`,
+        parse_mode: "HTML",
+        reply_markup: { remove_keyboard: true },
+      });
+      return { statusCode: 200, body: "OK" };
+    }
+
+    // 3. Notanish raqam -> Adminga tasdiqlash so'rovini yuborish
+    const draftId = `xod_${Math.random().toString(36).substring(2, 9)}`;
+    await supabase.from("tranzaksiya_qoralama").insert({
+      id: draftId,
+      malumot: {
+        amal: "xodim_sorov",
+        telegram_id: senderId,
+        ism: senderName,
+        telefon: phone,
+        username: senderUsername,
+      },
+      yaratildi: new Date().toISOString(),
+    });
+
+    const adminMsg = `🔔 <b>YANGI XODIM TIZIMGA KIRISHGA RUXSAT SO'RAMOQDA:</b>\n\n` +
+      `👤 <b>Ismi:</b> ${senderName} ${senderUsername}\n` +
+      `📞 <b>Telefon:</b> <code>${phone}</code>\n` +
+      `🆔 <b>Telegram ID:</b> <code>${senderId}</code>\n\n` +
+      `<i>Ushbu xodimga qanday rol bermoqchisiz?</i>`;
+
+    const adminKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "💼 Sotuvchi sifatida qabul qilish", callback_data: `xod:appr:${draftId}:sotuvchi` },
+        ],
+        [
+          { text: "👑 Admin sifatida qabul qilish", callback_data: `xod:appr:${draftId}:admin` },
+        ],
+        [
+          { text: "❌ Rad etish", callback_data: `xod:rej:${draftId}` },
+        ],
+      ],
+    };
+
+    // Barcha adminlarga yuborish
+    if (ADMIN_TELEGRAM_ID) {
+      for (const aId of ADMIN_TELEGRAM_ID.split(",")) {
+        if (aId.trim()) {
+          await tgPost("sendMessage", {
+            chat_id: aId.trim(),
+            text: adminMsg,
+            parse_mode: "HTML",
+            reply_markup: adminKeyboard,
+          });
+        }
+      }
+    }
+
+    // Guruhga yuborish (agar guruh sozlangan bo'lsa)
+    if (GROUP_CHAT_ID) {
+      await tgPost("sendMessage", {
+        chat_id: GROUP_CHAT_ID,
+        text: adminMsg,
+        parse_mode: "HTML",
+        reply_markup: adminKeyboard,
+      });
+    }
+
+    // Xodimga xabar
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `⏳ <b>Ruxsat so'rovingiz qabul qilindi!</b>\n\nTelefon raqamingiz (<code>${phone}</code>) administratorga yuborildi. Administrator ruxsat berishi bilan sizga xabar keladi.`,
+      parse_mode: "HTML",
+      reply_markup: { remove_keyboard: true },
+    });
+    return { statusCode: 200, body: "OK" };
+  }
+
+  // 2.3 FOYDALANUVCHI RUXSATINI TEKSHIRISH (WHITELIST CHECK)
+  const perm = await checkUserPermission(senderId);
+
+  // Agar ruxsati bo'lmasa -> Kirishni to'xtatish va kontakt so'rash
+  if (!perm.isAllowed) {
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `⛔️ <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nUshbu tizim faqat ro'yxatdan o'tgan do'kon xodimlari uchun mo'ljallangan.\n\nKirish uchun quyidagi <b>"📲 Telefon raqamimni yuborish"</b> tugmasini bosing yoki administrator bilan bog'laning.\n\n🆔 <i>Sizning Telegram ID:</i> <code>${senderId}</code>\n🔑 <i>Agar bosh admin bo'lsangiz: <code>/admin_parol &lt;parol&gt;</code> buyrug'ini yuboring.</i>`,
+      parse_mode: "HTML",
+      reply_markup: {
+        keyboard: [
+          [{ text: "📲 Telefon raqamimni yuborish (Ruxsat olish)", request_contact: true }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      },
+    });
+    return { statusCode: 200, body: "OK" };
+  }
+
+  // 2.4 RUXSATLI XODIM BUYRUQLARI
   if (text === "/start") {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nSiz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Obedga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Obedga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status`,
       parse_mode: "HTML",
+      reply_markup: { remove_keyboard: true },
     });
     return { statusCode: 200, body: "OK" };
   }
@@ -385,6 +723,8 @@ export const handler: Handler = async (event) => {
 
     const statusMsg = `🔍 <b>PROMAX TIZIM HOLATI:</b>\n\n` +
       `🤖 <b>Telegram Bot:</b> ✅ Faol (${botUsername})\n` +
+      `👤 <b>Sizning profilingiz:</b> ✅ Ruxsat berilgan (${perm.role === "admin" ? "👑 Admin" : "💼 Sotuvchi"})\n` +
+      `🆔 <b>Telegram ID:</b> <code>${senderId}</code>\n` +
       `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (${GEMINI_MODEL})` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
       `🗄 <b>Supabase Baza:</b> ${isSupabaseSet ? "✅ Ulangan" : "❌ Kiritilmagan (SUPABASE_URL yo'q)"}\n` +
       `👥 <b>Guruh xabarnomasi:</b> ${isGroupSet ? `✅ Guruh ID: <code>${GROUP_CHAT_ID}</code>` : "⚠️ Sozlanmagan"}\n\n` +
