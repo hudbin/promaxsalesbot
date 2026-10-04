@@ -356,3 +356,19 @@ CREATE POLICY "Allow public all for qarz_tolovlari" ON qarz_tolovlari FOR ALL US
 CREATE POLICY "Allow public all for kassa_harakatlari" ON kassa_harakatlari FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all for xodimlar" ON xodimlar FOR ALL USING (true) WITH CHECK (true);
 
+-- ==============================================================================
+-- 9. SUPABASE STORAGE (TOVARLAR RASMLARI BUCKET)
+-- ==============================================================================
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('tovarlar', 'tovarlar', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+CREATE POLICY "Public tovarlar images read" ON storage.objects
+FOR SELECT USING (bucket_id = 'tovarlar');
+
+CREATE POLICY "Allow public upload to tovarlar" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'tovarlar');
+
+CREATE POLICY "Allow public update to tovarlar" ON storage.objects
+FOR UPDATE USING (bucket_id = 'tovarlar');
+

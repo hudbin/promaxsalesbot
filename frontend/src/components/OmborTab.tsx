@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
-import { Search, Plus, AlertTriangle, Package, CheckCircle, ChevronRight } from "lucide-react";
+import { Search, Plus, AlertTriangle, Package, CheckCircle, ChevronRight, Camera, ImagePlus, Trash2, Loader2, Link2 } from "lucide-react";
 import { TovarDetailsModal } from "./TovarDetailsModal";
 import { Combobox } from "./ui/Combobox";
+import { uploadTovarRasm } from "../lib/imageUtils";
 
 export function OmborTab() {
   const [tovarlar, setTovarlar] = useState<any[]>([]);
@@ -13,6 +14,10 @@ export function OmborTab() {
   const [model, setModel] = useState("");
   const [shtrixkod, setShtrixkod] = useState("");
   const [rasmUrl, setRasmUrl] = useState("");
+  const [rasmYuklanmoqda, setRasmYuklanmoqda] = useState(false);
+  const [rasmStatistika, setRasmStatistika] = useState<string | null>(null);
+  const [urlKiritishRejimi, setUrlKiritishRejimi] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [tannarx, setTannarx] = useState("");
   const [narxOptom, setNarxOptom] = useState("");
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
@@ -29,6 +34,29 @@ export function OmborTab() {
     const { data } = await supabase.from("tovarlar").select("*").eq("faol", true).order("nom");
     if (data) setTovarlar(data);
     setYuklanmoqda(false);
+  }
+
+  async function rasmTanlandi(e: React.ChangeEvent<HTMLInputElement>) {
+    const fayl = e.target.files?.[0];
+    if (!fayl) return;
+
+    setRasmYuklanmoqda(true);
+    haptic("light");
+    try {
+      const res = await uploadTovarRasm(fayl);
+      setRasmUrl(res.url);
+      const oldMb = (res.originalSize / (1024 * 1024)).toFixed(1);
+      const newKb = Math.round(res.compressedSize / 1024);
+      const tejaldi = Math.round((1 - res.compressedSize / res.originalSize) * 100);
+      setRasmStatistika(`${oldMb}MB → ${newKb}KB (${tejaldi}% siqildi)`);
+      haptic("success");
+    } catch (err: any) {
+      haptic("error");
+      alert(err.message || "Rasm yuklashda xatolik yuz berdi");
+    } finally {
+      setRasmYuklanmoqda(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   async function tovarSaqla() {
@@ -61,6 +89,8 @@ export function OmborTab() {
       setModel("");
       setShtrixkod("");
       setRasmUrl("");
+      setRasmStatistika(null);
+      setUrlKiritishRejimi(false);
       setTannarx("");
       setNarxOptom("");
       setQoldiq("");
@@ -249,15 +279,91 @@ export function OmborTab() {
               </div>
             </div>
 
+            {/* Tovar Rasmi (Kamera yoki Galereya) */}
             <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">Rasm havolasi (URL)</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] font-bold text-slate-700">Tovar rasmi (Ixtiyoriy):</label>
+                <button
+                  type="button"
+                  onClick={() => setUrlKiritishRejimi(!urlKiritishRejimi)}
+                  className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-1"
+                >
+                  <Link2 className="w-3 h-3" />
+                  {urlKiritishRejimi ? "Kameradan yuklash" : "URL orqali kiritish"}
+                </button>
+              </div>
+
               <input
-                type="url"
-                placeholder="https://... rasm linki"
-                value={rasmUrl}
-                onChange={(e) => setRasmUrl(e.target.value)}
-                className="w-full p-2 border rounded-lg font-medium text-xs"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={rasmTanlandi}
+                className="hidden"
               />
+
+              {urlKiritishRejimi ? (
+                <input
+                  type="url"
+                  placeholder="https://... rasm havolasi"
+                  value={rasmUrl}
+                  onChange={(e) => setRasmUrl(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg font-medium text-xs bg-slate-50 focus:bg-white"
+                />
+              ) : rasmYuklanmoqda ? (
+                <div className="w-full p-3.5 border-2 border-dashed border-emerald-300 rounded-xl bg-emerald-50/50 flex flex-col items-center justify-center gap-1 text-emerald-800 text-xs font-bold animate-pulse">
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                  <span>Kvadrat qilib siqilmoqda va yuklanmoqda...</span>
+                </div>
+              ) : rasmUrl ? (
+                <div className="flex items-center gap-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white border border-slate-200 shadow-2xs">
+                    <img src={rasmUrl} alt="Tanlangan" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                      ✅ Kvadrat qilib saqlandi
+                    </span>
+                    {rasmStatistika && (
+                      <p className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                        {rasmStatistika}
+                      </p>
+                    )}
+                    <div className="flex gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[10px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs active:scale-95"
+                      >
+                        Almashtirish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRasmUrl("");
+                          setRasmStatistika(null);
+                        }}
+                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 px-1 py-0.5"
+                      >
+                        O'chirish
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl bg-slate-50/80 hover:bg-emerald-50/20 cursor-pointer flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Camera className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-700">Kamera yoki Galereya</span>
+                    <ImagePlus className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-medium text-center">
+                    Rasm avtomatik 1:1 kvadrat qilinadi va siqiladi (~80KB)
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">

@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { X, Package, DollarSign, TrendingUp, AlertTriangle, Layers, Edit2, Plus, Check } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { X, Package, DollarSign, TrendingUp, AlertTriangle, Layers, Edit2, Plus, Check, Camera, ImagePlus, Loader2 } from "lucide-react";
 import { pul, haptic, supabase } from "../lib/supabase";
+import { uploadTovarRasm } from "../lib/imageUtils";
 
 interface TovarDetailsModalProps {
   tovar: any;
@@ -15,6 +16,12 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
   const [yangiTannarx, setYangiTannarx] = useState(String(tovar.tannarx || ""));
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
   const [muvaffaqiyat, setMuvaffaqiyat] = useState<string | null>(null);
+
+  // Rasm yuklash va yangilash holati
+  const [rasmUrl, setRasmUrl] = useState<string | null>(tovar.rasm_url || null);
+  const [rasmYuklanmoqda, setRasmYuklanmoqda] = useState(false);
+  const [rasmStatistika, setRasmStatistika] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!tovar) return null;
 
@@ -72,9 +79,54 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
     }
   }
 
+  async function modalRasmYukla(e: React.ChangeEvent<HTMLInputElement>) {
+    const fayl = e.target.files?.[0];
+    if (!fayl) return;
+
+    setRasmYuklanmoqda(true);
+    haptic("light");
+    try {
+      const res = await uploadTovarRasm(fayl);
+      setRasmUrl(res.url);
+      const oldMb = (res.originalSize / (1024 * 1024)).toFixed(1);
+      const newKb = Math.round(res.compressedSize / 1024);
+      const tejaldi = Math.round((1 - res.compressedSize / res.originalSize) * 100);
+      setRasmStatistika(`${oldMb}MB → ${newKb}KB (${tejaldi}% siqildi)`);
+
+      // Supabase tovarlar jadvalida yangilash
+      const { error } = await supabase
+        .from("tovarlar")
+        .update({ rasm_url: res.url })
+        .eq("id", tovar.id);
+
+      if (error) throw error;
+
+      tovar.rasm_url = res.url;
+      haptic("success");
+      setMuvaffaqiyat("Tovar rasmi muvaffaqiyatli saqlandi!");
+      onUpdate();
+      setTimeout(() => setMuvaffaqiyat(null), 3500);
+    } catch (err: any) {
+      haptic("error");
+      alert(err.message || "Rasm yuklashda xatolik yuz berdi");
+    } finally {
+      setRasmYuklanmoqda(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-4 space-y-3.5 shadow-2xl max-h-[88vh] overflow-y-auto">
+        {/* Yashirin fayl tanlash inputi (Kamera / Galereya) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={modalRasmYukla}
+          className="hidden"
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -104,13 +156,38 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
 
         {/* Tovar Asosiy Ko'rinishi (Rasm + Nom) */}
         <div className="flex gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-          <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200 shadow-2xs">
-            {tovar.rasm_url ? (
-              <img src={tovar.rasm_url} alt={tovar.nom} className="w-full h-full object-cover" />
+          {/* Kvadrat rasm konteyneri va kamera tugmasi */}
+          <div className="relative w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200 shadow-2xs group">
+            {rasmYuklanmoqda ? (
+              <div className="flex flex-col items-center justify-center text-emerald-700 p-1 text-center">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-[8px] font-bold mt-1">Siqilmoqda...</span>
+              </div>
+            ) : rasmUrl ? (
+              <>
+                <img src={rasmUrl} alt={tovar.nom} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Rasmni almashtirish"
+                  className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span className="text-[8px] font-bold mt-0.5">Almashtirish</span>
+                </button>
+              </>
             ) : (
-              <Package className="w-8 h-8 text-slate-300" />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-full flex flex-col items-center justify-center p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors active:scale-95"
+              >
+                <Camera className="w-5 h-5" />
+                <span className="text-[9px] font-extrabold text-center leading-tight mt-0.5">+ Rasm</span>
+              </button>
             )}
           </div>
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h2 className="text-base font-black text-slate-900 truncate leading-snug">{tovar.nom}</h2>
@@ -125,6 +202,23 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
                 Shtrixkod: <span className="font-bold text-slate-700">{tovar.shtrixkod}</span>
               </p>
             )}
+
+            {/* Rasm qo'shish / siqish statusi */}
+            {!rasmUrl && !rasmYuklanmoqda && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1 mt-1"
+              >
+                <ImagePlus className="w-3 h-3" /> Kamera / Galereyadan rasm yuklash
+              </button>
+            )}
+            {rasmStatistika && (
+              <p className="text-[10px] text-emerald-700 font-medium mt-0.5 truncate">
+                {rasmStatistika}
+              </p>
+            )}
+
             <div className="mt-1.5 flex items-center gap-1.5">
               <span
                 className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
