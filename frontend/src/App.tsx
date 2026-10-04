@@ -4,7 +4,7 @@ import { ChiqimTab } from "./components/ChiqimTab";
 import { QarzlarTab } from "./components/QarzlarTab";
 import { KassaTab } from "./components/KassaTab";
 import { OmborTab } from "./components/OmborTab";
-import { ShoppingCart, TrendingDown, Users, Wallet, Package, RefreshCw } from "lucide-react";
+import { ShoppingCart, TrendingDown, Users, Wallet, Package, RefreshCw, X } from "lucide-react";
 import { haptic } from "./lib/supabase";
 
 type TabTur = "sotuv" | "chiqim" | "qarzlar" | "kassa" | "ombor";
@@ -13,12 +13,18 @@ export default function App() {
   const [faolTab, setFaolTab] = useState<TabTur>("sotuv");
   const [telegramFoydalanuvchi, setTelegramFoydalanuvchi] = useState<string>("Boshqaruv");
 
+  const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+
   useEffect(() => {
     try {
-      const tg = (window as any).Telegram?.WebApp;
       if (tg) {
         tg.ready();
         tg.expand();
+        try {
+          tg.setHeaderColor?.("#ffffff");
+          tg.setBackgroundColor?.("#f8fafc");
+          tg.enableClosingConfirmation?.();
+        } catch {}
         if (tg.initDataUnsafe?.user?.first_name) {
           setTelegramFoydalanuvchi(tg.initDataUnsafe.user.first_name);
         }
@@ -32,28 +38,44 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function ilovaniYopish() {
+    haptic("medium");
+    if (tg) {
+      tg.close();
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col">
       {/* Yuqori Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shadow-xs">
         <div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            <h1 className="text-lg font-black tracking-tight text-slate-900">PROMAX STORE</h1>
+            <h1 className="text-base font-black tracking-tight text-slate-900">PROMAX STORE</h1>
           </div>
-          <p className="text-xs font-semibold text-slate-500">Salom, {telegramFoydalanuvchi} 👋</p>
+          <p className="text-[11px] font-semibold text-slate-500">Salom, {telegramFoydalanuvchi} 👋</p>
         </div>
 
-        <button
-          onClick={() => {
-            haptic("light");
-            window.location.reload();
-          }}
-          className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-colors"
-          title="Sahifani yangilash"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              haptic("light");
+              window.location.reload();
+            }}
+            className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition-colors"
+            title="Sahifani yangilash"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={ilovaniYopish}
+            className="p-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 rounded-xl text-slate-600 transition-colors"
+            title="Ilovani yopish"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Asosiy Kontent */}
