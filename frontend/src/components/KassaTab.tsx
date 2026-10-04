@@ -130,14 +130,14 @@ export function KassaTab() {
       </div>
 
       {/* Pul Harakati Oqimi (Journal / Audit Trail) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-2xs space-y-3">
         {/* Title va Yangilash */}
-        <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <h3 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-              <History className="w-4 h-4 text-slate-500" /> Pul Oqimi Jurnali
+            <h3 className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+              <History className="w-4 h-4 text-slate-500 dark:text-slate-400" /> Pul Oqimi Jurnali
             </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
               To'liq tafsilotlar (kim, nima, qanday to'lov) uchun qator ustiga bosing
             </p>
           </div>
@@ -147,14 +147,14 @@ export function KassaTab() {
               haptic("light");
             }}
             disabled={yuklanmoqda}
-            className="text-[11px] font-bold text-emerald-700 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 rounded-lg active:scale-95 transition-all flex-shrink-0"
+            className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg active:scale-95 transition-all flex-shrink-0"
           >
             {yuklanmoqda ? "..." : "Yangilash ⟳"}
           </button>
         </div>
 
         {/* FILTR TUGMALARI: BARCHASI | KIRIM | CHIQIM */}
-        <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200">
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => {
               setAmalFilter("hammasi");
@@ -162,13 +162,13 @@ export function KassaTab() {
             }}
             className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
               amalFilter === "hammasi"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <span>Barchasi</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "hammasi" ? "bg-slate-200 text-slate-800" : "bg-slate-200/60 text-slate-500"
+              amalFilter === "hammasi" ? "bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200" : "bg-slate-200/60 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400"
             }`}>
               {harakatlar.length}
             </span>
@@ -182,13 +182,13 @@ export function KassaTab() {
             className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
               amalFilter === "kirim"
                 ? "bg-emerald-600 text-white shadow-sm"
-                : "text-emerald-700 hover:bg-emerald-50/50"
+                : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40"
             }`}
           >
             <ArrowDownLeft className="w-3 h-3" />
             <span>Kirim</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "kirim" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+              amalFilter === "kirim" ? "bg-white/20 text-white" : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300"
             }`}>
               {kirimlar.length}
             </span>
@@ -202,13 +202,13 @@ export function KassaTab() {
             className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
               amalFilter === "chiqim"
                 ? "bg-rose-600 text-white shadow-sm"
-                : "text-rose-700 hover:bg-rose-50/50"
+                : "text-rose-700 dark:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/40"
             }`}
           >
             <ArrowUpRight className="w-3 h-3" />
             <span>Chiqim</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "chiqim" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-800"
+              amalFilter === "chiqim" ? "bg-white/20 text-white" : "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300"
             }`}>
               {chiqimlar.length}
             </span>
@@ -218,7 +218,7 @@ export function KassaTab() {
         {/* Harakatlar Ro'yxati */}
         <div className="space-y-1.5">
           {saralanganHarakatlar.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-xs font-medium">
+            <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs font-medium">
               {amalFilter === "kirim" ? "Kirim harakatlari topilmadi." : 
                amalFilter === "chiqim" ? "Chiqim harakatlari topilmadi." : 
                "Kassa harakatlari mavjud emas."}
@@ -233,12 +233,12 @@ export function KassaTab() {
                     setTanlanganHarakat(h);
                     haptic("light");
                   }}
-                  className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-300 cursor-pointer active:bg-slate-100 transition-all group shadow-2xs"
+                  className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer active:bg-slate-100 dark:active:bg-slate-800 transition-all group shadow-2xs"
                 >
                   <div className="flex items-center gap-2.5 min-w-0 pr-1">
                     <div
                       className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        kirimmi ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        kirimmi ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400" : "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400"
                       }`}
                     >
                       {kirimmi ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
@@ -246,15 +246,15 @@ export function KassaTab() {
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-900 group-hover:text-indigo-600 truncate leading-tight">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate leading-tight">
                           {getManbaYozuv(h.manba_turi)}
                         </span>
-                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 uppercase flex-shrink-0">
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase flex-shrink-0">
                           {getKassaBadge(h.kassa_turi)}
                         </span>
                       </div>
                       
-                      <p className="text-[11px] text-slate-500 truncate max-w-[190px] mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[190px] mt-0.5">
                         {h.izoh || (kirimmi ? "Savdo / To'lov tushumi" : "Xarajat")}
                       </p>
                     </div>
@@ -264,18 +264,18 @@ export function KassaTab() {
                     <div>
                       <span
                         className={`font-black text-xs tabular-nums block ${
-                          kirimmi ? "text-emerald-700" : "text-rose-700"
+                          kirimmi ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
                         }`}
                       >
                         {kirimmi ? "+" : "−"}
                         {pul(h.summa)} {h.valyuta}
                       </span>
-                      <p className="text-[9px] font-medium text-slate-400 mt-0.5">
+                      <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
                         {new Date(h.sana_vaqt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}{" "}
                         {new Date(h.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
                   </div>
                 </div>
               );

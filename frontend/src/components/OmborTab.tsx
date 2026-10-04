@@ -127,22 +127,22 @@ export function OmborTab() {
 
       {/* Ombor Umumiy Xulosasi */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-white border border-slate-200 p-2.5 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Jami Mahsulotlar</span>
-          <p className="text-base font-black text-slate-900 tabular-nums mt-0.5">{tovarlar.length} ta</p>
-          <p className="text-[10px] text-slate-400 font-medium">turli xil tovar</p>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Jami Mahsulotlar</span>
+          <p className="text-base font-black text-slate-900 dark:text-white tabular-nums mt-0.5">{tovarlar.length} ta</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">turli xil tovar</p>
         </div>
-        <div className="bg-white border border-slate-200 p-2.5 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ombor Qoldig'i</span>
-          <p className="text-base font-black text-emerald-800 tabular-nums mt-0.5">{pul(jamiDona)} dona</p>
-          <p className="text-[10px] text-slate-400 font-medium">jami fizik miqdor</p>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ombor Qoldig'i</span>
+          <p className="text-base font-black text-emerald-800 dark:text-emerald-400 tabular-nums mt-0.5">{pul(jamiDona)} dona</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">jami fizik miqdor</p>
         </div>
       </div>
 
       {/* Kam qolgan tovarlar ogohlantirishi */}
       {kamQolganlar.length > 0 && (
-        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-900 text-xs font-bold">
-          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl flex items-center gap-2 text-amber-900 dark:text-amber-300 text-xs font-bold">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
           <span>
             Diqqat: {kamQolganlar.length} ta tovar kam qoldi!
           </span>
@@ -152,13 +152,13 @@ export function OmborTab() {
       {/* Qidiruv va Yangi tovar qo'shish */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
+          <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500 w-4 h-4" />
           <input
             type="text"
             placeholder="Tovar yoki model qidirish..."
             value={qidiruv}
             onChange={(e) => setQidiruv(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-emerald-500"
+            className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-emerald-500"
           />
         </div>
         <button
@@ -175,7 +175,7 @@ export function OmborTab() {
       {/* Tovarlar Ro'yxati */}
       <div className="space-y-2">
         {saralangan.length === 0 ? (
-          <p className="text-slate-400 text-center py-6 font-medium text-xs">Tovarlar topilmadi.</p>
+          <p className="text-slate-400 dark:text-slate-500 text-center py-6 font-medium text-xs">Tovarlar topilmadi.</p>
         ) : (
           saralangan.map((t) => (
             <div
@@ -184,32 +184,32 @@ export function OmborTab() {
                 haptic("light");
                 setTanlanganTovarDetali(t);
               }}
-              className="bg-white border border-slate-200 hover:border-emerald-300 p-2.5 rounded-xl shadow-2xs flex items-center gap-2.5 cursor-pointer active:scale-[0.99] transition-all"
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 p-2.5 rounded-xl shadow-2xs flex items-center gap-2.5 cursor-pointer active:scale-[0.99] transition-all"
             >
               {/* Tovar rasmi */}
-              <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-100">
+              <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-100 dark:border-slate-800">
                 {t.rasm_url ? (
                   <img src={t.rasm_url} alt={t.nom} className="w-full h-full object-cover" />
                 ) : (
-                  <Package className="w-5 h-5 text-slate-400" />
+                  <Package className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                 )}
               </div>
 
               {/* Tovar Tafsilotlari */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h4 className="font-bold text-xs text-slate-900 truncate leading-snug">{t.nom}</h4>
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate leading-snug">{t.nom}</h4>
                   {t.model && (
-                    <span className="bg-slate-100 text-slate-600 px-1 py-0.2 rounded text-[10px] font-bold">
+                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1 py-0.2 rounded text-[10px] font-bold">
                       #{t.model}
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-black text-emerald-800 tabular-nums mt-0.5">
+                <p className="text-xs font-black text-emerald-800 dark:text-emerald-400 tabular-nums mt-0.5">
                   {pul(t.narx_optom)} {t.valyuta}
                 </p>
                 {t.tannarx > 0 && (
-                  <p className="text-[10px] text-slate-400 font-medium">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                     Tannarx: {pul(t.tannarx)} {t.valyuta}
                   </p>
                 )}
@@ -220,14 +220,14 @@ export function OmborTab() {
                 <div>
                   <span
                     className={`text-sm font-black tabular-nums block ${
-                      t.qoldiq <= 5 ? "text-rose-600" : "text-slate-900"
+                      t.qoldiq <= 5 ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-white"
                     }`}
                   >
                     {pul(t.qoldiq)}
                   </span>
-                  <p className="text-[10px] font-semibold text-slate-500">{t.birlik}</p>
+                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{t.birlik}</p>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
               </div>
             </div>
           ))
@@ -236,45 +236,45 @@ export function OmborTab() {
 
       {/* Yangi Tovar Qo'shish Modali */}
       {modalOchiq && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-3">
-          <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-2.5 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-2 border-b">
-              <h3 className="text-sm font-bold text-slate-900">Yangi tovar qo'shish</h3>
-              <button onClick={() => setModalOchiq(false)} className="text-slate-400 p-1 font-bold text-lg">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-2.5 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Yangi tovar qo'shish</h3>
+              <button onClick={() => setModalOchiq(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 font-bold text-lg">
                 ✕
               </button>
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">Tovar nomi *</label>
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Tovar nomi *</label>
               <input
                 type="text"
                 placeholder="masalan: Velikan Uzun"
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
-                className="w-full p-2 border rounded-lg font-semibold text-xs"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-semibold text-xs"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Model / Artikul</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Model / Artikul</label>
                 <input
                   type="text"
                   placeholder="5017"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  className="w-full p-2 border rounded-lg font-semibold text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-semibold text-xs"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Shtrix-kod</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Shtrix-kod</label>
                 <input
                   type="text"
                   placeholder="Shtrix-kod..."
                   value={shtrixkod}
                   onChange={(e) => setShtrixkod(e.target.value)}
-                  className="w-full p-2 border rounded-lg font-semibold text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-semibold text-xs"
                 />
               </div>
             </div>
@@ -282,11 +282,11 @@ export function OmborTab() {
             {/* Tovar Rasmi (Kamera yoki Galereya) */}
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] font-bold text-slate-700">Tovar rasmi (Ixtiyoriy):</label>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Tovar rasmi (Ixtiyoriy):</label>
                 <button
                   type="button"
                   onClick={() => setUrlKiritishRejimi(!urlKiritishRejimi)}
-                  className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-1"
+                  className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
                 >
                   <Link2 className="w-3 h-3" />
                   {urlKiritishRejimi ? "Kameradan yuklash" : "URL orqali kiritish"}
@@ -307,24 +307,24 @@ export function OmborTab() {
                   placeholder="https://... rasm havolasi"
                   value={rasmUrl}
                   onChange={(e) => setRasmUrl(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg font-medium text-xs bg-slate-50 focus:bg-white"
+                  className="w-full p-2 border border-slate-200 dark:border-slate-700 rounded-lg font-medium text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
               ) : rasmYuklanmoqda ? (
-                <div className="w-full p-3.5 border-2 border-dashed border-emerald-300 rounded-xl bg-emerald-50/50 flex flex-col items-center justify-center gap-1 text-emerald-800 text-xs font-bold animate-pulse">
-                  <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                <div className="w-full p-3.5 border-2 border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/30 flex flex-col items-center justify-center gap-1 text-emerald-800 dark:text-emerald-300 text-xs font-bold animate-pulse">
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-600 dark:text-emerald-400" />
                   <span>Kvadrat qilib siqilmoqda va yuklanmoqda...</span>
                 </div>
               ) : rasmUrl ? (
-                <div className="flex items-center gap-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl">
+                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs">
                     <img src={rasmUrl} alt="Tanlangan" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">
                       ✅ Kvadrat qilib saqlandi
                     </span>
                     {rasmStatistika && (
-                      <p className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-1 truncate">
                         {rasmStatistika}
                       </p>
                     )}
@@ -332,7 +332,7 @@ export function OmborTab() {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="text-[10px] font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs active:scale-95"
+                        className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded shadow-2xs active:scale-95"
                       >
                         Almashtirish
                       </button>
@@ -342,7 +342,7 @@ export function OmborTab() {
                           setRasmUrl("");
                           setRasmStatistika(null);
                         }}
-                        className="text-[10px] font-bold text-rose-600 hover:text-rose-800 px-1 py-0.5"
+                        className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800 px-1 py-0.5"
                       >
                         O'chirish
                       </button>
@@ -352,14 +352,14 @@ export function OmborTab() {
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl bg-slate-50/80 hover:bg-emerald-50/20 cursor-pointer flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.99]"
+                  className="w-full p-3 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 hover:bg-emerald-50/20 cursor-pointer flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.99]"
                 >
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Camera className="w-4 h-4 text-emerald-600" />
-                    <span className="text-xs font-bold text-slate-700">Kamera yoki Galereya</span>
-                    <ImagePlus className="w-4 h-4 text-emerald-600" />
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                    <Camera className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Kamera yoki Galereya</span>
+                    <ImagePlus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <p className="text-[10px] text-slate-400 font-medium text-center">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium text-center">
                     Rasm avtomatik 1:1 kvadrat qilinadi va siqiladi (~80KB)
                   </p>
                 </div>
@@ -368,30 +368,30 @@ export function OmborTab() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Ulgurji Narxi *</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Ulgurji Narxi *</label>
                 <input
                   type="number"
                   placeholder="95000"
                   value={narxOptom}
                   onChange={(e) => setNarxOptom(e.target.value)}
-                  className="w-full p-2 border rounded-lg font-black text-sm tabular-nums"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-black text-sm tabular-nums"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Tannarxi</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Tannarxi</label>
                 <input
                   type="number"
                   placeholder="70000"
                   value={tannarx}
                   onChange={(e) => setTannarx(e.target.value)}
-                  className="w-full p-2 border rounded-lg font-black text-sm tabular-nums"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-black text-sm tabular-nums"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Valyuta:</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Valyuta:</label>
                 <Combobox
                   title="Valyutani tanlang"
                   value={valyuta}
@@ -403,13 +403,13 @@ export function OmborTab() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Boshlang'ich qoldiq:</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Boshlang'ich qoldiq:</label>
                 <input
                   type="number"
                   placeholder="100"
                   value={qoldiq}
                   onChange={(e) => setQoldiq(e.target.value)}
-                  className="w-full p-2 border rounded-lg font-black text-sm tabular-nums"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg font-black text-sm tabular-nums"
                 />
               </div>
             </div>
@@ -417,7 +417,7 @@ export function OmborTab() {
             <button
               onClick={tovarSaqla}
               disabled={yuklanmoqda}
-              className="w-full py-2.5 bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-md active:scale-98 transition-all disabled:opacity-50"
+              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-sm rounded-xl shadow-md active:scale-98 transition-all disabled:opacity-50"
             >
               {yuklanmoqda ? "Saqlanmoqda..." : "✅ Omborda Saqlash"}
             </button>

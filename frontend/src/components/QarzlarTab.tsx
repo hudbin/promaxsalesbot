@@ -203,7 +203,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       )}
 
       {/* 2 TA ASOSIY TAB (QARZLAR & MIJOZLAR BAZASI) */}
-      <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200">
+      <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
         <button
           onClick={() => {
             setSubTab("qarzlar");
@@ -211,14 +211,14 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
           }}
           className={`flex-1 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             subTab === "qarzlar"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-600 hover:text-slate-900"
+              ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           }`}
         >
-          <Wallet className="w-3.5 h-3.5 text-amber-600" />
+          <Wallet className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
           <span>Qarzlar</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-            subTab === "qarzlar" ? "bg-amber-100 text-amber-900" : "bg-slate-200 text-slate-700"
+            subTab === "qarzlar" ? "bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
           }`}>
             {qarzdorMijozlar.length}
           </span>
@@ -231,14 +231,14 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
           }}
           className={`flex-1 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             subTab === "mijozlar"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-600 hover:text-slate-900"
+              ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           }`}
         >
-          <Users className="w-3.5 h-3.5 text-indigo-600" />
+          <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>Mijozlar bazasi</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-            subTab === "mijozlar" ? "bg-indigo-100 text-indigo-900" : "bg-slate-200 text-slate-700"
+            subTab === "mijozlar" ? "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-300" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
           }`}>
             {barchaMijozlar.length}
           </span>
@@ -250,35 +250,35 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
         <div className="space-y-3 animate-fade-in">
           {/* Jami Qarzdorlik Balansi */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">So'mdagi jami qarz</span>
-              <p className="text-base font-black text-amber-950 tabular-nums mt-0.5">{pul(jamiQarzUZS)} so'm</p>
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">So'mdagi jami qarz</span>
+              <p className="text-base font-black text-amber-950 dark:text-amber-200 tabular-nums mt-0.5">{pul(jamiQarzUZS)} so'm</p>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Dollardagi jami qarz</span>
-              <p className="text-base font-black text-emerald-950 tabular-nums mt-0.5">${pul(jamiQarzUSD)}</p>
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">Dollardagi jami qarz</span>
+              <p className="text-base font-black text-emerald-950 dark:text-emerald-200 tabular-nums mt-0.5">${pul(jamiQarzUSD)}</p>
             </div>
           </div>
 
           {/* Qidiruv */}
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
+            <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500 w-4 h-4" />
             <input
               type="text"
               placeholder="Qarzdor ismi, telefon yoki bozor..."
               value={qidiruv}
               onChange={(e) => setQidiruv(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-amber-500"
+              className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
           {/* Qarzdor Mijozlar Ro'yxati */}
           <div className="space-y-2">
             {saralanganQarzdorlar.length === 0 ? (
-              <div className="text-center py-8 bg-white border border-dashed border-slate-200 rounded-xl">
-                <Wallet className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 font-bold text-xs">Qarzdor mijozlar mavjud emas</p>
-                <p className="text-slate-400 text-[11px] mt-0.5">Barcha savdolar bo'yicha to'lovlar qabul qilingan.</p>
+              <div className="text-center py-8 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                <Wallet className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                <p className="text-slate-500 dark:text-slate-400 font-bold text-xs">Qarzdor mijozlar mavjud emas</p>
+                <p className="text-slate-400 dark:text-slate-500 text-[11px] mt-0.5">Barcha savdolar bo'yicha to'lovlar qabul qilingan.</p>
               </div>
             ) : (
               saralanganQarzdorlar.map((m) => (
@@ -288,29 +288,29 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                     setTanlanganMijozDetali(m);
                     haptic("light");
                   }}
-                  className="bg-white border border-slate-200 hover:border-amber-300 p-2.5 rounded-xl shadow-2xs flex justify-between items-center cursor-pointer active:bg-slate-50 transition-all group"
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-600 p-2.5 rounded-xl shadow-2xs flex justify-between items-center cursor-pointer active:bg-slate-50 dark:active:bg-slate-800 transition-all group"
                 >
                   <div className="min-w-0 pr-2">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="font-bold text-sm text-slate-900 group-hover:text-amber-800 truncate leading-snug">{m.nom}</h4>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 transition-colors flex-shrink-0" />
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-amber-800 dark:group-hover:text-amber-400 truncate leading-snug">{m.nom}</h4>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors flex-shrink-0" />
                     </div>
-                    <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-500 mt-0.5">
+                    <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
                       {m.telefon && (
                         <span className="flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {m.telefon}
+                          <Phone className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.telefon}
                         </span>
                       )}
                       {m.manzil && (
                         <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" /> {m.manzil}
+                          <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.manzil}
                         </span>
                       )}
                     </div>
 
                     <div className="flex gap-2.5 mt-1 text-xs font-black">
-                      {m.qarz_uzs > 0 && <span className="text-amber-700 tabular-nums">{pul(m.qarz_uzs)} so'm</span>}
-                      {m.qarz_usd > 0 && <span className="text-emerald-700 tabular-nums">${pul(m.qarz_usd)}</span>}
+                      {m.qarz_uzs > 0 && <span className="text-amber-700 dark:text-amber-400 tabular-nums">{pul(m.qarz_uzs)} so'm</span>}
+                      {m.qarz_usd > 0 && <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">${pul(m.qarz_usd)}</span>}
                     </div>
                   </div>
 
@@ -337,13 +337,13 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
           {/* Header & Qidiruv & Yangi mijoz tugmasi */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
+              <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Mijoz ismi, telefon yoki do'koni..."
                 value={qidiruv}
                 onChange={(e) => setQidiruv(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl text-xs font-medium shadow-2xs focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -363,10 +363,10 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
           {/* Barcha Mijozlar Ro'yxati */}
           <div className="space-y-2">
             {saralanganBarcha.length === 0 ? (
-              <div className="text-center py-8 bg-white border border-dashed border-slate-200 rounded-xl">
-                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 font-bold text-xs">Mijozlar topilmadi</p>
-                <p className="text-slate-400 text-[11px] mt-0.5">"+ Yangi mijoz" tugmasi orqali yangi xaridor qo'shishingiz mumkin.</p>
+              <div className="text-center py-8 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                <Users className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                <p className="text-slate-500 dark:text-slate-400 font-bold text-xs">Mijozlar topilmadi</p>
+                <p className="text-slate-400 dark:text-slate-500 text-[11px] mt-0.5">"+ Yangi mijoz" tugmasi orqali yangi xaridor qo'shishingiz mumkin.</p>
               </div>
             ) : (
               saralanganBarcha.map((m) => {
@@ -381,34 +381,34 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                       setTanlanganMijozDetali(m);
                       haptic("light");
                     }}
-                    className="bg-white border border-slate-200 hover:border-indigo-300 p-3 rounded-xl shadow-2xs flex justify-between items-center cursor-pointer active:bg-slate-50 transition-all group"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-600 p-3 rounded-xl shadow-2xs flex justify-between items-center cursor-pointer active:bg-slate-50 dark:active:bg-slate-800 transition-all group"
                   >
                     <div className="min-w-0 pr-2">
                       <div className="flex items-center gap-2">
                         {/* Avatar monogramma */}
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center flex-shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-100 dark:border-indigo-900/60 text-indigo-700 dark:text-indigo-400 font-black text-xs flex items-center justify-center flex-shrink-0">
                           {m.nom.charAt(0).toUpperCase()}
                         </div>
 
                         <div className="min-w-0">
-                          <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 truncate leading-tight">
+                          <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate leading-tight">
                             {m.nom}
                           </h4>
                           {m.izoh && (
-                            <p className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">{m.izoh}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[200px] mt-0.5">{m.izoh}</p>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-500 mt-1.5 ml-9">
+                      <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 ml-9">
                         {m.telefon && (
                           <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-400" /> {m.telefon}
+                            <Phone className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.telefon}
                           </span>
                         )}
                         {m.manzil && (
                           <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-slate-400" /> {m.manzil}
+                            <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.manzil}
                           </span>
                         )}
                       </div>
@@ -419,23 +419,23 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                       {hasAnyDebt ? (
                         <>
                           {hasUzsDebt && (
-                            <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-md font-black text-[11px] tabular-nums">
+                            <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-300 rounded-md font-black text-[11px] tabular-nums">
                               {pul(m.qarz_uzs)} so'm
                             </span>
                           )}
                           {hasUsdDebt && (
-                            <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-md font-black text-[11px] tabular-nums">
+                            <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-900 dark:text-emerald-300 rounded-md font-black text-[11px] tabular-nums">
                               ${pul(m.qarz_usd)}
                             </span>
                           )}
                         </>
                       ) : (
-                        <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-400 rounded-md font-semibold text-[10px]">
+                        <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 rounded-md font-semibold text-[10px]">
                           Qarzi yo'q
                         </span>
                       )}
 
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 transition-colors mt-0.5" />
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mt-0.5" />
                     </div>
                   </div>
                 );
@@ -447,35 +447,35 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
 
       {/* YANGI MIJOZ QO'SHISH MODALI (SUPABASE MIJOZLAR JADVALIGA MOS MAYDONLAR) */}
       {yangiMijozModalOchiq && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
-          <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-2 border-b">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                   <UserPlus className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Yangi mijoz qo'shish</h3>
-                  <p className="text-[11px] text-slate-500">Mijozlar bazasiga yangi kontragent</p>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Yangi mijoz qo'shish</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Mijozlar bazasiga yangi kontragent</p>
                 </div>
               </div>
               <button 
                 onClick={() => setYangiMijozModalOchiq(false)} 
-                className="text-slate-400 hover:text-slate-600 p-1 font-bold text-lg"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 font-bold text-lg"
               >
                 ✕
               </button>
             </div>
 
             {formaXato && (
-              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold">
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-400 font-semibold rounded-xl">
                 {formaXato}
               </div>
             )}
 
             {/* 1. Nomi (Majburiy) */}
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                 Mijoz / Do'kon nomi <span className="text-rose-500">*</span>
               </label>
               <input
@@ -483,58 +483,58 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                 value={yangiNom}
                 onChange={(e) => setYangiNom(e.target.value)}
                 placeholder="Masalan: Sardor aka (Qo'yliq bozori)"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             {/* 2. Telefon */}
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Telefon raqami:</label>
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Telefon raqami:</label>
               <input
                 type="tel"
                 value={yangiTelefon}
                 onChange={(e) => setYangiTelefon(e.target.value)}
                 placeholder="+998 90 123 45 67"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             {/* 3. Manzil */}
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Manzil / Do'kon joylashuvi:</label>
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Manzil / Do'kon joylashuvi:</label>
               <input
                 type="text"
                 value={yangiManzil}
                 onChange={(e) => setYangiManzil(e.target.value)}
                 placeholder="Shahar, bozor, qator, do'kon raqami..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             {/* 4. Boshlang'ich qarz (Ixtiyoriy) */}
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-              <span className="text-[11px] font-bold text-slate-700 block">
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                 Boshlang'ich qarz balansi (agar bo'lsa):
               </span>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">So'mda (UZS):</label>
+                  <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">So'mda (UZS):</label>
                   <input
                     type="number"
                     value={yangiQarzUzs}
                     onChange={(e) => setYangiQarzUzs(e.target.value)}
                     placeholder="0 so'm"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Dollarda (USD):</label>
+                  <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">Dollarda (USD):</label>
                   <input
                     type="number"
                     value={yangiQarzUsd}
                     onChange={(e) => setYangiQarzUsd(e.target.value)}
                     placeholder="$0"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                    className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -542,13 +542,13 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
 
             {/* 5. Izoh */}
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Qo'shimcha izoh / eslatma:</label>
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Qo'shimcha izoh / eslatma:</label>
               <textarea
                 value={yangiIzoh}
                 onChange={(e) => setYangiIzoh(e.target.value)}
                 rows={2}
                 placeholder="Mijoz haqida eslatma..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               />
             </div>
 
@@ -556,7 +556,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setYangiMijozModalOchiq(false)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs"
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs"
               >
                 Bekor qilish
               </button>
@@ -574,22 +574,22 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
 
       {/* Qarz To'lovini Qabul Qilish Modali */}
       {tanlanganMijoz && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
-          <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-3 shadow-2xl">
-            <div className="flex justify-between items-center pb-2 border-b">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-3 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-4 space-y-3 shadow-2xl">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">{tanlanganMijoz.nom}</h3>
-                <p className="text-[11px] text-slate-500">Qarz to'lovini qabul qilish</p>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">{tanlanganMijoz.nom}</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Qarz to'lovini qabul qilish</p>
               </div>
-              <button onClick={() => setTanlanganMijoz(null)} className="text-slate-400 p-1 font-bold text-lg">
+              <button onClick={() => setTanlanganMijoz(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 font-bold text-lg">
                 ✕
               </button>
             </div>
 
             {/* Joriy qarz */}
-            <div className="bg-slate-50 p-2.5 rounded-lg border flex justify-between font-bold text-xs">
-              <span className="text-slate-600">Joriy qarz:</span>
-              <span className="text-amber-800 tabular-nums">
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-between font-bold text-xs">
+              <span className="text-slate-600 dark:text-slate-400">Joriy qarz:</span>
+              <span className="text-amber-800 dark:text-amber-300 tabular-nums">
                 {tanlanganMijoz.qarz_uzs > 0 ? `${pul(tanlanganMijoz.qarz_uzs)} so'm ` : ""}
                 {tanlanganMijoz.qarz_usd > 0 ? `$${pul(tanlanganMijoz.qarz_usd)}` : ""}
               </span>
@@ -604,7 +604,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                   setTolovSumma(String(tanlanganMijoz.qarz_uzs || ""));
                 }}
                 className={`flex-1 py-1.5 rounded-lg font-bold text-xs border ${
-                  valyuta === "UZS" ? "bg-amber-600 text-white border-amber-600 shadow-2xs" : "bg-slate-50 text-slate-700"
+                  valyuta === "UZS" ? "bg-amber-600 text-white border-amber-600 shadow-2xs" : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 So'm (UZS)
@@ -616,7 +616,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                   setTolovSumma(String(tanlanganMijoz.qarz_usd || ""));
                 }}
                 className={`flex-1 py-1.5 rounded-lg font-bold text-xs border ${
-                  valyuta === "USD" ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs" : "bg-slate-50 text-slate-700"
+                  valyuta === "USD" ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs" : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
               >
                 Dollar (USD)
@@ -625,19 +625,19 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
 
             {/* Summa */}
             <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">Qaytarilayotgan summa:</label>
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">Qaytarilayotgan summa:</label>
               <input
                 type="number"
                 value={tolovSumma}
                 onChange={(e) => setTolovSumma(e.target.value)}
                 placeholder="0"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-black text-lg text-slate-900 tabular-nums focus:ring-2 focus:ring-amber-500"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-black text-lg text-slate-900 dark:text-white tabular-nums focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
             {/* Kassa Combobox */}
             <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Qaysi kassaga tushdi:</label>
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Qaysi kassaga tushdi:</label>
               <Combobox
                 title="Kassani tanlang"
                 value={kassaTuri}
@@ -652,14 +652,14 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
               placeholder="Izoh (masalan: do'konga olib kelib berdi)..."
               value={izoh}
               onChange={(e) => setIzoh(e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium"
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-900 dark:text-white"
             />
 
             {/* Saqlash */}
             <button
               onClick={qarzTolovSaqla}
               disabled={yuklanmoqda}
-              className="w-full py-2.5 bg-amber-600 text-white font-extrabold text-sm rounded-xl shadow-md active:scale-98 transition-all disabled:opacity-50"
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-sm rounded-xl shadow-md active:scale-98 transition-all disabled:opacity-50"
             >
               {yuklanmoqda ? "Saqlanmoqda..." : "✅ To'lovni Qabul Qilish"}
             </button>

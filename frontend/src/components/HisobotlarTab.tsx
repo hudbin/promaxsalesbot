@@ -329,8 +329,8 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       </div>
 
       {/* 1. Hisobot turini tanlash (Pill buttons) */}
-      <div className="bg-white border border-slate-200 p-2.5 rounded-2xl shadow-2xs">
-        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-2xl shadow-2xs">
+        <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
           Hisobot turi:
         </label>
         <div className="grid grid-cols-2 gap-1.5">
@@ -349,11 +349,11 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
               className={`p-2 rounded-xl text-left border transition-all ${
                 hisobotTuri === t.id
                   ? "bg-indigo-600 border-indigo-600 text-white shadow-2xs"
-                  : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
+                  : "bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
               }`}
             >
               <p className="font-bold text-xs leading-tight">{t.nom}</p>
-              <p className={`text-[10px] mt-0.5 truncate ${hisobotTuri === t.id ? "text-indigo-100" : "text-slate-400"}`}>
+              <p className={`text-[10px] mt-0.5 truncate ${hisobotTuri === t.id ? "text-indigo-100" : "text-slate-400 dark:text-slate-500"}`}>
                 {t.desc}
               </p>
             </button>
@@ -362,10 +362,10 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       </div>
 
       {/* 2. Davrni tanlash (Tezkor tugmalar va sana tanlash) */}
-      <div className="bg-white border border-slate-200 p-3 rounded-2xl shadow-2xs space-y-2.5">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xs space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Davrni tanlang:</label>
-          <span className="text-[11px] font-semibold text-indigo-600">
+          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Davrni tanlang:</label>
+          <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
             {boshlanishSana === tugashSana ? boshlanishSana : `${boshlanishSana} — ${tugashSana}`}
           </span>
         </div>
@@ -385,7 +385,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
               className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
                 davr === d.id
                   ? "bg-indigo-600 text-white shadow-2xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
               }`}
             >
               {d.nom}
@@ -395,23 +395,23 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
 
         {/* Ixtiyoriy sanalar */}
         {davr === "boshqa" && (
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
             <div>
-              <label className="text-[10px] font-semibold text-slate-500 block mb-1">Boshlanish:</label>
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">Boshlanish:</label>
               <input
                 type="date"
                 value={boshlanishSana}
                 onChange={(e) => setBoshlanishSana(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-slate-500 block mb-1">Tugash:</label>
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">Tugash:</label>
               <input
                 type="date"
                 value={tugashSana}
                 onChange={(e) => setTugashSana(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
           </div>
@@ -420,71 +420,71 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
 
       {/* 3. Jonli ko'rsatkichlar & Xulosa (Foydalanuvchi ko'z oldida ko'radi) */}
       <div className="space-y-2">
-        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 px-1">
-          <Layers className="w-3.5 h-3.5 text-indigo-600" />
+        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 px-1">
+          <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           Hisobot Ko'rsatkichlari (Xulosa)
         </h3>
 
         <div className="grid grid-cols-2 gap-2">
           {/* Savdo */}
-          <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Jami Savdo</span>
-            <p className="text-base font-black text-emerald-900 tabular-nums leading-tight mt-0.5">
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">Jami Savdo</span>
+            <p className="text-base font-black text-emerald-900 dark:text-emerald-200 tabular-nums leading-tight mt-0.5">
               {pul(jamiSavdoUZS)} <span className="text-xs font-bold">so'm</span>
             </p>
             {jamiSavdoUSD > 0 && (
-              <p className="text-xs font-black text-emerald-700 tabular-nums">${pul(jamiSavdoUSD)}</p>
+              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">${pul(jamiSavdoUSD)}</p>
             )}
-            <p className="text-[10px] text-emerald-600 font-semibold mt-1">
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
               {savdolar.length} ta chek
             </p>
           </div>
 
           {/* Tushum (Kassaga) */}
-          <div className="bg-blue-50 border border-blue-200 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Kassaga Tushum</span>
-            <p className="text-base font-black text-blue-900 tabular-nums leading-tight mt-0.5">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 p-2.5 rounded-xl">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 block">Kassaga Tushum</span>
+            <p className="text-base font-black text-blue-900 dark:text-blue-200 tabular-nums leading-tight mt-0.5">
               {pul(tushganNaqdUZS)} <span className="text-xs font-bold">so'm</span>
             </p>
             {tushganNaqdUSD > 0 && (
-              <p className="text-xs font-black text-blue-700 tabular-nums">${pul(tushganNaqdUSD)}</p>
+              <p className="text-xs font-black text-blue-700 dark:text-blue-400 tabular-nums">${pul(tushganNaqdUSD)}</p>
             )}
-            <p className="text-[10px] text-blue-600 font-semibold mt-1">
+            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-1">
               Naqd & Karta orqali
             </p>
           </div>
 
           {/* Berilgan qarz */}
-          <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block">Qarzga berildi</span>
-            <p className="text-base font-black text-amber-900 tabular-nums leading-tight mt-0.5">
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">Qarzga berildi</span>
+            <p className="text-base font-black text-amber-900 dark:text-amber-200 tabular-nums leading-tight mt-0.5">
               {pul(berilganQarzUZS)} <span className="text-xs font-bold">so'm</span>
             </p>
             {berilganQarzUSD > 0 && (
-              <p className="text-xs font-black text-amber-700 tabular-nums">${pul(berilganQarzUSD)}</p>
+              <p className="text-xs font-black text-amber-700 dark:text-amber-400 tabular-nums">${pul(berilganQarzUSD)}</p>
             )}
-            <p className="text-[10px] text-amber-600 font-semibold mt-1">
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-1">
               Yangi nasiyalar
             </p>
           </div>
 
           {/* Chiqim (Xarajat) */}
-          <div className="bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block">Jami Chiqim</span>
-            <p className="text-base font-black text-rose-900 tabular-nums leading-tight mt-0.5">
+          <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 p-2.5 rounded-xl">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 block">Jami Chiqim</span>
+            <p className="text-base font-black text-rose-900 dark:text-rose-200 tabular-nums leading-tight mt-0.5">
               {pul(jamiChiqimUZS)} <span className="text-xs font-bold">so'm</span>
             </p>
             {jamiChiqimUSD > 0 && (
-              <p className="text-xs font-black text-rose-700 tabular-nums">${pul(jamiChiqimUSD)}</p>
+              <p className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">${pul(jamiChiqimUSD)}</p>
             )}
-            <p className="text-[10px] text-rose-600 font-semibold mt-1">
+            <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold mt-1">
               {rasxodlar.length} ta xarajat
             </p>
           </div>
         </div>
 
         {/* Eski qarzlardan qaytgan va Sof Kassa Farqi */}
-        <div className="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between shadow-2xs">
+        <div className="bg-slate-900 dark:bg-slate-800 text-white p-3 rounded-xl flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Qarzdan tushum: {pul(qaytganQarzUZS)} so'm
@@ -493,22 +493,22 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
               Sof Kassa Oqimi: {pul((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS)} so'm
             </p>
           </div>
-          <span className="text-xs px-2.5 py-1 bg-white/10 rounded-lg text-emerald-400 font-bold">
+          <span className="text-xs px-2.5 py-1 bg-white/10 dark:bg-slate-700/60 rounded-lg text-emerald-400 font-bold">
             {(tushganNaqdUZS + qaytganQarzUZS) >= jamiChiqimUZS ? "📈 Ijobiy" : "📉 Kamomad"}
           </span>
         </div>
 
         {/* Chiqimlar taqsimoti */}
         {Object.keys(chiqimKategoriyaMap).length > 0 && (
-          <div className="bg-white border border-slate-200 p-3 rounded-xl">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
               Xarajatlar tarkibi:
             </span>
             <div className="space-y-1.5">
               {Object.entries(chiqimKategoriyaMap).map(([kat, sum]) => (
                 <div key={kat} className="flex justify-between items-center text-xs">
-                  <span className="text-slate-700 font-semibold">{kat}</span>
-                  <span className="font-bold text-rose-700 tabular-nums">{pul(sum)} so'm</span>
+                  <span className="text-slate-700 dark:text-slate-300 font-semibold">{kat}</span>
+                  <span className="font-bold text-rose-700 dark:text-rose-400 tabular-nums">{pul(sum)} so'm</span>
                 </div>
               ))}
             </div>
@@ -517,8 +517,8 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       </div>
 
       {/* 4. Hisobotni Yuklab Olish va Telegramga Yuborish tugmalari */}
-      <div className="bg-white border border-slate-200 p-3 rounded-2xl shadow-2xs space-y-2">
-        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xs space-y-2">
+        <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
           Hisobotni olish usuli:
         </label>
 
@@ -532,7 +532,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
           {yuborilmoqda ? "Telegramga yuborilmoqda..." : "📲 Telegram Botimga Excel Yuborish"}
         </button>
 
-        <p className="text-[10px] text-slate-500 text-center leading-tight">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-tight">
           💡 Telegram ilovasi ichida Excel faylni 100% ochish va saqlash uchun eng qulay yo'l!
         </p>
 
@@ -541,9 +541,9 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
           <button
             onClick={() => telegramgaYuborish("guruh")}
             disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+            <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             Guruhga yuborish
           </button>
 
@@ -551,9 +551,9 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
           <button
             onClick={brauzerdaYuklabOlish}
             disabled={yuklanmoqda}
-            className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
             Faylni yuklash (.xlsx)
           </button>
         </div>
@@ -561,39 +561,39 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
 
       {/* 5. Tanlangan davrdagi amallar ro'yxati (Preview) */}
       <div className="space-y-1.5 pt-1">
-        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 px-1">
-          <Clock className="w-3.5 h-3.5 text-slate-500" />
+        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 px-1">
+          <Clock className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           Hisobotga kiritilgan amallar ro'yxati
         </h3>
 
         {/* Savdolar ro'yxati (agar tanlangan bo'lsa) */}
         {(hisobotTuri === "hammasi" || hisobotTuri === "savdolar") && (
           <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-1">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block px-1">
               Savdolar ({savdolar.length} ta):
             </span>
             {savdolar.length === 0 ? (
-              <p className="text-xs text-slate-400 p-2.5 bg-white rounded-xl text-center">Bu davrda savdo bo'lmagan.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-center">Bu davrda savdo bo'lmagan.</p>
             ) : (
               savdolar.slice(0, 5).map((s) => (
-                <div key={s.id} className="p-2.5 bg-white border border-slate-200 rounded-xl flex justify-between items-center text-xs">
+                <div key={s.id} className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex justify-between items-center text-xs">
                   <div>
-                    <span className="font-bold text-slate-800">{s.mijoz?.nom || "Noma'lum xaridor"}</span>
-                    <p className="text-[10px] text-slate-400">
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{s.mijoz?.nom || "Noma'lum xaridor"}</span>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
                       {new Date(s.sana_vaqt).toLocaleDateString("ru-RU")} · {s.tolov_turi || "naqd"} · {s.xodim || "Xodim"}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="font-black text-emerald-700">{pul(s.jami_summa)} {s.valyuta}</span>
+                    <span className="font-black text-emerald-700 dark:text-emerald-400">{pul(s.jami_summa)} {s.valyuta}</span>
                     {Number(s.qarz_summa) > 0 && (
-                      <p className="text-[10px] font-bold text-amber-600">Qarz: {pul(s.qarz_summa)}</p>
+                      <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400">Qarz: {pul(s.qarz_summa)}</p>
                     )}
                   </div>
                 </div>
               ))
             )}
             {savdolar.length > 5 && (
-              <p className="text-[10px] text-slate-400 text-center font-medium">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-medium">
                 ... va yana {savdolar.length - 5} ta savdo Excel faylida mavjud
               </p>
             )}
@@ -603,27 +603,27 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
         {/* Chiqimlar ro'yxati */}
         {(hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") && (
           <div className="space-y-1 pt-1.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-1">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block px-1">
               Xarajatlar ({rasxodlar.length} ta):
             </span>
             {rasxodlar.length === 0 ? (
-              <p className="text-xs text-slate-400 p-2.5 bg-white rounded-xl text-center">Bu davrda chiqim bo'lmagan.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-center">Bu davrda chiqim bo'lmagan.</p>
             ) : (
               rasxodlar.slice(0, 5).map((r) => (
-                <div key={r.id} className="p-2.5 bg-white border border-slate-200 rounded-xl flex justify-between items-center text-xs">
+                <div key={r.id} className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex justify-between items-center text-xs">
                   <div>
-                    <span className="font-bold text-slate-800">{r.kategoriya}</span>
-                    {r.izoh && <span className="text-[11px] text-slate-500"> · {r.izoh}</span>}
-                    <p className="text-[10px] text-slate-400">
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{r.kategoriya}</span>
+                    {r.izoh && <span className="text-[11px] text-slate-500 dark:text-slate-400"> · {r.izoh}</span>}
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
                       {new Date(r.sana_vaqt).toLocaleDateString("ru-RU")} · {r.tolov_turi || "naqd"}
                     </p>
                   </div>
-                  <span className="font-black text-rose-700 tabular-nums">−{pul(r.summa)} {r.valyuta}</span>
+                  <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">−{pul(r.summa)} {r.valyuta}</span>
                 </div>
               ))
             )}
             {rasxodlar.length > 5 && (
-              <p className="text-[10px] text-slate-400 text-center font-medium">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-medium">
                 ... va yana {rasxodlar.length - 5} ta chiqim Excel faylida mavjud
               </p>
             )}
