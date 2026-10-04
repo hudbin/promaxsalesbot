@@ -4,7 +4,7 @@
 import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
-const BOT_TOKEN = process.env.BOT_TOKEN || "";
+const BOT_TOKEN = process.env.BOT_TOKEN || "8909794013:AAEJB9hhM3OpIQoKRYlyML-gDodXgOgGDn0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";

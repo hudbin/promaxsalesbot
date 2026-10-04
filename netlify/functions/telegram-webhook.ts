@@ -5,7 +5,7 @@ import { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
 // Muhit o'zgaruvchilari
-const BOT_TOKEN = process.env.BOT_TOKEN || "";
+const BOT_TOKEN = process.env.BOT_TOKEN || "8909794013:AAEJB9hhM3OpIQoKRYlyML-gDodXgOgGDn0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -32,7 +32,18 @@ function pul(n: number): string {
 // -----------------------------------------------------------------------------
 // GEMINI AI TAHLILCHISI (O'zbek tilidagi matn va audio xabarlar)
 // -----------------------------------------------------------------------------
-async function geminiTahlil(matn: string, audioBase64?: string, mimeType?: string) {
+async function geminiTahlil(
+  matn: string,
+  audioBase64?: string,
+  mimeType?: string
+): Promise<{ ok: boolean; data?: any; error?: string }> {
+  if (!GEMINI_API_KEY) {
+    return {
+      ok: false,
+      error: "Google Gemini API kaliti (GEMINI_API_KEY) kiritilmagan. Iltimos, Netlify Environment Variables ga qo'shing.",
+    };
+  }
+
   const prompt = `
 Siz ulgurji va chakana savdo (B2B) do'koni uchun buxgalter yordamchi AI hisoblanasiz.
 Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilida (lotin yoki kirill) matn yoki ovozli xabar yuboradi.
@@ -72,38 +83,45 @@ Qoidalar:
 - Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", kassa_turi: "naqd_usd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
 `;
 
-  const contents: any[] = [];
-  const parts: any[] = [{ text: prompt }];
-
-  if (audioBase64 && mimeType) {
-    parts.push({
-      inline_data: {
-        mime_type: mimeType,
-        data: audioBase64,
-      },
-    });
-  } else if (matn) {
-    parts.push({ text: `Foydalanuvchi xabari: "${matn}"` });
-  }
-
-  contents.push({ parts });
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents }),
-  });
-
-  const data = await resp.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-  const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-
   try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    console.error("Gemini JSON parse xatosi:", rawText);
-    return null;
+    const contents: any[] = [];
+    const parts: any[] = [{ text: prompt }];
+
+    if (audioBase64 && mimeType) {
+      parts.push({
+        inline_data: {
+          mime_type: mimeType,
+          data: audioBase64,
+        },
+      });
+    } else if (matn) {
+      parts.push({ text: `Foydalanuvchi xabari: "${matn}"` });
+    }
+
+    contents.push({ parts });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents }),
+    });
+
+    const data = await resp.json();
+    if (data?.error) {
+      return {
+        ok: false,
+        error: `Gemini API xatosi: ${data.error.message || JSON.stringify(data.error)}`,
+      };
+    }
+
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    return { ok: true, data: parsed };
+  } catch (e: any) {
+    console.error("Gemini parse xatosi:", e);
+    return { ok: false, error: e?.message || "Gemini bilan bog'lanishda xatolik yuz berdi" };
   }
 }
 
@@ -258,21 +276,46 @@ export const handler: Handler = async (event) => {
   const text = message.text || message.caption || "";
   const voice = message.voice || message.audio;
 
-  // Buyruqlar (/start, /hisobot)
+  // Buyruqlar (/start, /status, /tekshir)
   if (text === "/start") {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nSiz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo va xarajatlarni yozishingiz mumkin.\n\n<i>Masalan:</i>\n• "Obedga 75 ming naqd ketdi"\n• "Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"\n• "Murodjon aka 500$ qarzini berdi"\n\nPastdagi menyu orqali Mini App ilovasini ochishingiz mumkin.`,
+      text: `👋 <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nSiz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo va xarajatlarni yozishingiz mumkin.\n\n<i>Masalan:</i>\n• "Obedga 75 ming naqd ketdi"\n• "Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"\n• "Murodjon aka 500$ qarzini berdi"\n\n⚙️ <i>Tizim ulanishlarini tekshirish uchun:</i> /status`,
+      parse_mode: "HTML",
+    });
+    return { statusCode: 200, body: "OK" };
+  }
+
+  if (text === "/status" || text === "/tekshir") {
+    const isGeminiSet = !!GEMINI_API_KEY && GEMINI_API_KEY.length > 5;
+    const isSupabaseSet = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+    const isGroupSet = !!GROUP_CHAT_ID;
+
+    const statusMsg = `🔍 <b>PROMAX TIZIM HOLATI:</b>\n\n` +
+      `🤖 <b>Telegram Bot:</b> ✅ Faol (@Promaxsavdobot)\n` +
+      `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? "✅ Ulangan (2.0 Flash)" : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
+      `🗄 <b>Supabase Baza:</b> ${isSupabaseSet ? "✅ Ulangan" : "❌ Kiritilmagan (SUPABASE_URL yo'q)"}\n` +
+      `👥 <b>Guruh xabarnomasi:</b> ${isGroupSet ? `✅ Guruh ID: <code>${GROUP_CHAT_ID}</code>` : "⚠️ Sozlanmagan"}\n\n` +
+      (!isGeminiSet ? `⚠️ <i>Gemini AI ishlashi uchun aistudio.google.com dan bepul kalit olib Netlify'ga qo'shing.</i>` : `✅ AI ovozli va matnli xabarlarni qabul qilishga tayyor!`);
+
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: statusMsg,
       parse_mode: "HTML",
     });
     return { statusCode: 200, body: "OK" };
   }
 
   // Ovozli yoki Moliyaviy matn kelganda -> Gemini AI ga uzatish
-  let parsedData: any = null;
+  let geminiRes: { ok: boolean; data?: any; error?: string } | null = null;
 
   if (voice) {
-    await tgPost("sendMessage", { chat_id: chatId, text: "🎙 <i>Ovoz eshitilmoqda va tahlil qilinmoqda...</i>", parse_mode: "HTML" });
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: "🎙 <i>Ovoz eshitilmoqda va tahlil qilinmoqda...</i>",
+      parse_mode: "HTML",
+    });
+
     try {
       // Telegramdan audio faylni yuklab olish
       const fileInfo = await tgPost("getFile", { file_id: voice.file_id });
@@ -282,62 +325,94 @@ export const handler: Handler = async (event) => {
         const audioRes = await fetch(fileUrl);
         const arrayBuffer = await audioRes.arrayBuffer();
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
-        parsedData = await geminiTahlil("", base64Audio, voice.mime_type || "audio/ogg");
+        geminiRes = await geminiTahlil("", base64Audio, voice.mime_type || "audio/ogg");
+      } else {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: "⚠️ Ovozli faylni Telegramdan yuklab bo'lmadi.",
+        });
+        return { statusCode: 200, body: "OK" };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Audio yuklash xatosi:", err);
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ Ovozli xabarni yuklashda xatolik: ${err?.message || err}`,
+      });
+      return { statusCode: 200, body: "OK" };
     }
   } else if (text && !text.startsWith("/")) {
-    parsedData = await geminiTahlil(text);
+    geminiRes = await geminiTahlil(text);
   }
 
-  if (parsedData && parsedData.amal) {
-    // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
-    const draftId = Math.random().toString(36).substring(2, 10);
-    await supabase.from("tranzaksiya_qoralama").insert({
-      id: draftId,
-      malumot: parsedData,
-      yaratildi: new Date().toISOString(),
-    });
-
-    // 1-bosqichli Tasdiqlash Kartochkasi
-    let preview = "";
-    if (parsedData.amal === "rasxod") {
-      preview = `🧾 <b>XARAJAT (RASXOD) ANIQLANDI</b>\n\n` +
-        `💵 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-        `📂 Kategoriya: <b>${parsedData.kategoriya || "Boshqa"}</b>\n` +
-        `💳 To'lov: <b>${parsedData.tolov_turi || "Naqd"}</b>\n` +
-        (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
-    } else if (parsedData.amal === "qarz_tolov") {
-      preview = `💳 <b>QARZ TO'LOVI ANIQLANDI</b>\n\n` +
-        `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Noma'lum"}</b>\n` +
-        `💵 To'lov: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-        `💳 Kassa: <b>${parsedData.tolov_turi || "Naqd"}</b>\n`;
-    } else if (parsedData.amal === "savdo") {
-      const qarz = Math.max(0, (parsedData.jami_summa || 0) - (parsedData.tolangan_summa || 0));
-      preview = `🛒 <b>SAVDO ANIQLANDI</b>\n\n` +
-        `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Chakana"}</b>\n` +
-        `💰 Jami: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-        `💵 Naqd to'landi: <b>${pul(parsedData.tolangan_summa)} ${parsedData.valyuta}</b>\n` +
-        `📝 Qarzga: <b>${pul(qarz)} ${parsedData.valyuta}</b>\n`;
+  if (geminiRes) {
+    if (!geminiRes.ok) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>AI TAHLIL XATOSI:</b>\n${geminiRes.error}\n\n<i>Eslatma:</i> aistudio.google.com dan bepul <b>GEMINI_API_KEY</b> olib, Netlify Dashboard -> Site configuration -> Environment variables ga kiriting.`,
+        parse_mode: "HTML",
+      });
+      return { statusCode: 200, body: "OK" };
     }
 
-    preview += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
+    const parsedData = geminiRes.data;
 
-    await tgPost("sendMessage", {
-      chat_id: chatId,
-      text: preview,
-      parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "✅ Tasdiqlash", callback_data: `cf:${draftId}` },
-            { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    if (parsedData && parsedData.amal) {
+      // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
+      const draftId = Math.random().toString(36).substring(2, 10);
+      await supabase.from("tranzaksiya_qoralama").insert({
+        id: draftId,
+        malumot: parsedData,
+        yaratildi: new Date().toISOString(),
+      });
+
+      // 1-bosqichli Tasdiqlash Kartochkasi
+      let preview = "";
+      if (parsedData.amal === "rasxod") {
+        preview = `🧾 <b>XARAJAT (RASXOD) ANIQLANDI</b>\n\n` +
+          `💵 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
+          `📂 Kategoriya: <b>${parsedData.kategoriya || "Boshqa"}</b>\n` +
+          `💳 To'lov: <b>${parsedData.tolov_turi || "Naqd"}</b>\n` +
+          (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
+      } else if (parsedData.amal === "qarz_tolov") {
+        preview = `💳 <b>QARZ TO'LOVI ANIQLANDI</b>\n\n` +
+          `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Noma'lum"}</b>\n` +
+          `💵 To'lov: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
+          `💳 Kassa: <b>${parsedData.tolov_turi || "Naqd"}</b>\n`;
+      } else if (parsedData.amal === "savdo") {
+        const qarz = Math.max(0, (parsedData.jami_summa || 0) - (parsedData.tolangan_summa || 0));
+        preview = `🛒 <b>SAVDO ANIQLANDI</b>\n\n` +
+          `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Chakana"}</b>\n` +
+          `💰 Jami: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
+          `💵 Naqd to'landi: <b>${pul(parsedData.tolangan_summa)} ${parsedData.valyuta}</b>\n` +
+          `📝 Qarzga: <b>${pul(qarz)} ${parsedData.valyuta}</b>\n`;
+      }
+
+      preview += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: preview,
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ Tasdiqlash", callback_data: `cf:${draftId}` },
+              { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+            ],
           ],
-        ],
-      },
-    });
-    return { statusCode: 200, body: "OK" };
+        },
+      });
+      return { statusCode: 200, body: "OK" };
+    } else {
+      // Moliyaviy amal aniqlanmadi
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `🤖 <b>Xabardan savdo yoki xarajat aniqlanmadi.</b>\n\nIltimos, aniqroq yozing yoki gapiring.\n\n<i>Masalan:</i>\n• "Obedga 75 ming naqd ketdi"\n• "Akrom akaga 50 ta velikan 100$ ga berdim, 40$ naqd berdi"\n• "Murod aka 500$ qarzini berdi"`,
+        parse_mode: "HTML",
+      });
+      return { statusCode: 200, body: "OK" };
+    }
   }
 
   return { statusCode: 200, body: "OK" };
