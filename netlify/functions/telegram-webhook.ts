@@ -106,13 +106,14 @@ Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilid
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 4 ta amal turidan birini aniqlang:
+Quyidagi 5 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
 3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
 4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
+5. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti).
 
-JSON strukturasi quyidagicha bo'lishi SHART:
+JSON strukturasi 1-4 amallar uchun:
 {
   "amal": "savdo" | "rasxod" | "qarz_tolov" | "tovar_kirim",
   "valyuta": "UZS" | "USD",
@@ -137,14 +138,30 @@ JSON strukturasi quyidagicha bo'lishi SHART:
   ]
 }
 
+JSON strukturasi "savol" amali uchun (Buxgalteriya bazasidan javob qidirish):
+{
+  "amal": "savol",
+  "sql": "SELECT ... FROM ...",
+  "izoh": "Siz yaratgan so'rov nimani anglatishini qisqacha izohi"
+}
+
+Agar "savol" bo'lsa, javob topish uchun Postgres SQL (SELECT) yozishingiz SHART. Jadvallar tuzilishi:
+- tovarlar (id, nom, model, birlik, tannarx, narx_optom, valyuta, qoldiq, faol)
+- mijozlar (id, nom, telefon, qarz_uzs, qarz_usd)
+- savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa)
+- rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, izoh)
+- qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta)
+
 Qoidalar:
+- Faqat va faqat SELECT so'rov yozing. So'rovni 1 qatorda, ikki qo'shtirnoq ichiga olib yozing.
+- Hozirgi vaqtni olish uchun \`now()\` yoki \`CURRENT_DATE\` ishlating.
 - Agar valyuta aytilmasa yoki "so'm", "ming", "mln" bo'lsa -> valyuta: "UZS", kassa_turi: "naqd_uzs" (agar plastik aytilmasa).
 - Agar "dollar", "$", "yashil" aytilsa -> valyuta: "USD", kassa_turi: "naqd_usd".
 - Agar savdoda qarzga berilgan bo'lsa, tolangan_summa = naqd berilgani, qolgani avtomatik qarz bo'ladi.
 - Agar "obedga 60 ming ketdi" yoki "ovqatlanishga 60 ming ketdi" deyilsa: amal: "rasxod", kategoriya: "Ovqatlanish", jami_summa: 60000, valyuta: "UZS", kassa_turi: "naqd_uzs".
 - Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", kassa_turi: "naqd_usd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
-- Agar omborga tovar kelgani, kirim bo'lgani, yangi tovar qo'shilishi aytilsa (masalan: "Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5 dollar, sotish narxi 2 dollar"):
-  amal: "tovar_kirim", tovar_nomi: "Velikan uzun", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
+- Agar omborga tovar kelgani, kirim bo'lgani, yangi tovar qo'shilishi aytilsa:
+  amal: "tovar_kirim", tovar_nomi: "...", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
 `;
 
   const contents: any[] = [];
@@ -207,6 +224,25 @@ Qoidalar:
   }
 
   return { ok: false, error: lastError || "Google AI serverlarida vaqtinchalik yuqori yuklama. Iltimos, yana bir bor urinib ko'ring." };
+}
+
+// Yordamchi: Gemini'dan tabiiy tilda javob olish (Text-to-Text)
+async function geminiTabiiyJavob(prompt: string): Promise<string> {
+  if (!GEMINI_API_KEY) return "AI kaliti kiritilmagan.";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    });
+    const data = await resp.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kechirasiz, natijani tushuntira olmadim.";
+  } catch (e) {
+    return "Xatolik yuz berdi. Javobni shakllantirib bo'lmadi.";
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -864,6 +900,39 @@ export const handler: Handler = async (event) => {
     }
 
     const parsedData = geminiRes.data;
+
+    if (parsedData && parsedData.amal === "savol") {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `🔍 <i>Tahlil qilinmoqda...</i>\n<code>${parsedData.izoh || "Ma'lumotlar o'qilmoqda"}</code>`,
+        parse_mode: "HTML",
+      });
+
+      try {
+        const { data: dbResult, error: dbErr } = await supabase.rpc("fn_execute_readonly_sql", {
+          sql_query: parsedData.sql,
+        });
+
+        if (dbErr) throw dbErr;
+
+        const answerPrompt = `Siz Buxgalter tahlilchisiz. Foydalanuvchi savoli: "${text}"\n\nBazadan (Postgres) olingan javob: ${JSON.stringify(dbResult)}\n\nShu ma'lumotlarga asoslanib foydalanuvchiga qisqa, aniq va chiroyli o'zbek tilida (hech qanday markdown kod blokisiz) javob yozing. So'm va dollarlarni raqamlar bilan chiroyli formatlang.`;
+        
+        const finalAns = await geminiTabiiyJavob(answerPrompt);
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: finalAns,
+          parse_mode: "HTML",
+        });
+      } catch (err: any) {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: `❌ <i>Baza bilan ishlashda xato:</i>\n<code>${err.message}</code>\n\nIltimos, Supabase'da "fn_execute_readonly_sql" rpc funksiyasi ochilganiga ishonch hosil qiling.`,
+          parse_mode: "HTML",
+        });
+      }
+      return { statusCode: 200, body: "OK" };
+    }
 
     if (parsedData && parsedData.amal) {
       // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
