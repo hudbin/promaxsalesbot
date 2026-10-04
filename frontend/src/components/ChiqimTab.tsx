@@ -3,6 +3,7 @@ import { supabase, pul, haptic } from "../lib/supabase";
 import { DollarSign, CheckCircle, Clock, ChevronRight } from "lucide-react";
 import { ChiqimDetailsModal } from "./ChiqimDetailsModal";
 import { Combobox } from "./ui/Combobox";
+import { toast } from "sonner";
 
 const KATEGORIYALAR = [
   { nom: "Ovqatlanish", belgi: "🍲", rang: "bg-orange-50 border-orange-200 text-orange-950" },
@@ -90,15 +91,15 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
       }
 
       haptic("success");
-      setXabar(`${pul(sonSumma)} ${valyuta} xarajat saqlandi!`);
+      toast.success("Xarajat saqlandi!", {
+        description: `${tanlanganKat}: ${pul(sonSumma)} ${valyuta}`,
+      });
       setSumma("");
       setIzoh("");
       await yuklaRasxodlar();
-
-      setTimeout(() => setXabar(null), 3000);
     } catch (err: any) {
       haptic("error");
-      alert("Xatolik: " + err.message);
+      toast.error("Xatolik", { description: err.message });
     } finally {
       setYuklanmoqda(false);
     }
@@ -116,14 +117,6 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
 
   return (
     <div className="space-y-3">
-      {/* Xabar */}
-      {xabar && (
-        <div className="p-3 bg-emerald-600 text-white rounded-xl flex items-center gap-2 shadow-2xs text-xs font-semibold">
-          <CheckCircle className="w-4 h-4 flex-shrink-0" />
-          <p>{xabar}</p>
-        </div>
-      )}
-
       {/* Kunlik xulosa kartasi */}
       <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-3 rounded-xl flex justify-between items-center shadow-2xs">
         <div>

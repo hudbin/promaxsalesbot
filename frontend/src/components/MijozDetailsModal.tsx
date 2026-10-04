@@ -4,6 +4,7 @@ import {
   ShoppingBag, Edit2, Trash2, Check, AlertTriangle, Loader2 
 } from "lucide-react";
 import { pul, haptic, supabase } from "../lib/supabase";
+import { toast } from "sonner";
 
 interface MijozDetailsModalProps {
   mijoz: any;
@@ -126,11 +127,13 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       mijoz.izoh = tahrirIzoh.trim() || null;
 
       haptic("success");
+      toast.success("Mijoz ma'lumotlari yangilandi!");
       setTahrirlashRejimi(false);
       if (onMijozYangilandi) onMijozYangilandi();
     } catch (err: any) {
       haptic("error");
       setTahrirXato("Xatolik: " + err.message);
+      toast.error("Xatolik", { description: err.message });
     } finally {
       setSaqlanmoqda(false);
     }
@@ -142,9 +145,9 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
     const qarzUsd = Number(mijoz.qarz_usd || 0);
 
     if (qarzUzs > 0 || qarzUsd > 0) {
-      setOchirishXato(
-        `Ushbu mijozning qarzi mavjud (${qarzUzs > 0 ? pul(qarzUzs) + " so'm " : ""}${qarzUsd > 0 ? "$" + pul(qarzUsd) : ""}). Avval qarz to'liq yopilishi shart!`
-      );
+      const xatoMatn = `Ushbu mijozning qarzi mavjud (${qarzUzs > 0 ? pul(qarzUzs) + " so'm " : ""}${qarzUsd > 0 ? "$" + pul(qarzUsd) : ""}). Avval qarz to'liq yopilishi shart!`;
+      setOchirishXato(xatoMatn);
+      toast.error("Mijozni o'chirib bo'lmaydi", { description: xatoMatn });
       haptic("error");
       return;
     }
@@ -168,6 +171,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           .eq("id", mijoz.id);
 
         if (error) throw error;
+        toast.success("Mijoz arxivlandi (savdolar tarixi saqlangan holda)");
       } else {
         // Savdo bo'lmagan -> Butunlay o'chirish
         const { error } = await supabase
@@ -176,6 +180,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           .eq("id", mijoz.id);
 
         if (error) throw error;
+        toast.success("Mijoz butunlay o'chirildi");
       }
 
       haptic("success");
@@ -183,7 +188,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       onClose();
     } catch (err: any) {
       haptic("error");
-      setOchirishXato("Xatolik: " + err.message);
+      setOchirishXato("O'chirishda xatolik: " + err.message);
+      toast.error("O'chirishda xatolik", { description: err.message });
       setOchirilmoqda(false);
     }
   }

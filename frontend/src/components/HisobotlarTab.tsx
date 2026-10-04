@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { haptic, supabase, pul } from "../lib/supabase";
 import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 interface HisobotlarTabProps {
   telegramUserId?: number | string | null;
@@ -176,7 +177,6 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
   const telegramgaYuborish = async (joy: "shaxsiy" | "guruh", format: "xlsx" | "pdf" = "xlsx") => {
     haptic("medium");
     setYuborilmoqda(true);
-    setXabar(null);
 
     try {
       const res = await fetch("/api/send-report", {
@@ -199,17 +199,15 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
 
       haptic("success");
       const fmtNom = format.toUpperCase();
-      setXabar({
-        turi: "success",
-        matn: joy === "shaxsiy" 
-          ? `📥 ${fmtNom} hisobot shaxsiy Telegram botingizga yuborildi!` 
-          : `📢 ${fmtNom} hisobot Telegram guruhga yuborildi!`,
+      toast.success(`${fmtNom} hisobot yuborildi!`, {
+        description: joy === "shaxsiy" 
+          ? "Shaxsiy Telegram botingizga yuborildi." 
+          : "Telegram ishchi guruhiga yuborildi.",
       });
     } catch (err: any) {
       haptic("error");
-      setXabar({
-        turi: "error",
-        matn: "Faylni yuborishda xatolik: " + err.message,
+      toast.error("Faylni yuborishda xatolik", {
+        description: err.message,
       });
     } finally {
       setYuborilmoqda(false);
@@ -296,11 +294,10 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       }
 
       XLSX.writeFile(wb, `PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.xlsx`);
-      setXabar({ turi: "success", matn: "Excel (.xlsx) fayli yuklab olindi!" });
+      toast.success("Excel (.xlsx) fayli yuklab olindi!");
     } catch (e: any) {
-      setXabar({
-        turi: "error",
-        matn: "Yuklab olishda xatolik: Telegram ilovasidan bo'lsangiz 'Telegramga yuborish' tugmasidan foydalaning.",
+      toast.error("Yuklab olishda xatolik", {
+        description: "Telegram ilovasidan bo'lsangiz 'Telegramga yuborish' tugmasidan foydalaning.",
       });
     }
   };
@@ -444,12 +441,11 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       }
 
       doc.save(`PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.pdf`);
-      setXabar({ turi: "success", matn: "PDF hisobot muvaffaqiyatli yuklab olindi!" });
+      toast.success("PDF hisobot yuklab olindi!");
     } catch (e: any) {
       console.error("PDF yaratishda xatolik:", e);
-      setXabar({
-        turi: "error",
-        matn: "PDF yaratishda xatolik: " + e.message,
+      toast.error("PDF yaratishda xatolik", {
+        description: e.message,
       });
     }
   };
@@ -480,24 +476,6 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
             <RefreshCw className={`w-4 h-4 ${yuklanmoqda ? "animate-spin text-indigo-600" : ""}`} />
           </button>
         </div>
-
-        {/* Xabar/Ogohlantirish */}
-        {xabar && (
-          <div
-            className={`p-3 mt-2 rounded-xl text-xs font-semibold flex items-start gap-2 ${
-              xabar.turi === "success"
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                : "bg-rose-50 text-rose-800 border border-rose-200"
-            }`}
-          >
-            {xabar.turi === "success" ? (
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
-            )}
-            <p className="flex-1 leading-snug">{xabar.matn}</p>
-          </div>
-        )}
       </div>
 
       {/* 1. Hisobot turini tanlash (Pill buttons) */}

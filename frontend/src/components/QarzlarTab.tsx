@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { MijozDetailsModal } from "./MijozDetailsModal";
 import { Combobox } from "./ui/Combobox";
+import { toast } from "sonner";
 
 interface QarzlarTabProps {
   xodimNomi?: string;
@@ -105,16 +106,16 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       if (error) throw error;
 
       haptic("success");
-      setXabar(`${tanlanganMijoz.nom} dan ${pul(sonSumma)} ${valyuta} qarz to'lovi qabul qilindi!`);
+      toast.success("Qarz to'lovi qabul qilindi!", {
+        description: `${tanlanganMijoz.nom}: ${pul(sonSumma)} ${valyuta}`,
+      });
       setTanlanganMijoz(null);
       setTolovSumma("");
       setIzoh("");
       await yuklaMijozlar();
-
-      setTimeout(() => setXabar(null), 4000);
     } catch (err: any) {
       haptic("error");
-      alert("Xatolik: " + err.message);
+      toast.error("Xatolik", { description: err.message });
     } finally {
       setYuklanmoqda(false);
     }
@@ -150,7 +151,9 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       if (error) throw error;
 
       haptic("success");
-      setXabar(`"${data.nom}" mijozlar bazasiga muvaffaqiyatli qo'shildi!`);
+      toast.success("Mijoz muvaffaqiyatli qo'shildi!", {
+        description: `"${data.nom}" mijozlar bazasiga qo'shildi.`,
+      });
       
       // Tozalash va modalni yopish
       setYangiNom("");
@@ -162,10 +165,10 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       setYangiMijozModalOchiq(false);
 
       await yuklaMijozlar();
-      setTimeout(() => setXabar(null), 4000);
     } catch (err: any) {
       haptic("error");
       setFormaXato("Xatolik: " + err.message);
+      toast.error("Mijozni saqlashda xatolik", { description: err.message });
     } finally {
       setYangiSaqlanmoqda(false);
     }
@@ -194,14 +197,6 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Muvaffaqiyat xabari */}
-      {xabar && (
-        <div className="p-3 bg-emerald-600 text-white rounded-xl flex items-center gap-2 shadow-sm text-xs font-semibold animate-fade-in">
-          <CheckCircle className="w-4 h-4 flex-shrink-0" />
-          <p>{xabar}</p>
-        </div>
-      )}
-
       {/* 2 TA ASOSIY TAB (QARZLAR & MIJOZLAR BAZASI) */}
       <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
         <button

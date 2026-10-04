@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { pul, haptic, supabase } from "../lib/supabase";
 import { uploadTovarRasm } from "../lib/imageUtils";
+import { toast } from "sonner";
 
 interface TovarDetailsModalProps {
   tovar: any;
@@ -110,13 +111,13 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
       Object.assign(tovar, yangilangan);
 
       haptic("success");
-      setMuvaffaqiyat("Tovar muvaffaqiyatli yangilandi!");
+      toast.success("Tovar muvaffaqiyatli yangilandi!");
       setTahrirlashRejimi(false);
       onUpdate();
-      setTimeout(() => setMuvaffaqiyat(null), 3000);
     } catch (err: any) {
       haptic("error");
       setTahrirXato("Xatolik: " + err.message);
+      toast.error("Xatolik", { description: err.message });
     } finally {
       setTahrirSaqlanmoqda(false);
     }
@@ -142,6 +143,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
           .eq("id", tovar.id);
 
         if (error) throw error;
+        toast.success("Tovar arxivlandi (savdolarda mavjud bo'lgani sababli)");
       } else {
         // Tarixda savdo yo'q -> Butunlay o'chirish
         const { error } = await supabase
@@ -150,6 +152,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
           .eq("id", tovar.id);
 
         if (error) throw error;
+        toast.success("Tovar butunlay o'chirildi");
       }
 
       haptic("success");
@@ -158,6 +161,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
     } catch (err: any) {
       haptic("error");
       setOchirishXato("O'chirishda xatolik: " + err.message);
+      toast.error("O'chirishda xatolik", { description: err.message });
       setOchirilmoqda(false);
     }
   }
@@ -165,7 +169,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
   async function qoldiqKirimQilish() {
     const son = parseFloat(kirimSoni);
     if (!son || son <= 0) {
-      alert("Iltimos, to'g'ri miqdor kiriting!");
+      toast.error("Iltimos, to'g'ri miqdor kiriting!");
       return;
     }
 
@@ -191,14 +195,14 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
       if (yangilash.tannarx) tovar.tannarx = yangilash.tannarx;
 
       haptic("success");
-      setMuvaffaqiyat(`Omborga +${son} ${birlik} muvaffaqiyatli qo'shildi!`);
+      toast.success(`Omborga +${son} ${birlik} qo'shildi!`, {
+        description: `Yangi qoldiq: ${yangiJamiQoldiq} ${birlik}`,
+      });
       setKirimModalOchiq(false);
       setKirimSoni("");
       onUpdate();
-
-      setTimeout(() => setMuvaffaqiyat(null), 3000);
     } catch (e: any) {
-      alert("Xatolik: " + e.message);
+      toast.error("Xatolik", { description: e.message });
     } finally {
       setYuklanmoqda(false);
     }
@@ -227,12 +231,11 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
 
       tovar.rasm_url = res.url;
       haptic("success");
-      setMuvaffaqiyat("Tovar rasmi muvaffaqiyatli saqlandi!");
+      toast.success("Tovar rasmi muvaffaqiyatli saqlandi!");
       onUpdate();
-      setTimeout(() => setMuvaffaqiyat(null), 3500);
     } catch (err: any) {
       haptic("error");
-      alert(err.message || "Rasm yuklashda xatolik yuz berdi");
+      toast.error("Rasm yuklashda xatolik", { description: err.message });
     } finally {
       setRasmYuklanmoqda(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -288,14 +291,6 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
             </button>
           </div>
         </div>
-
-        {/* Xabar */}
-        {muvaffaqiyat && (
-          <div className="p-2.5 bg-emerald-600 text-white rounded-xl flex items-center gap-2 text-xs font-bold shadow-sm">
-            <Check className="w-4 h-4 flex-shrink-0" />
-            <p>{muvaffaqiyat}</p>
-          </div>
-        )}
 
         {/* TAHRIRLASH FORMASI */}
         {tahrirlashRejimi ? (

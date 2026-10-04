@@ -4,6 +4,7 @@ import { Search, Plus, AlertTriangle, Package, CheckCircle, ChevronRight, Camera
 import { TovarDetailsModal } from "./TovarDetailsModal";
 import { Combobox } from "./ui/Combobox";
 import { uploadTovarRasm } from "../lib/imageUtils";
+import { toast } from "sonner";
 
 export function OmborTab() {
   const [tovarlar, setTovarlar] = useState<any[]>([]);
@@ -83,7 +84,9 @@ export function OmborTab() {
       if (error) throw error;
 
       haptic("success");
-      setXabar("Yangi tovar omborga qo'shildi!");
+      toast.success("Mahsulot omborga qo'shildi!", {
+        description: `${nom.trim()} (${Number(qoldiq) || 0} dona)`,
+      });
       setModalOchiq(false);
       setNom("");
       setModel("");
@@ -95,11 +98,9 @@ export function OmborTab() {
       setNarxOptom("");
       setQoldiq("");
       await yuklaTovarlar();
-
-      setTimeout(() => setXabar(null), 3000);
     } catch (err: any) {
       haptic("error");
-      alert("Xatolik: " + err.message);
+      toast.error("Xatolik", { description: err.message });
     } finally {
       setYuklanmoqda(false);
     }
@@ -117,14 +118,6 @@ export function OmborTab() {
 
   return (
     <div className="space-y-3">
-      {/* Xabar */}
-      {xabar && (
-        <div className="p-3 bg-emerald-600 text-white rounded-xl flex items-center gap-2 shadow-2xs text-xs font-semibold">
-          <CheckCircle className="w-4 h-4 flex-shrink-0" />
-          <p>{xabar}</p>
-        </div>
-      )}
-
       {/* Ombor Umumiy Xulosasi */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">

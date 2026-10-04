@@ -8,6 +8,7 @@ import { HisobotlarTab } from "./components/HisobotlarTab";
 import { XodimlarModal } from "./components/XodimlarModal";
 import { ShoppingCart, TrendingDown, Users, Wallet, Package, Lock, BarChart } from "lucide-react";
 import { supabase, haptic } from "./lib/supabase";
+import { Toaster } from "./components/ui/sonner";
 
 type TabTur = "sotuv" | "chiqim" | "qarzlar" | "kassa" | "ombor" | "hisobotlar";
 
@@ -562,6 +563,7 @@ export default function App() {
           </button>
         </div>
       </nav>
+      <Toaster />
     </div>
   );
 }

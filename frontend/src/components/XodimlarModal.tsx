@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Users, UserPlus, Shield, ShieldCheck, Phone, CheckCircle, Ban, Trash2, Key, Loader2, RefreshCw } from "lucide-react";
 import { supabase, haptic } from "../lib/supabase";
 import { Combobox } from "./ui/Combobox";
+import { toast } from "sonner";
 
 interface XodimlarModalProps {
   onClose: () => void;
@@ -55,17 +56,17 @@ export function XodimlarModal({ onClose, currentUserTgId }: XodimlarModalProps) 
       if (error) throw error;
 
       haptic("success");
-      setXabar(`${ism} xodimlar ro'yxatiga qo'shildi!`);
+      toast.success("Xodim qo'shildi!", {
+        description: `${ism} (${rol}) tizimga ulandi.`,
+      });
       setIsm("");
       setTelefon("");
       setRol("sotuvchi");
       setQoshishOchiq(false);
       await yuklaXodimlar();
-
-      setTimeout(() => setXabar(null), 3500);
     } catch (e: any) {
       haptic("error");
-      alert("Xatolik: " + e.message);
+      toast.error("Xatolik", { description: e.message });
     } finally {
       setYuklanmoqda(false);
     }
@@ -83,8 +84,9 @@ export function XodimlarModal({ onClose, currentUserTgId }: XodimlarModalProps) 
 
       await yuklaXodimlar();
       haptic("success");
+      toast.success(joriyFaol ? "Xodim bloklandi" : "Xodim faollashtirildi");
     } catch (e: any) {
-      alert("Xatolik: " + e.message);
+      toast.error("Xatolik", { description: e.message });
     }
   }
 
@@ -98,8 +100,9 @@ export function XodimlarModal({ onClose, currentUserTgId }: XodimlarModalProps) 
 
       await yuklaXodimlar();
       haptic("success");
+      toast.success(`${xodimIsm} o'chirildi`);
     } catch (e: any) {
-      alert("Xatolik: " + e.message);
+      toast.error("Xatolik", { description: e.message });
     }
   }
 
@@ -124,14 +127,6 @@ export function XodimlarModal({ onClose, currentUserTgId }: XodimlarModalProps) 
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Xabar */}
-        {xabar && (
-          <div className="p-2.5 bg-emerald-600 text-white rounded-xl flex items-center gap-2 text-xs font-bold shadow-sm">
-            <CheckCircle className="w-4 h-4 flex-shrink-0" />
-            <p>{xabar}</p>
-          </div>
-        )}
 
         {/* Info Banner */}
         <div className="p-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-[11px] text-indigo-950 dark:text-indigo-200 font-medium space-y-1">

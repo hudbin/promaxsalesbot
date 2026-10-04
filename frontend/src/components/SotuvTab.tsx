@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { ShoppingCart, Plus, Trash2, Search, CheckCircle, UserPlus, DollarSign } from "lucide-react";
 import { Combobox } from "./ui/Combobox";
+import { toast } from "sonner";
 
 interface SotuvTabProps {
   xodimNomi?: string;
@@ -143,18 +144,20 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
       if (error) throw error;
 
       haptic("success");
-      setMuvaffaqiyat(`Savdo muvaffaqiyatli saqlandi! Chek: #${data?.slice(0, 8)}`);
+      toast.success("Savdo muvaffaqiyatli saqlandi!", {
+        description: `Chek raqami: #${data?.slice(0, 8)}`,
+      });
       setSavat([]);
       setModalOchiq(false);
       setTolanganSumma("");
       setTanlanganMijoz(null);
       setIzoh("");
       await yuklaMaLumot();
-
-      setTimeout(() => setMuvaffaqiyat(null), 4000);
     } catch (err: any) {
       haptic("error");
-      alert("Xatolik yuz berdi: " + err.message);
+      toast.error("Xatolik yuz berdi", {
+        description: err.message,
+      });
     } finally {
       setYuklanmoqda(false);
     }
@@ -195,7 +198,7 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
       <div className="flex items-center justify-between pb-0.5">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <p className="text-xs font-bold text-slate-800">
+          <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
             Savdo Terminali
           </p>
         </div>
@@ -203,14 +206,6 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
           {tovarlar.length} ta mahsulot
         </span>
       </div>
-
-      {/* Muvaffaqiyat xabari */}
-      {muvaffaqiyat && (
-        <div className="p-3 bg-emerald-600 text-white rounded-xl flex items-center gap-2 shadow-sm animate-fade-in text-sm font-semibold">
-          <CheckCircle className="w-5 h-5 flex-shrink-0" />
-          <p>{muvaffaqiyat}</p>
-        </div>
-      )}
 
       {/* Qidiruv & Valyuta */}
       <div className="flex gap-2 items-center">
