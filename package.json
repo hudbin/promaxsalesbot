@@ -1,13 +1,12 @@
 {
   "name": "promax-store-bot",
   "version": "2.0.0",
-  "description": "Promax B2B Store Bot & Mini App - Serverless on Netlify & Supabase",
+  "description": "Promax B2B Store Bot & Mini App - Serverless on Vercel & Supabase",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "npm --prefix frontend install && npm --prefix frontend run build"
   },
   "dependencies": {
-    "@netlify/functions": "^2.8.2",
     "@supabase/supabase-js": "^2.49.1",
     "xlsx": "^0.18.5"
   }
