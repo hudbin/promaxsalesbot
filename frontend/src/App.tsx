@@ -17,6 +17,7 @@ export default function App() {
   const [xodimModalOchiq, setXodimModalOchiq] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>("sotuvchi");
   const [currentUserTgId, setCurrentUserTgId] = useState<number | string | null>(null);
+  const [foydalanuvchiRasm, setFoydalanuvchiRasm] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState(true);
   const [blokSababi, setBlokSababi] = useState<string>("");
   const [tekshirilmoqda, setTekshirilmoqda] = useState(true);
@@ -79,6 +80,9 @@ export default function App() {
         const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Foydalanuvchi";
         setTelegramFoydalanuvchi(fullName);
         setCurrentUserTgId(user.id);
+        if (user.photo_url) {
+          setFoydalanuvchiRasm(user.photo_url);
+        }
 
         // Supabase xodimlar jadvalidan tekshirish
         const numId = Number(user.id);
@@ -218,7 +222,21 @@ export default function App() {
         <div className="bg-white border border-slate-200 rounded-2xl p-4 w-full text-left space-y-2 text-xs mb-4 shadow-2xs">
           <p className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Telegram profilingiz</p>
           <div className="flex items-center justify-between">
-            <span className="font-bold text-slate-900 text-sm">{telegramFoydalanuvchi}</span>
+            <div className="flex items-center gap-2.5">
+              {foydalanuvchiRasm ? (
+                <img
+                  src={foydalanuvchiRasm}
+                  alt={telegramFoydalanuvchi}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs"
+                  onError={() => setFoydalanuvchiRasm(null)}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-2xs">
+                  {telegramFoydalanuvchi ? telegramFoydalanuvchi.charAt(0).toUpperCase() : "U"}
+                </div>
+              )}
+              <span className="font-bold text-slate-900 text-sm">{telegramFoydalanuvchi}</span>
+            </div>
             {currentUserTgId && (
               <span className="font-mono text-xs px-2 py-0.5 bg-slate-100 rounded-md text-slate-700 font-semibold">
                 ID: {currentUserTgId}
@@ -317,10 +335,19 @@ export default function App() {
     >
       {/* Yuqori Profil & Boshqaruv Satri */}
       <header className="px-3 pb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-2xs">
-            PX
-          </div>
+        <div className="flex items-center gap-2.5">
+          {foydalanuvchiRasm ? (
+            <img
+              src={foydalanuvchiRasm}
+              alt={telegramFoydalanuvchi}
+              className="w-8 h-8 rounded-xl object-cover border border-slate-200 shadow-2xs"
+              onError={() => setFoydalanuvchiRasm(null)}
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shadow-2xs">
+              {telegramFoydalanuvchi ? telegramFoydalanuvchi.charAt(0).toUpperCase() : "PX"}
+            </div>
+          )}
           <div>
             <h1 className="text-xs font-black text-slate-900 leading-tight">PROMAX STORE</h1>
             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold">
