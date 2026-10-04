@@ -380,3 +380,26 @@ FOR INSERT WITH CHECK (bucket_id = 'tovarlar');
 CREATE POLICY "Allow public update to tovarlar" ON storage.objects
 FOR UPDATE USING (bucket_id = 'tovarlar');
 
+-- ==============================================================================
+-- 10. AI ANALYST (READ-ONLY SQL EXECUTOR)
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION fn_execute_readonly_sql(sql_query text)
+RETURNS json AS $$
+DECLARE
+    cleaned_query text;
+    result json;
+BEGIN
+    -- Faqat o'qish rejimida tranzaksiya ochish
+    EXECUTE 'SET LOCAL TRANSACTION READ ONLY';
+    
+    -- Oxiridagi nuqta-vergul (;) larni tozalash (subquery xato bermasligi uchun)
+    cleaned_query := rtrim(rtrim(trim(sql_query)), ';');
+    cleaned_query := rtrim(cleaned_query, ';');
+    
+    -- AI yozgan so'rovni bajarib, natijani JSON ga aylantirish
+    EXECUTE 'SELECT json_agg(row_to_json(t)) FROM (' || cleaned_query || ') t' INTO result;
+    
+    RETURN COALESCE(result, '[]'::json);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
