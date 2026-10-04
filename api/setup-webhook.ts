@@ -41,8 +41,9 @@ export default async function handler(req: any, res: any) {
     });
     const setData = await setRes.json();
 
-    // 3. Mini App menyu tugmasini ulash
+    // 3. Mini App menyu tugmasini ulash ("Ilova")
     let menuData: any = null;
+    const buttonText = (req.query?.title || req.query?.button_text || "📱 Ilova").trim();
     try {
       const menuRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setChatMenuButton`, {
         method: "POST",
@@ -50,7 +51,7 @@ export default async function handler(req: any, res: any) {
         body: JSON.stringify({
           menu_button: {
             type: "web_app",
-            text: "🛍 Do'kon (Mini App)",
+            text: buttonText,
             web_app: { url: VERCEL_URL },
           },
         }),
