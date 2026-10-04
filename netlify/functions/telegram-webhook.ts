@@ -944,13 +944,35 @@ export const handler: Handler = async (event) => {
       });
 
       try {
+        let cleanSql = (parsedData.sql || "")
+          .replace(/```sql/gi, "")
+          .replace(/```/g, "")
+          .trim();
+
+        // Oxiridagi nuqta-vergul (;) larni tozalash (subquery xato bermasligi uchun)
+        while (cleanSql.endsWith(";")) {
+          cleanSql = cleanSql.slice(0, -1).trim();
+        }
+
+        if (!cleanSql.toLowerCase().startsWith("select") && !cleanSql.toLowerCase().startsWith("with")) {
+          throw new Error("Xavfsizlik cheklovi: faqat SELECT so'rovlariga ruxsat berilgan.");
+        }
+
         const { data: dbResult, error: dbErr } = await supabase.rpc("fn_execute_readonly_sql", {
-          sql_query: parsedData.sql,
+          sql_query: cleanSql,
         });
 
         if (dbErr) throw dbErr;
 
-        const answerPrompt = `Siz Buxgalter tahlilchisiz. Foydalanuvchi savoli: "${text}"\n\nBazadan (Postgres) olingan javob: ${JSON.stringify(dbResult)}\n\nShu ma'lumotlarga asoslanib foydalanuvchiga qisqa, aniq va chiroyli o'zbek tilida (hech qanday markdown kod blokisiz) javob yozing. So'm va dollarlarni raqamlar bilan chiroyli formatlang.`;
+        const answerPrompt = `Siz PROMAX do'koni uchun buxgalter tahlilchisiz.
+Foydalanuvchi savoli: "${text}"
+Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
+
+Qoidalar:
+1. Foydalanuvchiga inson tushunadigan, o'ta aniq va samimiy o'zbek tilida javob bering.
+2. Agar natija bo'sh bo'lsa, "Bu bo'yicha hech qanday ma'lumot topilmadi" deb ayting.
+3. Raqamlarni chiroyli formatlang (masalan, 1 500 000 so'm, $200).
+4. Hech qanday SQL kodi yoki texnik JSON ko'rsatmang, faqat yakuniy xulosa bering.`;
         
         const finalAns = await geminiTabiiyJavob(answerPrompt);
 
@@ -960,9 +982,10 @@ export const handler: Handler = async (event) => {
           parse_mode: "HTML",
         });
       } catch (err: any) {
+        console.error("AI SQL xatosi:", err);
         await tgPost("sendMessage", {
           chat_id: chatId,
-          text: `❌ <i>Baza bilan ishlashda xato:</i>\n<code>${err.message}</code>\n\nIltimos, Supabase'da "fn_execute_readonly_sql" rpc funksiyasi ochilganiga ishonch hosil qiling.`,
+          text: `❌ <b>Tahlil qilishda xatolik:</b>\n<code>${err.message}</code>\n\n<i>Maslahat:</i> Savolni soddaroq yoki boshqa so'zlar bilan berib ko'ring (masalan: <i>"Bugun qancha savdo bo'ldi?"</i> yoki <i>"Qaysi mijozlar qarzdor?"</i>).`,
           parse_mode: "HTML",
         });
       }
