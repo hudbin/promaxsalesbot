@@ -23,12 +23,11 @@ const GEMINI_API_KEY = GEMINI_API_KEYS[0] || "";
 const GEMINI_MODELS = Array.from(
   new Set(
     [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
       process.env.GEMINI_MODEL,
+      "gemini-3.8-flash",
       "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-8b",
-      "gemini-2.0-flash-lite",
     ].filter(Boolean)
   )
 ) as string[];
