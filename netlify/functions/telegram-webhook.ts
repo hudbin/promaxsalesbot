@@ -217,12 +217,11 @@ async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: str
 
   let oxirgiXato = "";
 
-  // 1-bosqich: Har bir API kalitni (akkauntni) tekshirish
-  for (let keyIndex = 0; keyIndex < GEMINI_API_KEYS.length; keyIndex++) {
-    const apiKey = GEMINI_API_KEYS[keyIndex];
-
-    // 2-bosqich: Shu kalit doirasida barcha modellarni sinab ko'rish
-    for (const model of GEMINI_MODELS) {
+  // 1-bosqich: Eng yaxshi modeldan boshlab tekshiramiz
+  for (const model of GEMINI_MODELS) {
+    // 2-bosqich: Har bir model uchun 1-kalit, keyin 2-zaxira kalitni sinab ko'ramiz
+    for (let keyIndex = 0; keyIndex < GEMINI_API_KEYS.length; keyIndex++) {
+      const apiKey = GEMINI_API_KEYS[keyIndex];
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const resp = await fetch(url, {
@@ -235,18 +234,7 @@ async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: str
         if (data?.error) {
           const errMsg = data.error.message || JSON.stringify(data.error);
           oxirgiXato = errMsg;
-          console.warn(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) xato berdi (${resp.status}): ${errMsg}`);
-
-          // Agar kvota tugagan bo'lsa (429, limit, quota exceeded)
-          const isQuota =
-            resp.status === 429 ||
-            errMsg.toLowerCase().includes("quota") ||
-            errMsg.toLowerCase().includes("limit") ||
-            data.error.status === "RESOURCE_EXHAUSTED";
-
-          if (isQuota) {
-            console.log(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) limiti tugagan, keyingisiga o'tilmoqda...`);
-          }
+          console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) xato berdi (${resp.status}): ${errMsg}`);
           continue;
         }
 
@@ -256,7 +244,7 @@ async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: str
         }
       } catch (e: any) {
         oxirgiXato = e?.message || "Ulanish xatosi";
-        console.warn(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) ulanish xatosi:`, oxirgiXato);
+        console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) ulanish xatosi:`, oxirgiXato);
       }
     }
   }
