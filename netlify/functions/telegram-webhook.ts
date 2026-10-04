@@ -8,7 +8,18 @@ import { createClient } from "@supabase/supabase-js";
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_API_KEYS = Array.from(
+  new Set(
+    [
+      ...(process.env.GEMINI_API_KEYS || "").split(","),
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_BACKUP,
+    ]
+      .map((k) => k?.trim())
+      .filter(Boolean)
+  )
+) as string[];
+const GEMINI_API_KEY = GEMINI_API_KEYS[0] || "";
 const GEMINI_MODELS = Array.from(
   new Set(
     [
@@ -196,9 +207,9 @@ Qoidalar:
   return await callGeminiJson(contents);
 }
 
-// Yordamchi: Gemini API ga so'rov yuborish (Barcha modellar bo'yicha fallback zaxira bilan)
+// Yordamchi: Gemini API ga so'rov yuborish (Ko'p akkauntli va barcha modellar bo'yicha zaxira bilan)
 async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
-  if (!GEMINI_API_KEY) {
+  if (GEMINI_API_KEYS.length === 0) {
     return {
       ok: false,
       error: "Google Gemini API kaliti (GEMINI_API_KEY) kiritilmagan. Iltimos, Netlify Environment Variables ga qo'shing.",
@@ -207,48 +218,53 @@ async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: str
 
   let oxirgiXato = "";
 
-  // Ro'yxatdagi har bir modelni navbatma-navbat sinab ko'rish
-  for (const model of GEMINI_MODELS) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents }),
-      });
+  // 1-bosqich: Har bir API kalitni (akkauntni) tekshirish
+  for (let keyIndex = 0; keyIndex < GEMINI_API_KEYS.length; keyIndex++) {
+    const apiKey = GEMINI_API_KEYS[keyIndex];
 
-      const data = await resp.json();
-      if (data?.error) {
-        const errMsg = data.error.message || JSON.stringify(data.error);
-        oxirgiXato = errMsg;
-        console.warn(`[Gemini Fallback] Model ${model} xato berdi (${resp.status}): ${errMsg}`);
+    // 2-bosqich: Shu kalit doirasida barcha modellarni sinab ko'rish
+    for (const model of GEMINI_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents }),
+        });
 
-        // Agar kvota tugagan bo'lsa (429, limit, quota exceeded), zudlik bilan keyingi modelga o'tamiz
-        const isQuota =
-          resp.status === 429 ||
-          errMsg.toLowerCase().includes("quota") ||
-          errMsg.toLowerCase().includes("limit") ||
-          data.error.status === "RESOURCE_EXHAUSTED";
+        const data = await resp.json();
+        if (data?.error) {
+          const errMsg = data.error.message || JSON.stringify(data.error);
+          oxirgiXato = errMsg;
+          console.warn(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) xato berdi (${resp.status}): ${errMsg}`);
 
-        if (isQuota) {
-          console.log(`[Gemini Fallback] ${model} limiti tugagan, zaxira modelga o'tilmoqda...`);
+          // Agar kvota tugagan bo'lsa (429, limit, quota exceeded)
+          const isQuota =
+            resp.status === 429 ||
+            errMsg.toLowerCase().includes("quota") ||
+            errMsg.toLowerCase().includes("limit") ||
+            data.error.status === "RESOURCE_EXHAUSTED";
+
+          if (isQuota) {
+            console.log(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) limiti tugagan, keyingisiga o'tilmoqda...`);
+          }
+          continue;
         }
-        continue;
-      }
 
-      const javob = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (javob) {
-        return { ok: true, text: javob };
+        const javob = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (javob) {
+          return { ok: true, text: javob };
+        }
+      } catch (e: any) {
+        oxirgiXato = e?.message || "Ulanish xatosi";
+        console.warn(`[Gemini Fallback] Kalit #${keyIndex + 1} (${model}) ulanish xatosi:`, oxirgiXato);
       }
-    } catch (e: any) {
-      oxirgiXato = e?.message || "Ulanish xatosi";
-      console.warn(`[Gemini Fallback] ${model} tarmoq xatosi:`, oxirgiXato);
     }
   }
 
   return {
     ok: false,
-    error: oxirgiXato || "Barcha Gemini zaxira modellari band yoki limit tugagan.",
+    error: oxirgiXato || "Barcha Gemini API kalitlari va zaxira modellari band yoki limit tugagan.",
   };
 }
 
@@ -849,7 +865,7 @@ export const handler: Handler = async (event) => {
       }
     } catch {}
 
-    const isGeminiSet = !!GEMINI_API_KEY && GEMINI_API_KEY.length > 5;
+    const isGeminiSet = GEMINI_API_KEYS.length > 0;
     const isSupabaseSet = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
     const isGroupSet = !!GROUP_CHAT_ID;
 
@@ -857,10 +873,10 @@ export const handler: Handler = async (event) => {
       `🤖 <b>Telegram Bot:</b> ✅ Faol (${botUsername})\n` +
       `👤 <b>Sizning profilingiz:</b> ✅ Ruxsat berilgan (${perm.role === "admin" ? "👑 Admin" : "💼 Sotuvchi"})\n` +
       `🆔 <b>Telegram ID:</b> <code>${senderId}</code>\n` +
-      `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (${GEMINI_MODEL})` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
+      `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (${GEMINI_API_KEYS.length} ta API kalit, ${GEMINI_MODELS.length} ta zaxira model)` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
       `🗄 <b>Supabase Baza:</b> ${isSupabaseSet ? "✅ Ulangan" : "❌ Kiritilmagan (SUPABASE_URL yo'q)"}\n` +
       `👥 <b>Guruh xabarnomasi:</b> ${isGroupSet ? `✅ Guruh ID: <code>${GROUP_CHAT_ID}</code>` : "⚠️ Sozlanmagan"}\n\n` +
-      (!isGeminiSet ? `⚠️ <i>Gemini AI ishlashi uchun aistudio.google.com dan bepul kalit olib Netlify'ga qo'shing.</i>` : `✅ AI ovozli va matnli xabarlarni qabul qilishga tayyor!`);
+      (!isGeminiSet ? `⚠️ <i>Gemini AI ishlashi uchun aistudio.google.com dan bepul kalit olib Netlify'ga qo'shing.</i>` : `✅ AI ovozli va matnli xabarlarni qabul qilishga tayyor! (Kunlik limitlar himoyalangan)`);
 
     await tgPost("sendMessage", {
       chat_id: chatId,
