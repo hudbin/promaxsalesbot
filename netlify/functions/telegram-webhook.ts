@@ -51,14 +51,15 @@ Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilid
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 3 ta amal turidan birini aniqlang:
+Quyidagi 4 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "rasxod": Xarajat qilindi (obed/tushlik, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
 3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
+4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
 
 JSON strukturasi quyidagicha bo'lishi SHART:
 {
-  "amal": "savdo" | "rasxod" | "qarz_tolov",
+  "amal": "savdo" | "rasxod" | "qarz_tolov" | "tovar_kirim",
   "valyuta": "UZS" | "USD",
   "jami_summa": 0.0,
   "tolangan_summa": 0.0,
@@ -66,6 +67,11 @@ JSON strukturasi quyidagicha bo'lishi SHART:
   "kassa_turi": "naqd_uzs" | "naqd_usd" | "plastik_uzs" | "bank_uzs",
   "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo yoki qarz to'lovi bo'lsa, aks holda null),
   "kategoriya": "Obed" | "Taksi" | "Elektr" | "Ijara" | "Oylik" | "Boshqa" (agar rasxod bo'lsa),
+  "tovar_nomi": "Tovar nomi" (agar tovar_kirim bo'lsa),
+  "soni": 0.0 (agar tovar_kirim bo'lsa),
+  "tannarx": 0.0 (agar tovar_kirim bo'lsa),
+  "narx_optom": 0.0 (agar tovar_kirim bo'lsa),
+  "birlik": "dona" | "metr" | "pachka" | "kg" (agar tovar_kirim bo'lsa, default: "dona"),
   "izoh": "Qisqa tushuntirish",
   "qatorlar": [
     {
@@ -82,6 +88,8 @@ Qoidalar:
 - Agar savdoda qarzga berilgan bo'lsa, tolangan_summa = naqd berilgani, qolgani avtomatik qarz bo'ladi.
 - Agar "obedga 60 ming ketdi" deyilsa: amal: "rasxod", kategoriya: "Obed", jami_summa: 60000, valyuta: "UZS", kassa_turi: "naqd_uzs".
 - Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", kassa_turi: "naqd_usd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
+- Agar omborga tovar kelgani, kirim bo'lgani, yangi tovar qo'shilishi aytilsa (masalan: "Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5 dollar, sotish narxi 2 dollar"):
+  amal: "tovar_kirim", tovar_nomi: "Velikan uzun", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
 `;
 
   const contents: any[] = [];
@@ -254,6 +262,61 @@ export const handler: Handler = async (event) => {
 
         const qarz = Math.max(0, (p.jami_summa || 0) - (p.tolangan_summa || 0));
         javobMatn = `✅ <b>SAVDO SAQLANDI</b>\n\n👤 Mijoz: <b>${p.mijoz_nomi || "Chakana"}</b>\n💰 Jami: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n💵 To'landi: <b>${pul(p.tolangan_summa)} ${p.valyuta}</b>\n📝 Qarzga: <b>${pul(qarz)} ${p.valyuta}</b>\n✍️ Sotuvchi: <b>${fromName}</b>`;
+      } else if (p.amal === "tovar_kirim") {
+        // Omborga tovar kirimi / yangi tovar qo'shish
+        const tovarNomi = (p.tovar_nomi || "").trim();
+        if (!tovarNomi) {
+          javobMatn = `⚠️ Tovar nomi aniqlanmadi.`;
+        } else {
+          const { data: mavjud } = await supabase
+            .from("tovarlar")
+            .select("*")
+            .ilike("nom", tovarNomi)
+            .limit(1)
+            .maybeSingle();
+
+          let yangiQoldiq = p.soni || 0;
+
+          if (mavjud) {
+            yangiQoldiq = (mavjud.qoldiq || 0) + (p.soni || 0);
+            await supabase
+              .from("tovarlar")
+              .update({
+                qoldiq: yangiQoldiq,
+                tannarx: p.tannarx > 0 ? p.tannarx : mavjud.tannarx,
+                narx_optom: p.narx_optom > 0 ? p.narx_optom : mavjud.narx_optom,
+                valyuta: p.valyuta || mavjud.valyuta,
+                faol: true,
+              })
+              .eq("id", mavjud.id);
+
+            javobMatn = `✅ <b>OMBORGA TOVAR QO'SHILDI</b>\n\n` +
+              `📦 Tovar: <b>${mavjud.nom}</b>\n` +
+              `➕ Kirim soni: <b>+${p.soni} ${p.birlik || mavjud.birlik || "dona"}</b>\n` +
+              `📊 Ombordagi yangi qoldiq: <b>${yangiQoldiq} ${mavjud.birlik || "dona"}</b>\n` +
+              (p.tannarx > 0 ? `💲 Yangi tannarx: <b>${pul(p.tannarx)} ${p.valyuta || mavjud.valyuta}</b>\n` : "") +
+              (p.narx_optom > 0 ? `💰 Yangi sotish narxi: <b>${pul(p.narx_optom)} ${p.valyuta || mavjud.valyuta}</b>\n` : "") +
+              `✍️ Kiritdi: <b>${fromName}</b>`;
+          } else {
+            await supabase.from("tovarlar").insert({
+              nom: tovarNomi,
+              model: p.model || tovarNomi,
+              birlik: p.birlik || "dona",
+              qoldiq: p.soni || 0,
+              tannarx: p.tannarx || 0,
+              narx_optom: p.narx_optom || 0,
+              valyuta: p.valyuta || "UZS",
+              faol: true,
+            });
+
+            javobMatn = `✅ <b>YANGI TOVAR OMBORGA KIRITILDI</b>\n\n` +
+              `📦 Tovar: <b>${tovarNomi}</b>\n` +
+              `🔢 Soni: <b>${p.soni} ${p.birlik || "dona"}</b>\n` +
+              (p.tannarx > 0 ? `💲 Tannarx: <b>${pul(p.tannarx)} ${p.valyuta}</b>\n` : "") +
+              (p.narx_optom > 0 ? `💰 Sotish (optom) narxi: <b>${pul(p.narx_optom)} ${p.valyuta}</b>\n` : "") +
+              `✍️ Kiritdi: <b>${fromName}</b>`;
+          }
+        }
       }
 
       await tgPost("editMessageText", {
@@ -301,7 +364,7 @@ export const handler: Handler = async (event) => {
   if (text === "/start") {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nSiz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo va xarajatlarni yozishingiz mumkin.\n\n<i>Masalan:</i>\n• "Obedga 75 ming naqd ketdi"\n• "Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"\n• "Murodjon aka 500$ qarzini berdi"\n\n⚙️ <i>Tizim ulanishlarini tekshirish uchun:</i> /status`,
+      text: `👋 <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nSiz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Obedga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status`,
       parse_mode: "HTML",
     });
     return { statusCode: 200, body: "OK" };
@@ -427,6 +490,15 @@ export const handler: Handler = async (event) => {
           `💰 Jami: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
           `💵 Naqd to'landi: <b>${pul(parsedData.tolangan_summa)} ${parsedData.valyuta}</b>\n` +
           `📝 Qarzga: <b>${pul(qarz)} ${parsedData.valyuta}</b>\n`;
+      } else if (parsedData.amal === "tovar_kirim") {
+        const jamiTannarx = (parsedData.soni || 0) * (parsedData.tannarx || 0);
+        preview = `📦 <b>TOVAR KIRIMI (OMBOR) ANIQLANDI</b>\n\n` +
+          `🏷 Tovar: <b>${parsedData.tovar_nomi || "Yangi tovar"}</b>\n` +
+          `🔢 Kirim soni: <b>+${parsedData.soni || 0} ${parsedData.birlik || "dona"}</b>\n` +
+          (parsedData.tannarx ? `💲 Tannarxi: <b>${pul(parsedData.tannarx)} ${parsedData.valyuta}</b>\n` : "") +
+          (parsedData.narx_optom ? `💰 Sotish (optom) narxi: <b>${pul(parsedData.narx_optom)} ${parsedData.valyuta}</b>\n` : "") +
+          (jamiTannarx > 0 ? `💵 Jami partiya tannarxi: <b>${pul(jamiTannarx)} ${parsedData.valyuta}</b>\n` : "") +
+          (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
       }
 
       preview += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
@@ -449,7 +521,7 @@ export const handler: Handler = async (event) => {
       // Moliyaviy amal aniqlanmadi
       await tgPost("sendMessage", {
         chat_id: chatId,
-        text: `🤖 <b>Xabardan savdo yoki xarajat aniqlanmadi.</b>\n\nIltimos, aniqroq yozing yoki gapiring.\n\n<i>Masalan:</i>\n• "Obedga 75 ming naqd ketdi"\n• "Akrom akaga 50 ta velikan 100$ ga berdim, 40$ naqd berdi"\n• "Murod aka 500$ qarzini berdi"`,
+        text: `🤖 <b>Xabardan moliyaviy yoki ombor amali aniqlanmadi.</b>\n\nIltimos, aniqroq yozing yoki gapiring.\n\n<i>Masalan:</i>\n• <i>"Obedga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan 100$ ga berdim, 40$ naqd berdi"</i> (Savdo)\n• <i>"Murod aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)`,
         parse_mode: "HTML",
       });
       return { statusCode: 200, body: "OK" };
