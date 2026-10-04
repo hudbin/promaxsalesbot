@@ -14,7 +14,8 @@ import {
   Layers, 
   Clock, 
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from "lucide-react";
 import { haptic, supabase, pul } from "../lib/supabase";
 import * as XLSX from "xlsx";
@@ -125,48 +126,54 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
     yuklaMalumotlar();
   }, [boshlanishSana, tugashSana]);
 
-  // Statistikani hisoblash
+  // Filtr bo'yicha ko'rsatkichlarni hisoblash
   let jamiSavdoUZS = 0, jamiSavdoUSD = 0;
   let tushganNaqdUZS = 0, tushganNaqdUSD = 0;
   let berilganQarzUZS = 0, berilganQarzUSD = 0;
 
-  savdolar.forEach((s) => {
-    const jami = Number(s.jami_summa || 0);
-    const tolangan = Number(s.tolangan_summa || 0);
-    const qarz = Number(s.qarz_summa || 0);
+  if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
+    savdolar.forEach((s) => {
+      const jami = Number(s.jami_summa || 0);
+      const tolangan = Number(s.tolangan_summa || 0);
+      const qarz = Number(s.qarz_summa || 0);
 
-    if (s.valyuta === "USD") {
-      jamiSavdoUSD += jami;
-      tushganNaqdUSD += tolangan;
-      berilganQarzUSD += qarz;
-    } else {
-      jamiSavdoUZS += jami;
-      tushganNaqdUZS += tolangan;
-      berilganQarzUZS += qarz;
-    }
-  });
+      if (s.valyuta === "USD") {
+        jamiSavdoUSD += jami;
+        tushganNaqdUSD += tolangan;
+        berilganQarzUSD += qarz;
+      } else {
+        jamiSavdoUZS += jami;
+        tushganNaqdUZS += tolangan;
+        berilganQarzUZS += qarz;
+      }
+    });
+  }
 
   let jamiChiqimUZS = 0, jamiChiqimUSD = 0;
   const chiqimKategoriyaMap: Record<string, number> = {};
-  rasxodlar.forEach((r) => {
-    const s = Number(r.summa || 0);
-    if (r.valyuta === "USD") {
-      jamiChiqimUSD += s;
-    } else {
-      jamiChiqimUZS += s;
-      chiqimKategoriyaMap[r.kategoriya] = (chiqimKategoriyaMap[r.kategoriya] || 0) + s;
-    }
-  });
+  if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
+    rasxodlar.forEach((r) => {
+      const s = Number(r.summa || 0);
+      if (r.valyuta === "USD") {
+        jamiChiqimUSD += s;
+      } else {
+        jamiChiqimUZS += s;
+        chiqimKategoriyaMap[r.kategoriya] = (chiqimKategoriyaMap[r.kategoriya] || 0) + s;
+      }
+    });
+  }
 
   let qaytganQarzUZS = 0, qaytganQarzUSD = 0;
-  qarzTolovlari.forEach((q) => {
-    const s = Number(q.summa || 0);
-    if (q.valyuta === "USD") qaytganQarzUSD += s;
-    else qaytganQarzUZS += s;
-  });
+  if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
+    qarzTolovlari.forEach((q) => {
+      const s = Number(q.summa || 0);
+      if (q.valyuta === "USD") qaytganQarzUSD += s;
+      else qaytganQarzUZS += s;
+    });
+  }
 
-  // Telegramga Excel fayl yuborish (Eng ishonchli usul)
-  const telegramgaYuborish = async (joy: "shaxsiy" | "guruh") => {
+  // Telegramga Excel yoki PDF fayl yuborish
+  const telegramgaYuborish = async (joy: "shaxsiy" | "guruh", format: "xlsx" | "pdf" = "xlsx") => {
     haptic("medium");
     setYuborilmoqda(true);
     setXabar(null);
@@ -179,6 +186,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
           boshlanishSana,
           tugashSana,
           hisobotTuri,
+          format,
           telegram_user_id: telegramUserId,
           yuborishJoyi: joy,
         }),
@@ -190,11 +198,12 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       }
 
       haptic("success");
+      const fmtNom = format.toUpperCase();
       setXabar({
         turi: "success",
         matn: joy === "shaxsiy" 
-          ? "📥 Excel hisobot shaxsiy Telegram botingizga yuborildi! Botni ochib faylni yuklab oling." 
-          : "📢 Excel hisobot Telegram guruhga yuborildi!",
+          ? `📥 ${fmtNom} hisobot shaxsiy Telegram botingizga yuborildi!` 
+          : `📢 ${fmtNom} hisobot Telegram guruhga yuborildi!`,
       });
     } catch (err: any) {
       haptic("error");
@@ -207,8 +216,8 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
     }
   };
 
-  // Brauzer orqali to'g'ridan-to'g'ri yuklab olish (Kompyuter yoki tashqi brauzer uchun)
-  const brauzerdaYuklabOlish = () => {
+  // Brauzer orqali XLSX yuklab olish
+  const brauzerdaYuklabOlishXLSX = () => {
     haptic("light");
     try {
       const wb = XLSX.utils.book_new();
@@ -217,16 +226,30 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       const xulosaData = [
         ["PROMAX B2B STORE - MOLIYAVIY HISOBOT"],
         ["Davr:", `${boshlanishSana} dan ${tugashSana} gacha`],
+        ["Filtr turi:", hisobotTuri.toUpperCase()],
         ["Tuzilgan vaqt:", new Date().toLocaleString("ru-RU")],
         [],
         ["KO'RSATKICH", "SO'M (UZS)", "DOLLAR (USD)"],
-        ["Jami Savdo", jamiSavdoUZS, jamiSavdoUSD],
-        ["Kassaga kelib tushgan summa", tushganNaqdUZS, tushganNaqdUSD],
-        ["Berilgan qarz (nasiya)", berilganQarzUZS, berilganQarzUSD],
-        ["Eski qarzlardan tushgan summa", qaytganQarzUZS, qaytganQarzUSD],
-        ["Jami Xarajatlar (Chiqim)", jamiChiqimUZS, jamiChiqimUSD],
-        ["Sof Kassa Farqi", (tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS, (tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD],
       ];
+
+      if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
+        xulosaData.push(["Jami Savdo", String(jamiSavdoUZS), String(jamiSavdoUSD)]);
+        xulosaData.push(["Kassaga tushgan savdo summasi", String(tushganNaqdUZS), String(tushganNaqdUSD)]);
+        xulosaData.push(["Berilgan qarz (nasiya)", String(berilganQarzUZS), String(berilganQarzUSD)]);
+      }
+
+      if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
+        xulosaData.push(["Qaytarilgan eski qarzlar", String(qaytganQarzUZS), String(qaytganQarzUSD)]);
+      }
+
+      if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
+        xulosaData.push(["Jami Chiqim (Xarajatlar)", String(jamiChiqimUZS), String(jamiChiqimUSD)]);
+      }
+
+      if (hisobotTuri === "hammasi") {
+        xulosaData.push(["Sof Kassa Oqimi", String((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS), String((tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD)]);
+      }
+
       const wsXulosa = XLSX.utils.aoa_to_sheet(xulosaData);
       XLSX.utils.book_append_sheet(wb, wsXulosa, "Umumiy Xulosa");
 
@@ -272,12 +295,161 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qRows), "Qarz To'lovlari");
       }
 
-      XLSX.writeFile(wb, `PROMAX_Hisobot_${boshlanishSana}_${tugashSana}.xlsx`);
-      setXabar({ turi: "success", matn: "Excel fayl yuklab olindi!" });
+      XLSX.writeFile(wb, `PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.xlsx`);
+      setXabar({ turi: "success", matn: "Excel (.xlsx) fayli yuklab olindi!" });
     } catch (e: any) {
       setXabar({
         turi: "error",
-        matn: "Yuklab olishda xatolik: Telegram mobil ilovasi to'g'ridan-to'g'ri yuklashni bloklaydi. Iltimos 'Telegramimga Excel yuborish' tugmasini bosing!",
+        matn: "Yuklab olishda xatolik: Telegram ilovasidan bo'lsangiz 'Telegramga yuborish' tugmasidan foydalaning.",
+      });
+    }
+  };
+
+  // Brauzer orqali PDF yuklab olish
+  const brauzerdaYuklabOlishPDF = async () => {
+    haptic("light");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const autoTableModule = await import("jspdf-autotable");
+      const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59);
+      doc.text("PROMAX B2B STORE - MOLIYAVIY HISOBOT", 14, 18);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Davr: ${boshlanishSana} dan ${tugashSana} gacha`, 14, 25);
+      doc.text(`Hisobot turi: ${hisobotTuri.toUpperCase()} | Tuzilgan vaqt: ${new Date().toLocaleString("ru-RU")}`, 14, 31);
+
+      // Xulosa jadvali
+      const summaryRows = [];
+      if (hisobotTuri === "hammasi" || hisobotTuri === "savdolar") {
+        summaryRows.push(["Jami Savdo", `${pul(jamiSavdoUZS)} so'm`, `$${pul(jamiSavdoUSD)}`]);
+        summaryRows.push(["Kassaga Tushum (Savdo)", `${pul(tushganNaqdUZS)} so'm`, `$${pul(tushganNaqdUSD)}`]);
+        summaryRows.push(["Berilgan Qarz (Nasiya)", `${pul(berilganQarzUZS)} so'm`, `$${pul(berilganQarzUSD)}`]);
+      }
+      if (hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") {
+        summaryRows.push(["Qaytarilgan Eski Qarzlar", `${pul(qaytganQarzUZS)} so'm`, `$${pul(qaytganQarzUSD)}`]);
+      }
+      if (hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") {
+        summaryRows.push(["Jami Chiqim (Xarajatlar)", `${pul(jamiChiqimUZS)} so'm`, `$${pul(jamiChiqimUSD)}`]);
+      }
+      if (hisobotTuri === "hammasi") {
+        summaryRows.push(["Sof Kassa Oqimi", `${pul((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS)} so'm`, `$${pul((tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD)}`]);
+      }
+
+      autoTable(doc, {
+        startY: 36,
+        head: [["Ko'rsatkich", "So'm (UZS)", "Dollar (USD)"]],
+        body: summaryRows,
+        theme: "striped",
+        headStyles: { fillColor: [79, 70, 229] },
+        styles: { fontSize: 9 },
+      });
+
+      let nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 70;
+
+      // Savdolar jadvali
+      if ((hisobotTuri === "hammasi" || hisobotTuri === "savdolar") && savdolar.length > 0) {
+        if (nextY > 230) {
+          doc.addPage();
+          nextY = 20;
+        }
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`Savdolar ro'yxati (${savdolar.length} ta)`, 14, nextY);
+
+        const sData = savdolar.map(s => [
+          s.raqam ? `#${s.raqam}` : "-",
+          new Date(s.sana_vaqt).toLocaleDateString("ru-RU"),
+          s.mijoz?.nom || "Noma'lum",
+          `${pul(s.jami_summa)} ${s.valyuta}`,
+          `${pul(s.tolangan_summa)} ${s.valyuta}`,
+          Number(s.qarz_summa) > 0 ? `${pul(s.qarz_summa)} ${s.valyuta}` : "-",
+          s.tolov_turi || "naqd"
+        ]);
+
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [["Chek", "Sana", "Mijoz", "Jami", "To'langan", "Qarz", "To'lov"]],
+          body: sData,
+          theme: "grid",
+          headStyles: { fillColor: [16, 185, 129] },
+          styles: { fontSize: 8 },
+        });
+
+        nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+      }
+
+      // Chiqimlar jadvali
+      if ((hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") && rasxodlar.length > 0) {
+        if (nextY > 230) {
+          doc.addPage();
+          nextY = 20;
+        }
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`Chiqimlar ro'yxati (${rasxodlar.length} ta)`, 14, nextY);
+
+        const rData = rasxodlar.map(r => [
+          new Date(r.sana_vaqt).toLocaleDateString("ru-RU"),
+          r.kategoriya || "Chiqim",
+          r.izoh || "-",
+          `${pul(r.summa)} ${r.valyuta}`,
+          r.tolov_turi || "naqd"
+        ]);
+
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [["Sana", "Kategoriya", "Izoh", "Summa", "Kassa"]],
+          body: rData,
+          theme: "grid",
+          headStyles: { fillColor: [244, 63, 94] },
+          styles: { fontSize: 8 },
+        });
+
+        nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+      }
+
+      // Qarz to'lovlari jadvali
+      if ((hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") && qarzTolovlari.length > 0) {
+        if (nextY > 230) {
+          doc.addPage();
+          nextY = 20;
+        }
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`Qaytarilgan qarzlar (${qarzTolovlari.length} ta)`, 14, nextY);
+
+        const qData = qarzTolovlari.map(q => [
+          new Date(q.sana_vaqt).toLocaleDateString("ru-RU"),
+          q.mijoz?.nom || "Noma'lum",
+          `${pul(q.summa)} ${q.valyuta}`,
+          q.tolov_turi || "naqd",
+          q.izoh || "-"
+        ]);
+
+        autoTable(doc, {
+          startY: nextY + 4,
+          head: [["Sana", "Mijoz", "Summa", "To'lov turi", "Izoh"]],
+          body: qData,
+          theme: "grid",
+          headStyles: { fillColor: [245, 158, 11] },
+          styles: { fontSize: 8 },
+        });
+      }
+
+      doc.save(`PROMAX_${hisobotTuri}_${boshlanishSana}_${tugashSana}.pdf`);
+      setXabar({ turi: "success", matn: "PDF hisobot muvaffaqiyatli yuklab olindi!" });
+    } catch (e: any) {
+      console.error("PDF yaratishda xatolik:", e);
+      setXabar({
+        turi: "error",
+        matn: "PDF yaratishda xatolik: " + e.message,
       });
     }
   };
@@ -418,88 +590,119 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
         )}
       </div>
 
-      {/* 3. Jonli ko'rsatkichlar & Xulosa (Foydalanuvchi ko'z oldida ko'radi) */}
+      {/* 3. Jonli ko'rsatkichlar & Xulosa (Tanlangan filtrga mos) */}
       <div className="space-y-2">
-        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 px-1">
-          <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          Hisobot Ko'rsatkichlari (Xulosa)
-        </h3>
-
-        <div className="grid grid-cols-2 gap-2">
-          {/* Savdo */}
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">Jami Savdo</span>
-            <p className="text-base font-black text-emerald-900 dark:text-emerald-200 tabular-nums leading-tight mt-0.5">
-              {pul(jamiSavdoUZS)} <span className="text-xs font-bold">so'm</span>
-            </p>
-            {jamiSavdoUSD > 0 && (
-              <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">${pul(jamiSavdoUSD)}</p>
-            )}
-            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
-              {savdolar.length} ta chek
-            </p>
-          </div>
-
-          {/* Tushum (Kassaga) */}
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 block">Kassaga Tushum</span>
-            <p className="text-base font-black text-blue-900 dark:text-blue-200 tabular-nums leading-tight mt-0.5">
-              {pul(tushganNaqdUZS)} <span className="text-xs font-bold">so'm</span>
-            </p>
-            {tushganNaqdUSD > 0 && (
-              <p className="text-xs font-black text-blue-700 dark:text-blue-400 tabular-nums">${pul(tushganNaqdUSD)}</p>
-            )}
-            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-1">
-              Naqd & Karta orqali
-            </p>
-          </div>
-
-          {/* Berilgan qarz */}
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">Qarzga berildi</span>
-            <p className="text-base font-black text-amber-900 dark:text-amber-200 tabular-nums leading-tight mt-0.5">
-              {pul(berilganQarzUZS)} <span className="text-xs font-bold">so'm</span>
-            </p>
-            {berilganQarzUSD > 0 && (
-              <p className="text-xs font-black text-amber-700 dark:text-amber-400 tabular-nums">${pul(berilganQarzUSD)}</p>
-            )}
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-1">
-              Yangi nasiyalar
-            </p>
-          </div>
-
-          {/* Chiqim (Xarajat) */}
-          <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 p-2.5 rounded-xl">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 block">Jami Chiqim</span>
-            <p className="text-base font-black text-rose-900 dark:text-rose-200 tabular-nums leading-tight mt-0.5">
-              {pul(jamiChiqimUZS)} <span className="text-xs font-bold">so'm</span>
-            </p>
-            {jamiChiqimUSD > 0 && (
-              <p className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">${pul(jamiChiqimUSD)}</p>
-            )}
-            <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold mt-1">
-              {rasxodlar.length} ta xarajat
-            </p>
-          </div>
-        </div>
-
-        {/* Eski qarzlardan qaytgan va Sof Kassa Farqi */}
-        <div className="bg-slate-900 dark:bg-slate-800 text-white p-3 rounded-xl flex items-center justify-between shadow-2xs">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Qarzdan tushum: {pul(qaytganQarzUZS)} so'm
-            </span>
-            <p className="text-sm font-black text-white mt-0.5">
-              Sof Kassa Oqimi: {pul((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS)} so'm
-            </p>
-          </div>
-          <span className="text-xs px-2.5 py-1 bg-white/10 dark:bg-slate-700/60 rounded-lg text-emerald-400 font-bold">
-            {(tushganNaqdUZS + qaytganQarzUZS) >= jamiChiqimUZS ? "📈 Ijobiy" : "📉 Kamomad"}
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            {hisobotTuri === "hammasi" && "Barcha Ko'rsatkichlar"}
+            {hisobotTuri === "savdolar" && "Savdolar Ko'rsatkichlari"}
+            {hisobotTuri === "chiqimlar" && "Chiqimlar Ko'rsatkichlari"}
+            {hisobotTuri === "qarzlar" && "Qarzlar & Nasiya Ko'rsatkichlari"}
+          </h3>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 uppercase">
+            {hisobotTuri}
           </span>
         </div>
 
+        {/* Dynamic Cards Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Savdo Bloklari - Faqat hammasi yoki savdolar tanlanganda */}
+          {(hisobotTuri === "hammasi" || hisobotTuri === "savdolar") && (
+            <>
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">Jami Savdo</span>
+                <p className="text-base font-black text-emerald-900 dark:text-emerald-200 tabular-nums leading-tight mt-0.5">
+                  {pul(jamiSavdoUZS)} <span className="text-xs font-bold">so'm</span>
+                </p>
+                {jamiSavdoUSD > 0 && (
+                  <p className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">${pul(jamiSavdoUSD)}</p>
+                )}
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                  {savdolar.length} ta chek
+                </p>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 p-2.5 rounded-xl">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 block">Kassaga Tushum</span>
+                <p className="text-base font-black text-blue-900 dark:text-blue-200 tabular-nums leading-tight mt-0.5">
+                  {pul(tushganNaqdUZS)} <span className="text-xs font-bold">so'm</span>
+                </p>
+                {tushganNaqdUSD > 0 && (
+                  <p className="text-xs font-black text-blue-700 dark:text-blue-400 tabular-nums">${pul(tushganNaqdUSD)}</p>
+                )}
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-1">
+                  Naqd & Karta
+                </p>
+              </div>
+
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">Qarzga Berildi</span>
+                <p className="text-base font-black text-amber-900 dark:text-amber-200 tabular-nums leading-tight mt-0.5">
+                  {pul(berilganQarzUZS)} <span className="text-xs font-bold">so'm</span>
+                </p>
+                {berilganQarzUSD > 0 && (
+                  <p className="text-xs font-black text-amber-700 dark:text-amber-400 tabular-nums">${pul(berilganQarzUSD)}</p>
+                )}
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-1">
+                  Yangi nasiyalar
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Chiqim Bloklari - Faqat hammasi yoki chiqimlar tanlanganda */}
+          {(hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") && (
+            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 p-2.5 rounded-xl">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 block">Jami Chiqim</span>
+              <p className="text-base font-black text-rose-900 dark:text-rose-200 tabular-nums leading-tight mt-0.5">
+                {pul(jamiChiqimUZS)} <span className="text-xs font-bold">so'm</span>
+              </p>
+              {jamiChiqimUSD > 0 && (
+                <p className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">${pul(jamiChiqimUSD)}</p>
+              )}
+              <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold mt-1">
+                {rasxodlar.length} ta xarajat
+              </p>
+            </div>
+          )}
+
+          {/* Qarzlar Bloki - Faqat hammasi yoki qarzlar tanlanganda */}
+          {(hisobotTuri === "hammasi" || hisobotTuri === "qarzlar") && (
+            <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/60 p-2.5 rounded-xl">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 block">Qaytarilgan Qarz</span>
+              <p className="text-base font-black text-indigo-900 dark:text-indigo-200 tabular-nums leading-tight mt-0.5">
+                {pul(qaytganQarzUZS)} <span className="text-xs font-bold">so'm</span>
+              </p>
+              {qaytganQarzUSD > 0 && (
+                <p className="text-xs font-black text-indigo-700 dark:text-indigo-400 tabular-nums">${pul(qaytganQarzUSD)}</p>
+              )}
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">
+                {qarzTolovlari.length} ta to'lov
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Sof Kassa Oqimi (Faqat hammasi ko'rsatkichlarida) */}
+        {hisobotTuri === "hammasi" && (
+          <div className="bg-slate-900 dark:bg-slate-800 text-white p-3 rounded-xl flex items-center justify-between shadow-2xs">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Qarzdan tushum: {pul(qaytganQarzUZS)} so'm
+              </span>
+              <p className="text-sm font-black text-white mt-0.5">
+                Sof Kassa Oqimi: {pul((tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS)} so'm
+              </p>
+            </div>
+            <span className="text-xs px-2.5 py-1 bg-white/10 dark:bg-slate-700/60 rounded-lg text-emerald-400 font-bold">
+              {(tushganNaqdUZS + qaytganQarzUZS) >= jamiChiqimUZS ? "📈 Ijobiy" : "📉 Kamomad"}
+            </span>
+          </div>
+        )}
+
         {/* Chiqimlar taqsimoti */}
-        {Object.keys(chiqimKategoriyaMap).length > 0 && (
+        {(hisobotTuri === "hammasi" || hisobotTuri === "chiqimlar") && Object.keys(chiqimKategoriyaMap).length > 0 && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl">
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
               Xarajatlar tarkibi:
@@ -516,45 +719,69 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
         )}
       </div>
 
-      {/* 4. Hisobotni Yuklab Olish va Telegramga Yuborish tugmalari */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xs space-y-2">
+      {/* 4. Hisobotni Yuklab Olish (XLSX & PDF) va Telegramga Yuborish */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xs space-y-2.5">
         <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-          Hisobotni olish usuli:
+          Hisobotni olish va yuklab olish:
         </label>
 
-        {/* ASOSIY: Telegram Bot orqali Excel faylni olish */}
-        <button
-          onClick={() => telegramgaYuborish("shaxsiy")}
-          disabled={yuborilmoqda || yuklanmoqda}
-          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
-        >
-          <Send className="w-4 h-4" />
-          {yuborilmoqda ? "Telegramga yuborilmoqda..." : "📲 Telegram Botimga Excel Yuborish"}
-        </button>
-
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-tight">
-          💡 Telegram ilovasi ichida Excel faylni 100% ochish va saqlash uchun eng qulay yo'l!
-        </p>
+        {/* TELEGRAM BOTGA YUBORISH (XLSX / PDF) */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => telegramgaYuborish("shaxsiy", "xlsx")}
+            disabled={yuborilmoqda || yuklanmoqda}
+            className="py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" />
+            Botga (Excel)
+          </button>
+          <button
+            onClick={() => telegramgaYuborish("shaxsiy", "pdf")}
+            disabled={yuborilmoqda || yuklanmoqda}
+            className="py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+          >
+            <Send className="w-3.5 h-3.5" />
+            Botga (PDF)
+          </button>
+        </div>
 
         {/* GURUHGA YUBORISH */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => telegramgaYuborish("guruh")}
+            onClick={() => telegramgaYuborish("guruh", "xlsx")}
             disabled={yuborilmoqda || yuklanmoqda}
-            className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            Guruhga yuborish
+            <Share2 className="w-3.5 h-3.5 text-indigo-500" />
+            Guruhga (Excel)
           </button>
-
-          {/* Brauzerda to'g'ridan-to'g'ri yuklash */}
           <button
-            onClick={brauzerdaYuklabOlish}
-            disabled={yuklanmoqda}
-            className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            onClick={() => telegramgaYuborish("guruh", "pdf")}
+            disabled={yuborilmoqda || yuklanmoqda}
+            className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-            Faylni yuklash (.xlsx)
+            <Share2 className="w-3.5 h-3.5 text-rose-500" />
+            Guruhga (PDF)
+          </button>
+        </div>
+
+        {/* QURILMAGA TO'G'RIDAN-TO'G'RI YUKLAB OLISH (XLSX & PDF) */}
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+          <button
+            onClick={brauzerdaYuklabOlishXLSX}
+            disabled={yuklanmoqda}
+            className="py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            Excel (.xlsx)
+          </button>
+          <button
+            onClick={brauzerdaYuklabOlishPDF}
+            disabled={yuklanmoqda}
+            className="py-2.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+            PDF fayl (.pdf)
           </button>
         </div>
       </div>
