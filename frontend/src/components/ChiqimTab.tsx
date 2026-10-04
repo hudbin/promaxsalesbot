@@ -5,7 +5,7 @@ import { ChiqimDetailsModal } from "./ChiqimDetailsModal";
 import { Combobox } from "./ui/Combobox";
 
 const KATEGORIYALAR = [
-  { nom: "Obed", belgi: "🍲", rang: "bg-orange-50 border-orange-200 text-orange-950" },
+  { nom: "Ovqatlanish", belgi: "🍲", rang: "bg-orange-50 border-orange-200 text-orange-950" },
   { nom: "Taksi", belgi: "🚕", rang: "bg-yellow-50 border-yellow-200 text-yellow-950" },
   { nom: "Elektr", belgi: "💡", rang: "bg-blue-50 border-blue-200 text-blue-950" },
   { nom: "Ijara", belgi: "🏢", rang: "bg-purple-50 border-purple-200 text-purple-950" },
@@ -22,7 +22,7 @@ interface ChiqimTabProps {
 export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
   const [summa, setSumma] = useState("");
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
-  const [tanlanganKat, setTanlanganKat] = useState("Obed");
+  const [tanlanganKat, setTanlanganKat] = useState("Ovqatlanish");
   const [tolovTuri, setTolovTuri] = useState("naqd");
   const [kassaTuri, setKassaTuri] = useState("naqd_uzs");
   const [izoh, setIzoh] = useState("");

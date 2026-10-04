@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS rasxodlar (
     sana_vaqt TIMESTAMPTZ NOT NULL DEFAULT now(),
     summa NUMERIC(15, 2) NOT NULL CHECK (summa > 0),
     valyuta TEXT NOT NULL DEFAULT 'UZS' CHECK (valyuta IN ('UZS', 'USD')),
-    kategoriya TEXT NOT NULL,               -- Obed, Taksi, Elektr, Ijara, Oylik, Boshqa
+    kategoriya TEXT NOT NULL,               -- Ovqatlanish, Taksi, Elektr, Ijara, Oylik, Boshqa
     tolov_turi TEXT NOT NULL DEFAULT 'naqd' CHECK (tolov_turi IN ('naqd', 'plastik', 'perechisleniya')),
     kassa_turi TEXT NOT NULL CHECK (kassa_turi IN ('naqd_uzs', 'naqd_usd', 'plastik_uzs', 'bank_uzs')),
     izoh TEXT,
