@@ -83,15 +83,16 @@ export default function App() {
       if (tg) {
         tg.ready();
         tg.expand();
+        const isMobile = tg.platform === "ios" || tg.platform === "android";
         try {
-          if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+          if (isMobile && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
             tg.requestFullscreen();
           }
           tg.enableClosingConfirmation?.();
         } catch {}
 
         const onFirstInteract = () => {
-          if (tg && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+          if (isMobile && tg && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
             try {
               tg.requestFullscreen();
             } catch {}
