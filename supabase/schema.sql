@@ -403,3 +403,129 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- ==============================================================================
+-- 11. AI INTELLIGENT HELPER FUNCTIONS & VIEWS
+-- ==============================================================================
+
+-- 1. Aqlli Mijoz va Qarz Qidirish (Fuzzy Search & Substring)
+CREATE OR REPLACE FUNCTION fn_ai_mijoz_qidirish(qidiruv_sozi TEXT)
+RETURNS TABLE (
+    id UUID,
+    nom TEXT,
+    telefon TEXT,
+    manzil TEXT,
+    qarz_uzs NUMERIC,
+    qarz_usd NUMERIC,
+    oxshashlik REAL
+) AS $func$
+DECLARE
+    q_norm TEXT := lower(trim(qidiruv_sozi));
+BEGIN
+    RETURN QUERY
+    SELECT 
+        m.id,
+        m.nom,
+        m.telefon,
+        m.manzil,
+        m.qarz_uzs,
+        m.qarz_usd,
+        GREATEST(
+            similarity(m.nom_norm, q_norm),
+            similarity(lower(m.nom), q_norm),
+            CASE 
+                WHEN m.nom_norm ILIKE '%' || q_norm || '%' THEN 0.8
+                WHEN lower(m.nom) ILIKE '%' || q_norm || '%' THEN 0.8
+                ELSE 0.0
+            END
+        )::REAL AS oxshashlik
+    FROM mijozlar m
+    WHERE 
+        m.nom_norm ILIKE '%' || q_norm || '%' 
+        OR lower(m.nom) ILIKE '%' || q_norm || '%'
+        OR similarity(m.nom_norm, q_norm) > 0.15
+        OR similarity(lower(m.nom), q_norm) > 0.15
+    ORDER BY oxshashlik DESC, (m.qarz_uzs + m.qarz_usd * 12800) DESC
+    LIMIT 10;
+END;
+$func$ LANGUAGE plpgsql STABLE;
+
+-- 2. Aqlli Tovar va Ombor Qidirish (Fuzzy & Keyword)
+CREATE OR REPLACE FUNCTION fn_ai_tovar_qidirish(qidiruv_sozi TEXT)
+RETURNS TABLE (
+    id UUID,
+    nom TEXT,
+    model TEXT,
+    qoldiq NUMERIC,
+    birlik TEXT,
+    narx_optom NUMERIC,
+    narx_chakana NUMERIC,
+    tannarx NUMERIC,
+    valyuta TEXT,
+    oxshashlik REAL
+) AS $func$
+DECLARE
+    q_norm TEXT := lower(trim(qidiruv_sozi));
+BEGIN
+    RETURN QUERY
+    SELECT 
+        t.id,
+        t.nom,
+        t.model,
+        t.qoldiq,
+        t.birlik,
+        t.narx_optom,
+        t.narx_chakana,
+        t.tannarx,
+        t.valyuta,
+        GREATEST(
+            similarity(lower(t.nom), q_norm),
+            similarity(COALESCE(lower(t.model), ''), q_norm),
+            CASE 
+                WHEN lower(t.nom) ILIKE '%' || q_norm || '%' THEN 0.8
+                WHEN lower(COALESCE(t.model, '')) ILIKE '%' || q_norm || '%' THEN 0.8
+                ELSE 0.0
+            END
+        )::REAL AS oxshashlik
+    FROM tovarlar t
+    WHERE 
+        t.faol = true
+        AND (
+            lower(t.nom) ILIKE '%' || q_norm || '%'
+            OR lower(COALESCE(t.model, '')) ILIKE '%' || q_norm || '%'
+            OR similarity(lower(t.nom), q_norm) > 0.15
+        )
+    ORDER BY oxshashlik DESC, t.qoldiq DESC
+    LIMIT 10;
+END;
+$func$ LANGUAGE plpgsql STABLE;
+
+-- 3. Qarzdorlik Tahlil Ko'rinishi (Top qarzdorlar va umumiy qarz)
+CREATE OR REPLACE VIEW view_ai_qarzdorlar AS
+SELECT 
+    id,
+    nom,
+    telefon,
+    manzil,
+    qarz_uzs,
+    qarz_usd,
+    (qarz_uzs + (qarz_usd * 12800)) AS taxminiy_jami_summa_uzs
+FROM mijozlar
+WHERE (qarz_uzs > 0 OR qarz_usd > 0) AND faol = true
+ORDER BY taxminiy_jami_summa_uzs DESC;
+
+-- 4. Do'kon Umumiy Holati va Dinamik Xulosasi (AI Executive Summary)
+CREATE OR REPLACE VIEW view_ai_xulosa AS
+SELECT 
+    (SELECT COUNT(*) FROM mijozlar WHERE faol = true) AS jami_mijozlar_soni,
+    (SELECT COUNT(*) FROM mijozlar WHERE (qarz_uzs > 0 OR qarz_usd > 0) AND faol = true) AS qarzdor_mijozlar_soni,
+    COALESCE((SELECT SUM(qarz_uzs) FROM mijozlar WHERE faol = true), 0) AS umumiy_qarz_uzs,
+    COALESCE((SELECT SUM(qarz_usd) FROM mijozlar WHERE faol = true), 0) AS umumiy_qarz_usd,
+    (SELECT COUNT(*) FROM tovarlar WHERE faol = true) AS faol_tovarlar_turi,
+    COALESCE((SELECT SUM(qoldiq) FROM tovarlar WHERE faol = true), 0) AS ombordagi_jami_dona,
+    COALESCE((SELECT COUNT(*) FROM tovarlar WHERE faol = true AND qoldiq <= COALESCE(ogohlantirish_qoldiq, 5)), 0) AS kam_qolgan_tovarlar_soni,
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'UZS'), 0) AS bugungi_savdo_uzs,
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS bugungi_savdo_usd,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'UZS'), 0) AS bugungi_rasxod_uzs,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'USD'), 0) AS bugungi_rasxod_usd;

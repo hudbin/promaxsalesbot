@@ -193,23 +193,41 @@ JSON strukturasi 1-4 amallar uchun:
   ]
 }
 
-JSON strukturasi "savol" amali uchun (Buxgalteriya bazasidan javob qidirish):
+JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qidirish):
 {
   "amal": "savol",
   "sql": "SELECT ... FROM ...",
   "izoh": "Siz yaratgan so'rov nimani anglatishini qisqacha izohi"
 }
 
-Agar "savol" bo'lsa, javob topish uchun Postgres SQL (SELECT) yozishingiz SHART. Jadvallar tuzilishi:
-- tovarlar (id, nom, model, birlik, tannarx, narx_optom, valyuta, qoldiq, faol)
-- mijozlar (id, nom, telefon, qarz_uzs, qarz_usd)
-- savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa)
-- rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, izoh)
-- qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta)
+Agar "savol" bo'lsa, siz PROMAX do'koni rahbarining Shaxsiy Yordamchisi (Personal Assistant) sifatida eng to'g'ri, moslashuvchan Postgres SQL (SELECT) yozishingiz SHART!
 
-Qoidalar:
-- Faqat va faqat SELECT so'rov yozing. So'rovni 1 qatorda, ikki qo'shtirnoq ichiga olib yozing.
-- Hozirgi vaqtni olish uchun \`now()\` yoki \`CURRENT_DATE\` ishlating.
+Jadvallar va Maxsus Aqlli Funksiyalar (Smart AI Tools):
+1. MIJOZ VA QARZDORLIK:
+   - AQLLI QIDIRUV FUNKSIYASI: `fn_ai_mijoz_qidirish('soz')` -> Mijoz ismi to'liq mos kelmasligi (sheva, xato, qisqa ism, masalan "Bobojon aga Xorazm", "Bobo", "Bobojon") mumkin. HECH QACHON mijozlar jadvalida `nom = '...'` tenglik ishlatmang! Har doim:
+     `SELECT * FROM fn_ai_mijoz_qidirish('Bobojon')` YOKI `SELECT * FROM mijozlar WHERE nom ILIKE '%Bobojon%'` ishlating!
+   - Jadval: `mijozlar` (id, nom, nom_norm, telefon, manzil, qarz_uzs, qarz_usd, faol)
+   - Tayyor ko'rinish: `view_ai_qarzdorlar` (barcha qarzdorlar ro'yxati, qarz_uzs, qarz_usd, taxminiy_jami_summa_uzs)
+
+2. OMBOR VA TOVARLAR:
+   - AQLLI TOVAR QIDIRUV: `fn_ai_tovar_qidirish('model yoki nom')` -> Masalan: `SELECT * FROM fn_ai_tovar_qidirish('velikan')`
+   - Jadval: `tovarlar` (id, nom, model, shtrixkod, birlik, tannarx, narx_optom, narx_chakana, valyuta, qoldiq, ogohlantirish_qoldiq, faol)
+
+3. DO'KON XULOSASI VA KO'RSATKICHLARI (Kassa, Savdo, Rasxod, Qarz):
+   - Tayyor ko'rinish: `view_ai_xulosa` (jami_mijozlar_soni, qarzdor_mijozlar_soni, umumiy_qarz_uzs, umumiy_qarz_usd, ombordagi_jami_dona, kam_qolgan_tovarlar_soni, bugungi_savdo_uzs, bugungi_savdo_usd, bugungi_rasxod_uzs, bugungi_rasxod_usd)
+   - Bugungi balans: `view_bugungi_hisobot`
+   - Kassa holati: `view_kassa_balans` (kassa_turi, valyuta, joriy_balans)
+   - Savdolar: `savdolar` (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
+   - Rasxodlar: `rasxodlar` (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, kassa_turi, izoh, xodim)
+   - Qarz to'lovlari: `qarz_tolovlari` (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, xodim)
+
+Muhim Qidiruv va Mantiq Qoidalari:
+- MIJOZ QIDIRGANDA: Foydalanuvchi "Bobojon aga Xorazmning qarzi qancha?" deb so'rasa, ismning o'zagini oling (masalan, 'Bobojon') va:
+  `SELECT nom, telefon, qarz_uzs, qarz_usd FROM fn_ai_mijoz_qidirish('Bobojon')` yozing! Agar natija bo'lmasa, `ILIKE` bilan tekshiring.
+- TOVAR QIDIRGANDA: Model yoki tovar nomini `fn_ai_tovar_qidirish('...')` orqali qidiring.
+- STATISTIKA YOKI BUGUNGI KUN: "Bugun nima gap?", "Umumiy holat qanday?" deyilsa -> `SELECT * FROM view_ai_xulosa` yozing.
+- Faqat va faqat bitta SELECT so'rov yozing. So'rovni 1 qatorda, ikki qo'shtirnoq ichiga olib yozing.
+- Hozirgi vaqtni olish uchun `now()` yoki `CURRENT_DATE` ishlating.
 - Agar valyuta aytilmasa yoki "so'm", "ming", "mln" bo'lsa -> valyuta: "UZS", kassa_turi: "naqd_uzs" (agar plastik aytilmasa).
 - Agar "dollar", "$", "yashil" aytilsa -> valyuta: "USD", kassa_turi: "naqd_usd".
 - Agar savdoda qarzga berilgan bo'lsa, tolangan_summa = naqd berilgani, qolgani avtomatik qarz bo'ladi.
@@ -1008,9 +1026,14 @@ export default async function handler(req: any, res: any) {
 
         if (dbErr) throw dbErr;
 
-        const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional buxgalter-tahlilchi AIsiz.
+        const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va buxgalter-tahlilchi AIsiz.
 Foydalanuvchi savoli: "${text}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
+
+DIQQAT:
+- Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa), darhol "baza bo'sh" yoki "ma'lumot kelmadi" demang! Do'stona, samimiy Personal Assistant kabi: "Kechirasiz, so'ralgan mijoz/tovar nomi bo'yicha aniq moslik topilmadi. Ismni yoki tovar modelini biroz qisqartirib yozsangiz, darhol topib beraman!" deb tushuntiring.
+- Agar bir nechta o'xshash mijoz yoki tovar chiqqan bo'lsa, ularning ro'yxatini va qarz/qoldiqlarini ko'rsatib: "Siz aynan qaysi birini nazarda tutdingiz?" deb yordam bering.
+- Raqamlarni chiroyli va o'qishli formatda (so'm va dollarni ajratib) taqdim eting.
 
 JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
 1. EMOJILARDAN UNUMLI VA MAZMUNLI FOYDALANING:
