@@ -169,7 +169,8 @@ async function checkUserPermission(
 async function geminiTahlil(
   matn: string,
   audioBase64?: string,
-  mimeType?: string
+  mimeType?: string,
+  chatId?: number
 ): Promise<{ ok: boolean; data?: any; error?: string }> {
   if (!GEMINI_API_KEY) {
     return {
@@ -182,7 +183,7 @@ async function geminiTahlil(
 Siz ulgurji va chakana savdo (B2B) do'koni uchun buxgalter yordamchi AI hisoblanasiz.
 Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilida (lotin yoki kirill) matn yoki ovozli xabar yuboradi.
 
-Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\\\json) yoki ortiqcha so'z qo'shmang!
+Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
 Quyidagi 5 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
@@ -224,6 +225,7 @@ JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qid
 }
 
 Agar "savol" bo'lsa, siz PROMAX do'koni rahbarining Shaxsiy Yordamchisi (Personal Assistant) sifatida eng to'g'ri, moslashuvchan Postgres SQL (SELECT) yozishingiz SHART!
+Oldingi muloqot xotirasini (kontekstni) inobatga oling, chunki yangi savol oldingi javobga bog'liq bo'lishi mumkin.
 
 Jadvallar va Maxsus Aqlli Funksiyalar (Smart AI Tools):
 1. MIJOZ VA QARZDORLIK:
@@ -261,22 +263,49 @@ Muhim Qidiruv va Mantiq Qoidalari:
 `;
 
   const contents: any[] = [];
-  const parts: any[] = [{ text: prompt }];
+  
+  // Asosiy system prompt
+  contents.push({ role: "user", parts: [{ text: prompt }] });
+  contents.push({ role: "model", parts: [{ text: "Tushundim. Men FAQAT toza JSON formatida javob beraman. Qolgan narsalarni qo'shmayman." }] });
+
+  // Xotirani (history) yuklash
+  if (chatId) {
+    try {
+      const { data: history } = await getSupabase()
+        .from("ai_chat_history")
+        .select("role, content")
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      
+      if (history && history.length > 0) {
+        // Eski xabarlardan yangisiga qarab taxlash
+        history.reverse().forEach((msg: any) => {
+          contents.push({ role: msg.role, parts: [{ text: msg.content }] });
+        });
+      }
+    } catch (err) {
+      console.error("Xotirani yuklashda xato:", err);
+    }
+  }
+
+  const currentParts: any[] = [];
 
   if (audioBase64) {
     // Telegram audio formati: toza audio/ogg
     const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
-    parts.push({
+    currentParts.push({
       inlineData: {
         mimeType: cleanMimeType,
         data: audioBase64,
       },
     });
+    currentParts.push({ text: "DIQQAT: Javobingiz orqadagi xotirani hisobga olgan holda faqat toza JSON bo'lishi shart!" });
   } else if (matn) {
-    parts.push({ text: `Foydalanuvchi xabari: "${matn}"` });
+    currentParts.push({ text: `Foydalanuvchi xabari: "${matn}"\n\nDIQQAT: Javobingiz orqadagi xotirani hisobga olgan holda faqat toza JSON bo'lishi shart!` });
   }
 
-  contents.push({ parts });
+  contents.push({ role: "user", parts: currentParts });
 
   return await callGeminiJson(contents);
 }
@@ -989,7 +1018,14 @@ export default async function handler(req: any, res: any) {
         const audioRes = await fetch(fileUrl);
         const arrayBuffer = await audioRes.arrayBuffer();
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
-        geminiRes = await geminiTahlil("", base64Audio, voice.mime_type || "audio/ogg");
+        geminiRes = await geminiTahlil("", base64Audio, voice.mime_type || "audio/ogg", chatId);
+        
+        // Ovozli xabarni xotiraga saqlash
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "user",
+          content: "[Ovozli xabar yuborildi]"
+        });
       } else {
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -1006,7 +1042,13 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send("OK");
     }
   } else if (text && !text.startsWith("/")) {
-    geminiRes = await geminiTahlil(text);
+    // Matnli xabarni xotiraga saqlash
+    await getSupabase().from("ai_chat_history").insert({
+      chat_id: chatId,
+      role: "user",
+      content: text
+    });
+    geminiRes = await geminiTahlil(text, undefined, undefined, chatId);
   }
 
   if (geminiRes) {
@@ -1062,13 +1104,14 @@ export default async function handler(req: any, res: any) {
         if (dbErr) throw dbErr;
 
         const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va buxgalter-tahlilchi AIsiz.
-Foydalanuvchi savoli: "${text}"
+Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
 
 DIQQAT:
 - Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa), darhol "baza bo'sh" yoki "ma'lumot kelmadi" demang! Do'stona, samimiy Personal Assistant kabi: "Kechirasiz, so'ralgan mijoz/tovar nomi bo'yicha aniq moslik topilmadi. Ismni yoki tovar modelini biroz qisqartirib yozsangiz, darhol topib beraman!" deb tushuntiring.
 - Agar bir nechta o'xshash mijoz yoki tovar chiqqan bo'lsa, ularning ro'yxatini va qarz/qoldiqlarini ko'rsatib: "Siz aynan qaysi birini nazarda tutdingiz?" deb yordam bering.
 - Raqamlarni chiroyli va o'qishli formatda (so'm va dollarni ajratib) taqdim eting.
+- Har bir javobni "Assalomu alaykum..." deb boshlamang. To'g'ridan to'g'ri javobni bering, xuddiki muloqot davom etayotgandek.
 
 JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
 1. EMOJILARDAN UNUMLI VA MAZMUNLI FOYDALANING:
@@ -1087,6 +1130,14 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
 4. Markdown (** yoki *) belgilarini ishlatmang, faqat toza Telegram HTML (<b>, <i>, <code>, <blockquote>) ishlating.`;
 
         const finalAns = await geminiTabiiyJavob(answerPrompt);
+        
+        // AI javobini xotiraga saqlash
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: finalAns
+        });
+
         const formattedHtml = formatTelegramHtml(finalAns);
 
         const sendRes = await tgPost("sendMessage", {
@@ -1154,6 +1205,13 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
       }
 
       preview += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+      // Tranzaksiya qoralamasini AI xotirasiga model javobi sifatida saqlab qo'yamiz (context uchun)
+      await getSupabase().from("ai_chat_history").insert({
+        chat_id: chatId,
+        role: "model",
+        content: preview.replace(/<[^>]+>/g, '') // HTML teglarni olib tashlaymiz
+      });
 
       await tgPost("sendMessage", {
         chat_id: chatId,

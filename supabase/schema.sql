@@ -529,3 +529,18 @@ SELECT
     COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS bugungi_savdo_usd,
     COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'UZS'), 0) AS bugungi_rasxod_uzs,
     COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'USD'), 0) AS bugungi_rasxod_usd;
+
+-- ==============================================================================
+-- 12. AI CONVERSATION MEMORY
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS ai_chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    chat_id BIGINT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'model')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_ai_chat_history_chat_id ON ai_chat_history(chat_id);
+CREATE INDEX IF NOT EXISTS ix_ai_chat_history_created_at ON ai_chat_history(created_at);
