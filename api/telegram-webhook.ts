@@ -34,7 +34,17 @@ const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "580858047";
 const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "promax2026";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+let _supabaseClient: any = null;
+function getSupabase() {
+  if (!_supabaseClient) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('[Supabase Warning] SUPABASE_URL yoki SUPABASE_SERVICE_ROLE_KEY mavjud emas!');
+      return null;
+    }
+    _supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  }
+  return _supabaseClient;
+}
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 // Yordamchi: Telegram API ga xabar yuborish
@@ -380,7 +390,7 @@ export default async function handler(req: any, res: any) {
       let javobMatn = "";
 
       if (p.amal === "rasxod") {
-        await supabase.rpc("fn_rasxod_yaratish", {
+        await getSupabase().rpc("fn_rasxod_yaratish", {
           p_summa: p.jami_summa,
           p_valyuta: p.valyuta || "UZS",
           p_kategoriya: p.kategoriya || "Boshqa",
@@ -405,7 +415,7 @@ export default async function handler(req: any, res: any) {
         }
 
         if (mijozId) {
-          await supabase.rpc("fn_qarz_tolov_yaratish", {
+          await getSupabase().rpc("fn_qarz_tolov_yaratish", {
             p_mijoz_id: mijozId,
             p_summa: p.jami_summa,
             p_valyuta: p.valyuta || "UZS",
@@ -432,7 +442,7 @@ export default async function handler(req: any, res: any) {
           mijozId = m?.id;
         }
 
-        await supabase.rpc("fn_savdo_yaratish", {
+        await getSupabase().rpc("fn_savdo_yaratish", {
           p_mijoz_id: mijozId,
           p_valyuta: p.valyuta || "UZS",
           p_tolangan: p.tolangan_summa || 0,
@@ -482,7 +492,7 @@ export default async function handler(req: any, res: any) {
               (p.narx_optom > 0 ? `💰 Yangi sotish narxi: <b>${pul(p.narx_optom)} ${p.valyuta || mavjud.valyuta}</b>\n` : "") +
               `✍️ Kiritdi: <b>${fromName}</b>`;
           } else {
-            await supabase.from("tovarlar").insert({
+            await getSupabase().from("tovarlar").insert({
               nom: tovarNomi,
               model: p.model || tovarNomi,
               birlik: p.birlik || "dona",
@@ -574,7 +584,7 @@ export default async function handler(req: any, res: any) {
           })
           .eq("id", mavjudXodim.id);
       } else {
-        await supabase.from("xodimlar").insert({
+        await getSupabase().from("xodimlar").insert({
           telegram_id: req.telegram_id,
           ism: req.ism,
           telefon: req.telefon,
@@ -665,7 +675,7 @@ export default async function handler(req: any, res: any) {
           .update({ ism: senderName, telegram_username: senderUsername, rol: "admin", faol: true })
           .eq("id", mavjud.id);
       } else {
-        await supabase.from("xodimlar").insert({
+        await getSupabase().from("xodimlar").insert({
           telegram_id: !isNaN(numSenderId) ? numSenderId : senderId,
           ism: senderName,
           telegram_username: senderUsername,
@@ -762,7 +772,7 @@ export default async function handler(req: any, res: any) {
 
     // 3. Notanish raqam -> Bazaga so'rov yozish va barcha Adminlarga xabar yuborish
     const draftId = `xod_${Math.random().toString(36).substring(2, 9)}`;
-    await supabase.from("tranzaksiya_qoralama").insert({
+    await getSupabase().from("tranzaksiya_qoralama").insert({
       id: draftId,
       malumot: {
         amal: "xodim_sorov",
@@ -1020,7 +1030,7 @@ export default async function handler(req: any, res: any) {
           throw new Error("Xavfsizlik cheklovi: faqat SELECT so'rovlariga ruxsat berilgan.");
         }
 
-        const { data: dbResult, error: dbErr } = await supabase.rpc("fn_execute_readonly_sql", {
+        const { data: dbResult, error: dbErr } = await getSupabase().rpc("fn_execute_readonly_sql", {
           sql_query: cleanSql,
         });
 
@@ -1081,7 +1091,7 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
     if (parsedData && parsedData.amal) {
       // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
       const draftId = Math.random().toString(36).substring(2, 10);
-      await supabase.from("tranzaksiya_qoralama").insert({
+      await getSupabase().from("tranzaksiya_qoralama").insert({
         id: draftId,
         malumot: parsedData,
         yaratildi: new Date().toISOString(),
