@@ -35,16 +35,29 @@ const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "580858047";
 const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "promax2026";
 
 let _supabaseClient: any = null;
-function getSupabase() {
+function getSupabase(): any {
   if (!_supabaseClient) {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || SUPABASE_URL || "").trim();
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY || "").trim();
+    if (!url || !key) {
       console.warn('[Supabase Warning] SUPABASE_URL yoki SUPABASE_SERVICE_ROLE_KEY mavjud emas!');
       return null;
     }
-    _supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    _supabaseClient = createClient(url, key);
   }
   return _supabaseClient;
 }
+
+// Global xavfsiz proxy: fayl ichidagi barcha supabase.from(...) va supabase.rpc(...) chaqiruvlari uchun
+const supabase: any = new Proxy({} as any, {
+  get(_target, prop) {
+    const client = getSupabase();
+    if (!client) {
+      throw new Error("Supabase kalitlari mavjud emas (SUPABASE_URL yoki SUPABASE_SERVICE_ROLE_KEY yo'q)");
+    }
+    return client[prop];
+  }
+});
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 // Yordamchi: Telegram API ga xabar yuborish
@@ -701,9 +714,21 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // 2.2 KONTAKT (TELEFON RAQAM) KELGANDA
-  if (contact) {
-    const phone = normalizePhone(contact.phone_number);
+  // 2.2 KONTAKT (TELEFON RAQAM) KELGANDA YOKI MATNDA TELEFON RAQAM YUBORILGANDA
+  let rawPhoneNumber = contact?.phone_number;
+  if (!rawPhoneNumber && text && !text.startsWith("/")) {
+    const cleanDigits = text.replace(/[^\d+]/g, "");
+    if (
+      (cleanDigits.startsWith("+998") && cleanDigits.length === 13) ||
+      (cleanDigits.startsWith("998") && cleanDigits.length === 12) ||
+      (cleanDigits.length === 9 && !cleanDigits.startsWith("+"))
+    ) {
+      rawPhoneNumber = cleanDigits;
+    }
+  }
+
+  if (rawPhoneNumber) {
+    const phone = normalizePhone(rawPhoneNumber);
     const last9 = phone.slice(-9);
     const numSenderId = Number(senderId);
 
@@ -888,7 +913,7 @@ export default async function handler(req: any, res: any) {
   if (!perm.isAllowed) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `⛔️ <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nUshbu tizim faqat ro'yxatdan o'tgan do'kon xodimlari uchun mo'ljallangan.\n\nKirish uchun quyidagi <b>"📲 Telefon raqamimni yuborish"</b> tugmasini bosing yoki administrator bilan bog'laning.\n\n🆔 <i>Sizning Telegram ID:</i> <code>${senderId}</code>\n🔑 <i>Agar bosh admin bo'lsangiz: <code>/admin_parol &lt;parol&gt;</code> buyrug'ini yuboring.</i>`,
+      text: `⛔️ <b>Assalomu alaykum! PROMAX Savdo va Kassa tizimiga xush kelibsiz.</b>\n\nUshbu tizim faqat ro'yxatdan o'tgan do'kon xodimlari uchun mo'ljallangan.\n\nKirish uchun quyidagi <b>"📲 Telefon raqamimni yuborish"</b> tugmasini bosing yoki o'z telefon raqamingizni yozib yuboring (masalan: <code>+998901234567</code>).\n\n🆔 <i>Sizning Telegram ID:</i> <code>${senderId}</code>\n🔑 <i>Agar bosh admin bo'lsangiz: <code>/admin_parol &lt;parol&gt;</code> buyrug'ini yuboring.</i>`,
       parse_mode: "HTML",
       reply_markup: {
         keyboard: [
