@@ -289,6 +289,10 @@ export function KassaTab() {
         <KassaDetailsModal
           harakat={tanlanganHarakat}
           onClose={() => setTanlanganHarakat(null)}
+          onYangilandi={() => {
+            yuklaKassa();
+            setTanlanganHarakat(null);
+          }}
         />
       )}
     </div>
