@@ -164,7 +164,7 @@ CREATE OR REPLACE FUNCTION fn_savdo_yaratish(
     p_izoh TEXT,
     p_xodim TEXT,
     p_telegram_user_id BIGINT,
-    p_qatorlar JSONB -- [{tovar_id, soni, narx, tannarx}]
+    p_qatorlar JSONB -- [{tovar_id, soni, narx, tannarx, nom}]
 ) RETURNS UUID AS $$
 DECLARE
     v_savdo_id UUID;
@@ -178,11 +178,13 @@ DECLARE
     v_tovar_nomi TEXT;
 BEGIN
     -- 1. Jami summani hisoblash
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_qatorlar) LOOP
-        v_soni := (v_item->>'soni')::NUMERIC;
-        v_narx := (v_item->>'narx')::NUMERIC;
-        v_jami := v_jami + (v_soni * v_narx);
-    END LOOP;
+    IF p_qatorlar IS NOT NULL AND jsonb_typeof(p_qatorlar) = 'array' THEN
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_qatorlar) LOOP
+            v_soni := COALESCE((v_item->>'soni')::NUMERIC, 0);
+            v_narx := COALESCE((v_item->>'narx')::NUMERIC, 0);
+            v_jami := v_jami + (v_soni * v_narx);
+        END LOOP;
+    END IF;
 
     v_qarz := GREATEST(v_jami - COALESCE(p_tolangan, 0), 0);
 
@@ -196,30 +198,48 @@ BEGIN
     ) RETURNING id INTO v_savdo_id;
 
     -- 3. Savdo qatorlarini yozish va ombordan ayirish
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_qatorlar) LOOP
-        v_tovar_id := (v_item->>'tovar_id')::UUID;
-        v_soni := (v_item->>'soni')::NUMERIC;
-        v_narx := (v_item->>'narx')::NUMERIC;
-        v_tannarx := COALESCE((v_item->>'tannarx')::NUMERIC, 0);
+    IF p_qatorlar IS NOT NULL AND jsonb_typeof(p_qatorlar) = 'array' THEN
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_qatorlar) LOOP
+            BEGIN
+                v_tovar_id := NULLIF(trim(COALESCE(v_item->>'tovar_id', '')), '')::UUID;
+            EXCEPTION WHEN OTHERS THEN
+                v_tovar_id := NULL;
+            END;
 
-        SELECT nom INTO v_tovar_nomi FROM tovarlar WHERE id = v_tovar_id;
-        IF v_tovar_nomi IS NULL THEN
-            v_tovar_nomi := COALESCE(v_item->>'nom', 'Noma''lum tovar');
-        END IF;
+            v_soni := COALESCE((v_item->>'soni')::NUMERIC, 0);
+            v_narx := COALESCE((v_item->>'narx')::NUMERIC, 0);
+            v_tannarx := COALESCE((v_item->>'tannarx')::NUMERIC, 0);
 
-        INSERT INTO savdo_qatorlari (
-            savdo_id, tovar_id, tovar_nomi, soni, narx, tannarx, summa
-        ) VALUES (
-            v_savdo_id, v_tovar_id, v_tovar_nomi, v_soni, v_narx, v_tannarx, (v_soni * v_narx)
-        );
+            -- Tovar nomini aniqlash
+            v_tovar_nomi := NULL;
+            IF v_tovar_id IS NOT NULL THEN
+                SELECT nom INTO v_tovar_nomi FROM tovarlar WHERE id = v_tovar_id;
+            END IF;
 
-        -- Ombordan ayirish
-        IF v_tovar_id IS NOT NULL THEN
-            UPDATE tovarlar
-            SET qoldiq = qoldiq - v_soni
-            WHERE id = v_tovar_id;
-        END IF;
-    END LOOP;
+            IF v_tovar_nomi IS NULL THEN
+                v_tovar_nomi := COALESCE(v_item->>'nom', 'Noma''lum tovar');
+                -- Agar tovar_id berilmagan bo'lsa, nom yoki model bo'yicha tovarlarni tekshirib ko'rish
+                IF v_tovar_id IS NULL AND v_tovar_nomi != 'Noma''lum tovar' THEN
+                    SELECT id INTO v_tovar_id FROM tovarlar
+                    WHERE faol = true AND (lower(nom) = lower(v_tovar_nomi) OR lower(COALESCE(model, '')) = lower(v_tovar_nomi))
+                    LIMIT 1;
+                END IF;
+            END IF;
+
+            INSERT INTO savdo_qatorlari (
+                savdo_id, tovar_id, tovar_nomi, soni, narx, tannarx, summa
+            ) VALUES (
+                v_savdo_id, v_tovar_id, v_tovar_nomi, v_soni, v_narx, v_tannarx, (v_soni * v_narx)
+            );
+
+            -- Ombordan ayirish
+            IF v_tovar_id IS NOT NULL AND v_soni > 0 THEN
+                UPDATE tovarlar
+                SET qoldiq = qoldiq - v_soni
+                WHERE id = v_tovar_id;
+            END IF;
+        END LOOP;
+    END IF;
 
     -- 4. Mijoz qarzini oshirish (agar qarz bo'lsa)
     IF p_mijoz_id IS NOT NULL AND v_qarz > 0 THEN
@@ -335,13 +355,13 @@ GROUP BY kassa_turi, valyuta;
 -- 2. Bugungi Xulosa (Today's Executive Dashboard)
 CREATE OR REPLACE VIEW view_bugungi_hisobot AS
 SELECT
-    CURRENT_DATE AS sana,
-    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'UZS'), 0) AS savdo_uzs,
-    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS savdo_usd,
-    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'UZS'), 0) AS rasxod_uzs,
-    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'USD'), 0) AS rasxod_usd,
-    COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE sana_vaqt::date = CURRENT_DATE AND valyuta = 'UZS'), 0) AS qarz_tolov_uzs,
-    COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE sana_vaqt::date = CURRENT_DATE AND valyuta = 'USD'), 0) AS qarz_tolov_usd;
+    (now() AT TIME ZONE 'Asia/Tashkent')::date AS sana,
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'yakunlandi' AND valyuta = 'UZS'), 0) AS savdo_uzs,
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS savdo_usd,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'faol' AND valyuta = 'UZS'), 0) AS rasxod_uzs,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'faol' AND valyuta = 'USD'), 0) AS rasxod_usd,
+    COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND valyuta = 'UZS'), 0) AS qarz_tolov_uzs,
+    COALESCE((SELECT SUM(summa) FROM qarz_tolovlari WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND valyuta = 'USD'), 0) AS qarz_tolov_usd;
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) - MINI APP HUQUQLARI
@@ -525,10 +545,10 @@ SELECT
     (SELECT COUNT(*) FROM tovarlar WHERE faol = true) AS faol_tovarlar_turi,
     COALESCE((SELECT SUM(qoldiq) FROM tovarlar WHERE faol = true), 0) AS ombordagi_jami_dona,
     COALESCE((SELECT COUNT(*) FROM tovarlar WHERE faol = true AND qoldiq <= COALESCE(ogohlantirish_qoldiq, 5)), 0) AS kam_qolgan_tovarlar_soni,
-    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'UZS'), 0) AS bugungi_savdo_uzs,
-    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS bugungi_savdo_usd,
-    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'UZS'), 0) AS bugungi_rasxod_uzs,
-    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE sana_vaqt::date = CURRENT_DATE AND holat = 'faol' AND valyuta = 'USD'), 0) AS bugungi_rasxod_usd;
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'yakunlandi' AND valyuta = 'UZS'), 0) AS bugungi_savdo_uzs,
+    COALESCE((SELECT SUM(jami_summa) FROM savdolar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'yakunlandi' AND valyuta = 'USD'), 0) AS bugungi_savdo_usd,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'faol' AND valyuta = 'UZS'), 0) AS bugungi_rasxod_uzs,
+    COALESCE((SELECT SUM(summa) FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = (now() AT TIME ZONE 'Asia/Tashkent')::date AND holat = 'faol' AND valyuta = 'USD'), 0) AS bugungi_rasxod_usd;
 
 -- ==============================================================================
 -- 12. AI CONVERSATION MEMORY

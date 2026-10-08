@@ -126,6 +126,253 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
+// -----------------------------------------------------------------------------
+// AQLLI ENTITY ANIQLASHTIRISH VA IKKI BOSQICHLI TASDIQLASH YORDAMCHILARI
+// -----------------------------------------------------------------------------
+
+async function resolveSavdoEntities(data: any): Promise<any> {
+  const client = getSupabase();
+  if (!client) return data;
+
+  // 1. Mijozni aniqlash
+  if (data.mijoz_nomi && String(data.mijoz_nomi).trim()) {
+    try {
+      const { data: mList } = await client.rpc("fn_ai_mijoz_qidirish", {
+        qidiruv_sozi: String(data.mijoz_nomi).trim(),
+      });
+
+      if (mList && mList.length > 0) {
+        const topSim = Number(mList[0].oxshashlik) || 0;
+        const secondSim = Number(mList[1]?.oxshashlik) || 0;
+
+        // Bitta yaqqol kuchli moslik bormi? (oxshashlik >= 0.75 va boshqasidan ancha oldinda)
+        if (topSim >= 0.75 && (mList.length === 1 || (topSim - secondSim) >= 0.2)) {
+          data.selectedMijoz = mList[0];
+          data.mijozStatus = "resolved";
+        } else {
+          data.selectedMijoz = null;
+          data.mijozStatus = "ambiguous";
+          data.mijozCandidates = mList.slice(0, 4);
+        }
+      } else {
+        data.selectedMijoz = null;
+        data.mijozStatus = "not_found";
+      }
+    } catch (e) {
+      console.error("Mijoz qidirish xatosi:", e);
+      data.mijozStatus = "resolved";
+    }
+  } else {
+    data.selectedMijoz = null;
+    data.mijozStatus = "resolved"; // Chakana
+  }
+
+  // 2. Tovarlarni aniqlash
+  data.qatorlar = data.qatorlar || [];
+  for (const it of data.qatorlar) {
+    if (it.nom && !it.status) {
+      try {
+        const { data: tList } = await client.rpc("fn_ai_tovar_qidirish", {
+          qidiruv_sozi: String(it.nom).trim(),
+        });
+
+        if (tList && tList.length > 0) {
+          const topT = Number(tList[0].oxshashlik) || 0;
+          const secondT = Number(tList[1]?.oxshashlik) || 0;
+
+          if (topT >= 0.75 && (tList.length === 1 || (topT - secondT) >= 0.25)) {
+            it.tovar_id = tList[0].id;
+            it.aniq_nom = tList[0].nom;
+            it.qoldiq = Number(tList[0].qoldiq) || 0;
+            it.birlik = tList[0].birlik || "dona";
+            it.status = "resolved";
+          } else {
+            it.status = "ambiguous";
+            it.candidates = tList.slice(0, 4);
+          }
+        } else {
+          it.status = "resolved";
+          it.tovar_id = null;
+          it.aniq_nom = it.nom;
+        }
+      } catch (e) {
+        console.error("Tovar qidirish xatosi:", e);
+        it.status = "resolved";
+        it.tovar_id = null;
+        it.aniq_nom = it.nom;
+      }
+    }
+  }
+
+  return data;
+}
+
+function buildSavdoCard(draftId: string, p: any): { text: string; keyboard: any } {
+  // 1. Agar mijoz bir nechta bo'lib noaniq bo'lsa
+  if (p.mijozStatus === "ambiguous") {
+    const text = `🔍 <b>MIJOZNI ANIQLASHTIRISH (1-bosqich)</b>\n\n` +
+      `Siz kiritgan <i>"${p.mijoz_nomi}"</i> bo'yicha bazada bir nechta mijoz topildi. Qaysi birini tanlaysiz?`;
+    const buttons: any[] = (p.mijozCandidates || []).map((c: any) => [
+      { text: `👤 ${c.nom}${c.manzil ? ` (${c.manzil})` : ""}`, callback_data: `pk:m:${draftId}:${c.id}` },
+    ]);
+    buttons.push([
+      { text: `➕ Yangi mijoz ochish: "${p.mijoz_nomi}"`, callback_data: `pk:m:${draftId}:new` },
+    ]);
+    buttons.push([
+      { text: `🛒 Chakana mijoz sifatida saqlash`, callback_data: `pk:m:${draftId}:none` },
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 2. Agar mijoz bazada umuman topilmagan bo'lsa
+  if (p.mijozStatus === "not_found") {
+    const text = `👤 <b>MIJOZ TOPILMADI (1-bosqich)</b>\n\n` +
+      `Bazada <i>"${p.mijoz_nomi}"</i> ismli mijoz topilmadi. Qanday davom etamiz?`;
+    const buttons = [
+      [{ text: `➕ Yangi mijoz sifatida ochish`, callback_data: `pk:m:${draftId}:new` }],
+      [{ text: `🛒 Chakana mijoz sifatida yozish`, callback_data: `pk:m:${draftId}:none` }],
+      [{ text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` }],
+    ];
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 3. Agar tovarlardan birortasi noaniq bo'lsa
+  const ambIndex = (p.qatorlar || []).findIndex((it: any) => it.status === "ambiguous");
+  if (ambIndex >= 0) {
+    const it = p.qatorlar[ambIndex];
+    const text = `📦 <b>MAHSULOT MODELINI TANLANG (${ambIndex + 1}/${p.qatorlar.length})</b>\n\n` +
+      `👤 <b>Mijoz:</b> <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
+      `Siz aytgan <i>"${it.nom}"</i> (${it.soni} dona × ${pul(it.narx)}) bo'yicha quyidagi modellar mavjud:`;
+    const buttons: any[] = (it.candidates || []).map((c: any) => [
+      { text: `🏷 ${c.nom} (Omborda: ${c.qoldiq} ${c.birlik || "dona"})`, callback_data: `pk:t:${draftId}:${ambIndex}:${c.id}` },
+    ]);
+    buttons.push([
+      { text: `✍️ O'z nomi bilan qoldirish ("${it.nom}")`, callback_data: `pk:t:${draftId}:${ambIndex}:free` },
+    ]);
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 4. Barcha noaniqliklar hal bo'ldi -> 2-BOSQICH (YAKUNIY TASDIQLASH KARTASI)
+  const jami = (p.qatorlar || []).reduce(
+    (sum: number, it: any) => sum + (Number(it.soni) || 0) * (Number(it.narx) || 0),
+    0
+  ) || Number(p.jami_summa) || 0;
+  const tolangan = Number(p.tolangan_summa) || 0;
+  const qarz = Math.max(0, jami - tolangan);
+  const valyuta = p.valyuta || "UZS";
+
+  let itemsText = "";
+  (p.qatorlar || []).forEach((it: any, i: number) => {
+    const s = (Number(it.soni) || 0) * (Number(it.narx) || 0);
+    const birlik = it.birlik || "dona";
+    itemsText += `  ${i + 1}️⃣ <b>${it.aniq_nom || it.nom}</b>: <code>${it.soni} ${birlik}</code> × <code>${pul(it.narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
+    if (it.qoldiq !== undefined && it.qoldiq !== null) {
+      itemsText += `      <i>📉 Omborda: ${it.qoldiq} ${birlik} ➔ qoladi: ${Math.max(0, it.qoldiq - it.soni)} ${birlik}</i>\n`;
+    }
+  });
+
+  let text = `🛒 <b>SAVDO YAKUNIY TASDIQLASH (2-bosqich)</b>\n\n` +
+    `👤 <b>Mijoz:</b> <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
+    (itemsText ? `📦 <b>Mahsulotlar (${(p.qatorlar || []).length} ta):</b>\n${itemsText}\n` : "") +
+    `💰 <b>Jami savdo:</b> <b>${pul(jami)} ${valyuta}</b>\n` +
+    `💵 <b>Naqd to'landi:</b> <b>${pul(tolangan)} ${valyuta}</b>\n` +
+    `📝 <b>Nasiya / Qarz:</b> <b>${pul(qarz)} ${valyuta}</b>\n`;
+
+  if (qarz > 0 && p.selectedMijoz) {
+    const joriyQarz = Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0;
+    text += `📊 <b>Mijozning yangi umumiy qarzi:</b> <b>${pul(joriyQarz + qarz)} ${valyuta}</b>\n`;
+  }
+
+  text += `\n<i>Ma'lumotlar to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Tasdiqlash va Bazaga yozish", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
+async function resolveQarzTolovEntities(data: any): Promise<any> {
+  const client = getSupabase();
+  if (!client || !data.mijoz_nomi) return data;
+
+  try {
+    const { data: mList } = await client.rpc("fn_ai_mijoz_qidirish", {
+      qidiruv_sozi: String(data.mijoz_nomi).trim(),
+    });
+
+    if (mList && mList.length > 0) {
+      const topSim = Number(mList[0].oxshashlik) || 0;
+      const secondSim = Number(mList[1]?.oxshashlik) || 0;
+
+      if (topSim >= 0.75 && (mList.length === 1 || (topSim - secondSim) >= 0.2)) {
+        data.selectedMijoz = mList[0];
+        data.mijozStatus = "resolved";
+      } else {
+        data.selectedMijoz = null;
+        data.mijozStatus = "ambiguous";
+        data.mijozCandidates = mList.slice(0, 4);
+      }
+    } else {
+      data.selectedMijoz = null;
+      data.mijozStatus = "not_found";
+    }
+  } catch (e) {
+    console.error("Qarz to'lovida mijoz qidirish xatosi:", e);
+    data.mijozStatus = "resolved";
+  }
+
+  return data;
+}
+
+function buildQarzTolovCard(draftId: string, p: any): { text: string; keyboard: any } {
+  if (p.mijozStatus === "ambiguous") {
+    const text = `🔍 <b>QARZ TO'LOVI: MIJOZNI TANLANG</b>\n\n` +
+      `Siz aytgan <i>"${p.mijoz_nomi}"</i> bo'yicha bir nechta mijoz topildi:`;
+    const buttons: any[] = (p.mijozCandidates || []).map((c: any) => [
+      { text: `👤 ${c.nom} (Qarzi: ${pul(c.qarz_uzs)} UZS)`, callback_data: `pk:qm:${draftId}:${c.id}` },
+    ]);
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  const valyuta = p.valyuta || "UZS";
+  const summa = Number(p.jami_summa) || 0;
+  const m = p.selectedMijoz;
+  const joriyQarz = m ? Number(valyuta === "USD" ? m.qarz_usd : m.qarz_uzs) || 0 : 0;
+  const qolganQarz = Math.max(0, joriyQarz - summa);
+
+  let text = `💳 <b>QARZ TO'LOVI ANIQLANDI</b>\n\n` +
+    `👤 <b>Mijoz:</b> <b>${m?.nom || p.mijoz_nomi || "Noma'lum"}</b>\n` +
+    `💵 <b>To'lov summasi:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+    `💳 <b>Kassa / To'lov turi:</b> <b>${p.tolov_turi || "Naqd"}</b>\n`;
+
+  if (m) {
+    text += `📊 <b>Eski qarz:</b> ${pul(joriyQarz)} ${valyuta}\n` +
+      `📉 <b>To'lovdan keyingi qarz:</b> <b>${pul(qolganQarz)} ${valyuta}</b>\n`;
+  }
+
+  text += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ To'lovni qabul qilish", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
 // Yordamchi: Foydalanuvchi ruxsatini tekshirish
 async function checkUserPermission(
   telegramId?: number | string
@@ -240,13 +487,16 @@ Jadvallar va Maxsus Aqlli Funksiyalar (Smart AI Tools):
 
 3. DO'KON XULOSASI VA KO'RSATKICHLARI (Kassa, Savdo, Rasxod, Qarz):
    - Tayyor ko'rinish: view_ai_xulosa (jami_mijozlar_soni, qarzdor_mijozlar_soni, umumiy_qarz_uzs, umumiy_qarz_usd, ombordagi_jami_dona, kam_qolgan_tovarlar_soni, bugungi_savdo_uzs, bugungi_savdo_usd, bugungi_rasxod_uzs, bugungi_rasxod_usd)
-   - Bugungi balans: view_bugungi_hisobot
-   - Kassa holati: view_kassa_balans (kassa_turi, valyuta, joriy_balans)
-   - Savdolar: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
+   - Bugungi balans va savdo oboroti: view_bugungi_hisobot (savdo_uzs, savdo_usd, rasxod_uzs, rasxod_usd, qarz_tolov_uzs, qarz_tolov_usd)
+   - Kassa sandig'idagi naqd pul: view_kassa_balans (kassa_turi, valyuta, joriy_balans)
+   - Savdolar jadvali: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
+     DIQQAT: Ustun nomi "tolov_turi" ('naqd', 'plastik', 'perechisleniya') - HECH QACHON "tolq_turi" yoki "tolov" deb xato yozmang!
    - Rasxodlar: rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, kassa_turi, izoh, xodim)
    - Qarz to'lovlari: qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, xodim)
 
 Muhim Qidiruv va Mantiq Qoidalari:
+- SAVDO VA KASSA FARQI (O'TA MUHIM): Foydalanuvchi "Bugun qancha savdo bo'ldi?" yoki "Bugungi savdoning umumiy summasi" deb so'rasa, bu KASSA SANDIG'I EMAS, BUGUNGI SAVDO OBOROTI! Har doim "SELECT * FROM view_bugungi_hisobot" yoki "SELECT * FROM view_ai_xulosa" yozing! Agar savdo nasiyaga/qarzga bo'lsa, kassa 0 so'm bo'ladi, lekin savdo 0 EMAS!
+- KASSA SO'RALGANDA: Faqat "kassada qancha naqd pul bor", "kassa holati qanday" deyilsagina "view_kassa_balans" ko'rinishini o'qing!
 - MIJOZ QIDIRGANDA: Foydalanuvchi "Bobojon aga Xorazmning qarzi qancha?" deb so'rasa, ismning o'zagini oling (masalan, 'Bobojon') va:
   SELECT nom, telefon, qarz_uzs, qarz_usd FROM fn_ai_mijoz_qidirish('Bobojon') yozing! Agar natija bo'lmasa, ILIKE bilan tekshiring.
 - TOVAR QIDIRGANDA: Model yoki tovar nomini fn_ai_tovar_qidirish('...') orqali qidiring.
@@ -413,6 +663,172 @@ export default async function handler(req: any, res: any) {
     const msgId = cq.message?.message_id;
     const fromName = `${cq.from?.first_name || ""} ${cq.from?.last_name || ""}`.trim() || "Xodim";
 
+    // 1.0 MIJOZ TANLASH (SAVDO) (pk:m:draftId:choice)
+    if (data.startsWith("pk:m:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const choice = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      if (choice === "new") {
+        const nom = (p.mijoz_nomi || "Yangi mijoz").trim();
+        const { data: newM } = await getSupabase()
+          .from("mijozlar")
+          .insert({
+            nom: nom,
+            nom_norm: nom.toLowerCase(),
+            qarz_uzs: 0,
+            qarz_usd: 0,
+            faol: true,
+          })
+          .select()
+          .single();
+        p.selectedMijoz = newM;
+        p.mijozStatus = "resolved";
+      } else if (choice === "none") {
+        p.selectedMijoz = null;
+        p.mijozStatus = "resolved";
+      } else {
+        const { data: selM } = await supabase
+          .from("mijozlar")
+          .select("*")
+          .eq("id", choice)
+          .single();
+        p.selectedMijoz = selM;
+        p.mijozStatus = "resolved";
+      }
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const nextCard = buildSavdoCard(draftId, p);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // 1.1 TOVAR MODELINI TANLASH (SAVDO) (pk:t:draftId:idx:choice)
+    if (data.startsWith("pk:t:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const idx = Number(parts[3]);
+      const tChoice = parts[4];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      if (p.qatorlar && p.qatorlar[idx]) {
+        if (tChoice === "free") {
+          p.qatorlar[idx].tovar_id = null;
+          p.qatorlar[idx].aniq_nom = p.qatorlar[idx].nom;
+          p.qatorlar[idx].status = "resolved";
+        } else {
+          const { data: selT } = await supabase
+            .from("tovarlar")
+            .select("*")
+            .eq("id", tChoice)
+            .single();
+          if (selT) {
+            p.qatorlar[idx].tovar_id = selT.id;
+            p.qatorlar[idx].aniq_nom = selT.nom;
+            p.qatorlar[idx].qoldiq = Number(selT.qoldiq) || 0;
+            p.qatorlar[idx].birlik = selT.birlik || "dona";
+            p.qatorlar[idx].status = "resolved";
+          }
+        }
+      }
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const nextCard = buildSavdoCard(draftId, p);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Tovar tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // 1.2 QARZ TO'LOVI UCHUN MIJOZ TANLASH (pk:qm:draftId:mId)
+    if (data.startsWith("pk:qm:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const mId = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      const { data: selM } = await supabase
+        .from("mijozlar")
+        .select("*")
+        .eq("id", mId)
+        .single();
+      p.selectedMijoz = selM;
+      p.mijozStatus = "resolved";
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const nextCard = buildQarzTolovCard(draftId, p);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
     if (data.startsWith("cf:")) {
       // Tasdiqlash bosildi
       const draftId = data.replace("cf:", "");
@@ -444,60 +860,91 @@ export default async function handler(req: any, res: any) {
         });
         javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
       } else if (p.amal === "qarz_tolov") {
-        // Mijozni topish yoki yaratish
-        let mijozId = null;
-        if (p.mijoz_nomi) {
-          const { data: m } = await supabase
-            .from("mijozlar")
-            .select("id")
-            .ilike("nom", `%${p.mijoz_nomi}%`)
-            .limit(1)
-            .single();
-          mijozId = m?.id;
-        }
+        const mijozId = p.selectedMijoz?.id || null;
+        const valyuta = p.valyuta || "UZS";
+        const summa = Number(p.jami_summa) || 0;
 
         if (mijozId) {
-          await getSupabase().rpc("fn_qarz_tolov_yaratish", {
+          const { error: tolovErr } = await getSupabase().rpc("fn_qarz_tolov_yaratish", {
             p_mijoz_id: mijozId,
-            p_summa: p.jami_summa,
-            p_valyuta: p.valyuta || "UZS",
+            p_summa: summa,
+            p_valyuta: valyuta,
             p_tolov_turi: p.tolov_turi || "naqd",
             p_kassa_turi: p.kassa_turi || "naqd_uzs",
             p_izoh: p.izoh || "",
             p_xodim: fromName,
             p_telegram_user_id: cq.from?.id,
           });
-          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n👤 Mijoz: <b>${p.mijoz_nomi}</b>\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n✍️ Qabul qildi: <b>${fromName}</b>`;
+
+          if (tolovErr) {
+            console.error("fn_qarz_tolov_yaratish xatosi:", tolovErr);
+            await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xatolik: " + tolovErr.message });
+            await tgPost("editMessageText", {
+              chat_id: chatId,
+              message_id: msgId,
+              text: `❌ <b>Qarz to'lovini saqlashda xatolik:</b>\n<code>${tolovErr.message}</code>`,
+              parse_mode: "HTML",
+            });
+            return res.status(200).send("OK");
+          }
+
+          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi}</b>\n💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n✍️ Qabul qildi: <b>${fromName}</b>`;
         } else {
-          javobMatn = `⚠️ Mijoz topilmadi (${p.mijoz_nomi}). Iltimos, mijozlar bo'limidan tekshiring.`;
+          javobMatn = `⚠️ Mijoz tanlanmadi (${p.mijoz_nomi || "Noma'lum"}). Iltimos, mijozlar bo'limidan tekshiring.`;
         }
       } else if (p.amal === "savdo") {
         // Savdo
-        let mijozId = null;
-        if (p.mijoz_nomi) {
-          const { data: m } = await supabase
-            .from("mijozlar")
-            .select("id")
-            .ilike("nom", `%${p.mijoz_nomi}%`)
-            .limit(1)
-            .single();
-          mijozId = m?.id;
-        }
+        const jami = (p.qatorlar || []).reduce(
+          (sum: number, it: any) => sum + (Number(it.soni) || 0) * (Number(it.narx) || 0),
+          0
+        ) || Number(p.jami_summa) || 0;
+        const tolangan = Number(p.tolangan_summa) || 0;
+        const qarz = Math.max(0, jami - tolangan);
+        const valyuta = p.valyuta || "UZS";
 
-        await getSupabase().rpc("fn_savdo_yaratish", {
-          p_mijoz_id: mijozId,
-          p_valyuta: p.valyuta || "UZS",
-          p_tolangan: p.tolangan_summa || 0,
+        const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish", {
+          p_mijoz_id: p.selectedMijoz?.id || null,
+          p_valyuta: valyuta,
+          p_tolangan: tolangan,
           p_tolov_turi: p.tolov_turi || "naqd",
           p_kassa_turi: p.kassa_turi || "naqd_uzs",
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
-          p_qatorlar: p.qatorlar || [],
+          p_qatorlar: (p.qatorlar || []).map((it: any) => ({
+            tovar_id: it.tovar_id || null,
+            nom: it.aniq_nom || it.nom,
+            soni: Number(it.soni) || 0,
+            narx: Number(it.narx) || 0,
+            tannarx: Number(it.tannarx) || 0,
+          })),
         });
 
-        const qarz = Math.max(0, (p.jami_summa || 0) - (p.tolangan_summa || 0));
-        javobMatn = `✅ <b>SAVDO SAQLANDI</b>\n\n👤 Mijoz: <b>${p.mijoz_nomi || "Chakana"}</b>\n💰 Jami: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n💵 To'landi: <b>${pul(p.tolangan_summa)} ${p.valyuta}</b>\n📝 Qarzga: <b>${pul(qarz)} ${p.valyuta}</b>\n✍️ Sotuvchi: <b>${fromName}</b>`;
+        if (saveErr) {
+          console.error("fn_savdo_yaratish xatosi:", saveErr);
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xatolik: " + saveErr.message });
+          await tgPost("editMessageText", {
+            chat_id: chatId,
+            message_id: msgId,
+            text: `❌ <b>Savdoni saqlashda xatolik yuz berdi:</b>\n<code>${saveErr.message}</code>`,
+            parse_mode: "HTML",
+          });
+          return res.status(200).send("OK");
+        }
+
+        let itemsSummary = "";
+        (p.qatorlar || []).forEach((it: any) => {
+          itemsSummary += `  • <b>${it.aniq_nom || it.nom}</b>: ${it.soni} ${it.birlik || "dona"}\n`;
+        });
+
+        javobMatn = `✅ <b>SAVDO SAQLANDI VA OMBORDAN AYIRILDI</b>\n\n` +
+          `👤 Mijoz: <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
+          (itemsSummary ? `📦 Mahsulotlar:\n${itemsSummary}\n` : "") +
+          `💰 Jami: <b>${pul(jami)} ${valyuta}</b>\n` +
+          `💵 To'landi: <b>${pul(tolangan)} ${valyuta}</b>\n` +
+          `📝 Qarzga: <b>${pul(qarz)} ${valyuta}</b>\n` +
+          `✍️ Sotuvchi: <b>${fromName}</b>`;
+      }
       } else if (p.amal === "tovar_kirim") {
         // Omborga tovar kirimi / yangi tovar qo'shish
         const tovarNomi = (p.tovar_nomi || "").trim();
@@ -1097,9 +1544,37 @@ export default async function handler(req: any, res: any) {
           throw new Error("Xavfsizlik cheklovi: faqat SELECT so'rovlariga ruxsat berilgan.");
         }
 
-        const { data: dbResult, error: dbErr } = await getSupabase().rpc("fn_execute_readonly_sql", {
+        let { data: dbResult, error: dbErr } = await getSupabase().rpc("fn_execute_readonly_sql", {
           sql_query: cleanSql,
         });
+
+        // Agar SQL xato bersa -> Gemini orqali o'zini o'zi to'g'rilash (Self-Correction Retry)
+        if (dbErr) {
+          console.warn("AI SQL xatosi, Gemini orqali qayta urinish:", dbErr.message);
+          const fixPrompt = `Siz yozgan Postgres SQL so'rov xatolik berdi: "${dbErr.message}".
+Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
+Noto'g'ri SQL: "${cleanSql}"
+
+DIQQAT TIZIM QOIDALARI:
+- savdolar jadvali ustunlari: (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
+- Ustun nomi: tolov_turi ('naqd', 'plastik', 'perechisleniya') - HECH QACHON "tolq_turi" yoki "tolov" deb xato yozmang!
+- Do'konning bugungi savdo oboroti: "view_bugungi_hisobot" (savdo_uzs, savdo_usd) yoki "view_ai_xulosa" (bugungi_savdo_uzs, bugungi_savdo_usd)
+- Kassa sandig'idagi naqd pul balansi: "view_kassa_balans" (kassa_turi, valyuta, joriy_balans)
+Iltimos, FAQAT to'g'rilangan toza SELECT SQL yozing (hech qanday izohsiz, markdown'siz):`;
+
+          const correctedSqlRaw = await geminiTabiiyJavob(fixPrompt);
+          if (correctedSqlRaw) {
+            let fixedSql = correctedSqlRaw.replace(/```(?:sql)?/gi, "").replace(/```/g, "").trim();
+            while (fixedSql.endsWith(";")) fixedSql = fixedSql.slice(0, -1).trim();
+            if (fixedSql.toLowerCase().startsWith("select") || fixedSql.toLowerCase().startsWith("with")) {
+              const retryRun = await getSupabase().rpc("fn_execute_readonly_sql", { sql_query: fixedSql });
+              if (!retryRun.error) {
+                dbResult = retryRun.data;
+                dbErr = null;
+              }
+            }
+          }
+        }
 
         if (dbErr) throw dbErr;
 
@@ -1167,13 +1642,66 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
     if (parsedData && parsedData.amal) {
       // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
       const draftId = Math.random().toString(36).substring(2, 10);
+
+      // 1. SAVDO AMALI: AQLLI IKKI BOSQICHLI TASDIQLASH VA ANIQ OMBOR/QARZ BOG'LASH
+      if (parsedData.amal === "savdo") {
+        await resolveSavdoEntities(parsedData);
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const card = buildSavdoCard(draftId, parsedData);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // 2. QARZ TO'LOVI AMALI: AQLLI MIJOZ TANLASH
+      if (parsedData.amal === "qarz_tolov") {
+        await resolveQarzTolovEntities(parsedData);
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const card = buildQarzTolovCard(draftId, parsedData);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // 3. RASXOD VA TOVAR KIRIMI UCHUN
       await getSupabase().from("tranzaksiya_qoralama").insert({
         id: draftId,
         malumot: parsedData,
         yaratildi: new Date().toISOString(),
       });
 
-      // 1-bosqichli Tasdiqlash Kartochkasi
       let preview = "";
       if (parsedData.amal === "rasxod") {
         preview = `🧾 <b>XARAJAT (RASXOD) ANIQLANDI</b>\n\n` +
@@ -1181,18 +1709,6 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           `📂 Kategoriya: <b>${parsedData.kategoriya || "Boshqa"}</b>\n` +
           `💳 To'lov: <b>${parsedData.tolov_turi || "Naqd"}</b>\n` +
           (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
-      } else if (parsedData.amal === "qarz_tolov") {
-        preview = `💳 <b>QARZ TO'LOVI ANIQLANDI</b>\n\n` +
-          `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Noma'lum"}</b>\n` +
-          `💵 To'lov: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-          `💳 Kassa: <b>${parsedData.tolov_turi || "Naqd"}</b>\n`;
-      } else if (parsedData.amal === "savdo") {
-        const qarz = Math.max(0, (parsedData.jami_summa || 0) - (parsedData.tolangan_summa || 0));
-        preview = `🛒 <b>SAVDO ANIQLANDI</b>\n\n` +
-          `👤 Mijoz: <b>${parsedData.mijoz_nomi || "Chakana"}</b>\n` +
-          `💰 Jami: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-          `💵 Naqd to'landi: <b>${pul(parsedData.tolangan_summa)} ${parsedData.valyuta}</b>\n` +
-          `📝 Qarzga: <b>${pul(qarz)} ${parsedData.valyuta}</b>\n`;
       } else if (parsedData.amal === "tovar_kirim") {
         const jamiTannarx = (parsedData.soni || 0) * (parsedData.tannarx || 0);
         preview = `📦 <b>TOVAR KIRIMI (OMBOR) ANIQLANDI</b>\n\n` +
