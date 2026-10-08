@@ -527,6 +527,148 @@ async function checkUserPermission(
 }
 
 // -----------------------------------------------------------------------------
+// QARZDORLAR RO'YXATINI AVTOMATIK PDF HUJJAT QILIB YUBORISH
+// -----------------------------------------------------------------------------
+async function sendQarzdorlarPdf(chatId: number | string): Promise<{ ok: boolean; count?: number; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    const { data: qarzdorlar, error } = await client
+      .from("mijozlar")
+      .select("nom, qarz_uzs, qarz_usd, telefon, telegram")
+      .eq("faol", true)
+      .or("qarz_uzs.gt.0,qarz_usd.gt.0")
+      .order("qarz_uzs", { ascending: false });
+
+    if (error) throw error;
+    if (!qarzdorlar || qarzdorlar.length === 0) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "✅ <b>Qarzdor mijozlar mavjud emas!</b> Barcha qarzlar to'liq yopilgan.",
+        parse_mode: "HTML",
+      });
+      return { ok: true, count: 0 };
+    }
+
+    const { jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    // Sarlavha
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.text("PROMAX B2B STORE - QARZDORLAR RO'YXATI", 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    const sanaStr = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    doc.text(`Holat: ${sanaStr} | Jami qarzdorlar: ${qarzdorlar.length} ta`, 14, 25);
+
+    let jamiUzs = 0;
+    let jamiUsd = 0;
+
+    const rows = qarzdorlar.map((m: any, idx: number) => {
+      const uzs = Number(m.qarz_uzs || 0);
+      const usd = Number(m.qarz_usd || 0);
+      jamiUzs += uzs;
+      jamiUsd += usd;
+
+      return [
+        String(idx + 1),
+        m.nom || "-",
+        uzs > 0 ? `${pul(uzs)} so'm` : "-",
+        usd > 0 ? `$${pul(usd)}` : "-",
+        m.telefon || "-",
+        m.telegram || "-",
+      ];
+    });
+
+    // Jami qatorini qo'shish
+    rows.push([
+      "",
+      "JAMI UMUMIY QARZ:",
+      `${pul(jamiUzs)} so'm`,
+      `$${pul(jamiUsd)}`,
+      "",
+      "",
+    ]);
+
+    autoTable(doc, {
+      startY: 30,
+      head: [["No", "Mijoz Nomi", "Qarzi (UZS)", "Qarzi (USD)", "Telefon Raqami", "Telegram"]],
+      body: rows,
+      theme: "striped",
+      headStyles: {
+        fillColor: [79, 70, 229],
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 8,
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 48, fontStyle: "bold" },
+        2: { cellWidth: 32, halign: "right" },
+        3: { cellWidth: 24, halign: "right" },
+        4: { cellWidth: 36 },
+        5: { cellWidth: 38 },
+      },
+      didParseCell: (data: any) => {
+        if (data.row.index === rows.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [241, 245, 249];
+        }
+      },
+    });
+
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const filename = `PROMAX_Qarzdorlar_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📄 <b>PROMAX STORE — QARZDORLAR RO'YXATI (PDF)</b>\n\n` +
+      `👥 Qarzdorlar soni: <b>${qarzdorlar.length} ta</b>\n` +
+      `💵 Jami so'm: <b>${pul(jamiUzs)} so'm</b>\n` +
+      `💲 Jami dollar: <b>$${pul(jamiUsd)}</b>\n\n` +
+      `📅 <i>${sanaStr} holatiga</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    if (!resData.ok) {
+      console.error("sendDocument xatosi:", resData);
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `❌ <b>PDF yuborishda xatolik:</b>\n<code>${resData.description || "Noma'lum"}</code>`,
+        parse_mode: "HTML",
+      });
+    }
+    return { ok: resData.ok, count: qarzdorlar.length, error: resData.description };
+  } catch (err: any) {
+    console.error("sendQarzdorlarPdf xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>PDF yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
+
+// -----------------------------------------------------------------------------
 // GEMINI AI TAHLILCHISI (O'zbek tilidagi matn va audio xabarlar)
 // -----------------------------------------------------------------------------
 async function geminiTahlil(
@@ -548,13 +690,14 @@ Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilid
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 6 ta amal turidan birini aniqlang:
+Quyidagi 7 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
 3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
 4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
 5. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash (masalan: "Akmal akaga qarzini eslat", "Anvar Angorga qarzi bo'yicha xabar yozish kerak", "Bahodir akaga qarz eslatmasini yubor").
-6. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti).
+6. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozlar qarzini PDF fayl/hujjat ko'rinishida so'raganda (masalan: "Qarzdorlar ro'yxatini PDF qilib ber", "Qarzlar ro'yxatini PDF jo'nat", "Mijozlar qarzini PDF qilib tashla", "Qarzdorlarni PDF fayl qilib ber", "Qarzdorlar PDF").
+7. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti va PDF so'ramayapti).
 
 JSON strukturasi 1-4 amallar uchun:
 {
@@ -586,6 +729,11 @@ JSON strukturasi "qarz_eslatma" amali uchun:
   "amal": "qarz_eslatma",
   "mijoz_nomi": "Mijoz ismi yoki do'koni",
   "xabar_matni": "Ixtiyoriy foydalanuvchi aytgan maxsus xabar matni yoki null (agar aytmagan bo'lsa)"
+}
+
+JSON strukturasi "qarz_pdf" amali uchun:
+{
+  "amal": "qarz_pdf"
 }
 
 JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qidirish):
@@ -1795,6 +1943,12 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
             text: finalAns,
           });
         }
+
+        // Agar foydalanuvchi savolida PDF yoki fayl so'ralgan bo'lsa, PDF hujjatni ham yuboramiz
+        if (text && /pdf|fayl/i.test(text) && /qarz|qarzdor/i.test(text)) {
+          await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+          await sendQarzdorlarPdf(chatId);
+        }
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
         await tgPost("sendMessage", {
@@ -1888,7 +2042,14 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         return res.status(200).send("OK");
       }
 
-      // 4. RASXOD VA TOVAR KIRIMI UCHUN
+      // 4. QARZ RO'YXATINI PDF HUJJAT QILIB YUBORISH
+      if (parsedData.amal === "qarz_pdf") {
+        await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+        await sendQarzdorlarPdf(chatId);
+        return res.status(200).send("OK");
+      }
+
+      // 5. RASXOD VA TOVAR KIRIMI UCHUN
       await getSupabase().from("tranzaksiya_qoralama").insert({
         id: draftId,
         malumot: parsedData,
