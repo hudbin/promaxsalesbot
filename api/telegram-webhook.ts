@@ -373,6 +373,122 @@ function buildQarzTolovCard(draftId: string, p: any): { text: string; keyboard: 
   return { text, keyboard: { inline_keyboard: buttons } };
 }
 
+async function resolveQarzEslatmaEntities(data: any): Promise<any> {
+  const client = getSupabase();
+  if (!client || !data.mijoz_nomi) return data;
+
+  try {
+    const { data: mList } = await client.rpc("fn_ai_mijoz_qidirish", {
+      qidiruv_sozi: String(data.mijoz_nomi).trim(),
+    });
+
+    if (mList && mList.length > 0) {
+      const topSim = Number(mList[0].oxshashlik) || 0;
+      const secondSim = Number(mList[1]?.oxshashlik) || 0;
+
+      if (topSim >= 0.75 && (mList.length === 1 || (topSim - secondSim) >= 0.2)) {
+        data.selectedMijoz = mList[0];
+        data.mijozStatus = "resolved";
+      } else {
+        data.selectedMijoz = null;
+        data.mijozStatus = "ambiguous";
+        data.mijozCandidates = mList.slice(0, 4);
+      }
+    } else {
+      data.selectedMijoz = null;
+      data.mijozStatus = "not_found";
+    }
+  } catch (e) {
+    console.error("Qarz eslatmasida mijoz qidirish xatosi:", e);
+    data.mijozStatus = "resolved";
+  }
+
+  return data;
+}
+
+function buildQarzEslatmaCard(draftId: string, p: any): { text: string; keyboard: any } {
+  if (p.mijozStatus === "ambiguous") {
+    const text = `🔍 <b>QARZ ESLATMASI: MIJOZNI TANLANG</b>\n\n` +
+      `Siz aytgan <i>"${p.mijoz_nomi}"</i> bo'yicha bir nechta mijoz topildi:`;
+    const buttons: any[] = (p.mijozCandidates || []).map((c: any) => [
+      { text: `👤 ${c.nom} (Qarzi: ${pul(c.qarz_uzs)} UZS)`, callback_data: `pk:em:${draftId}:${c.id}` },
+    ]);
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  const m = p.selectedMijoz;
+  if (!m) {
+    const text = `⚠️ <b>MIJOZ TOPILMADI</b>\n\n` +
+      `Siz aytgan <i>"${p.mijoz_nomi || "Noma'lum"}"</i> ismli mijoz bazadan topilmadi.`;
+    const buttons = [
+      [{ text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` }],
+    ];
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  const qarzUzs = Number(m.qarz_uzs || 0);
+  const qarzUsd = Number(m.qarz_usd || 0);
+
+  let qarzMatn = "";
+  if (qarzUzs > 0) qarzMatn += `🔹 ${pul(qarzUzs)} so'm\n`;
+  if (qarzUsd > 0) qarzMatn += `🔹 $${pul(qarzUsd)}\n`;
+
+  const standartMatn =
+    `Assalomu alaykum, hurmatli ${m.nom}!\n\n` +
+    `PROMAX Store do'konimizdan joriy hisobingiz bo'yicha qarzingiz:\n` +
+    `${qarzMatn || "0 so'm\n"}\n` +
+    `Iltimos, imkon qadar to'lovni amalga oshirishingizni so'raymiz.\n\n` +
+    `Hurmat bilan, PROMAX Store!`;
+
+  const finalMatn = p.xabar_matni || standartMatn;
+
+  // Telegram linkini tayyorlash
+  let tgDestination = "";
+  let tgLabel = "";
+  if (m.telegram) {
+    let cleanTg = m.telegram.trim();
+    if (cleanTg.startsWith("https://t.me/")) cleanTg = cleanTg.replace("https://t.me/", "");
+    if (cleanTg.startsWith("http://t.me/")) cleanTg = cleanTg.replace("http://t.me/", "");
+    if (cleanTg.startsWith("t.me/")) cleanTg = cleanTg.replace("t.me/", "");
+    cleanTg = cleanTg.replace(/^@/, "");
+
+    if (cleanTg.startsWith("+") || /^\d+$/.test(cleanTg)) {
+      const phoneDigits = cleanTg.replace(/[^\d]/g, "");
+      tgDestination = `https://t.me/+${phoneDigits}?text=${encodeURIComponent(finalMatn)}`;
+    } else {
+      tgDestination = `https://t.me/${cleanTg}?text=${encodeURIComponent(finalMatn)}`;
+    }
+    tgLabel = `@${cleanTg}`;
+  } else if (m.telefon) {
+    const phoneDigits = m.telefon.replace(/[^\d]/g, "");
+    tgDestination = `https://t.me/+${phoneDigits}?text=${encodeURIComponent(finalMatn)}`;
+    tgLabel = m.telefon;
+  }
+
+  let text = `📩 <b>QARZ ESLATMASI TAYYORLANDI</b>\n\n` +
+    `👤 <b>Mijoz:</b> <b>${m.nom}</b>\n` +
+    `💵 <b>Umumiy qarzi:</b> ${qarzUzs > 0 ? `<b>${pul(qarzUzs)} so'm</b> ` : ""}${qarzUsd > 0 ? `<b>$${pul(qarzUsd)}</b>` : ""}\n` +
+    `📱 <b>Aloqa:</b> ${tgLabel ? `<b>${tgLabel}</b>` : "<i>(Telegram yoki telefon topilmadi)</i>"}\n\n` +
+    `✉️ <b>Yuboriladigan xabar:</b>\n` +
+    `<blockquote>${formatTelegramHtml(finalMatn)}</blockquote>\n\n` +
+    `<i>Xabarni mijozga shaxsan yuborish uchun quyidagi tasdiqlash tugmasini bosing:</i>`;
+
+  const buttons: any[] = [];
+  if (tgDestination) {
+    buttons.push([
+      { text: "📲 Telegram orqali yuborish (Tasdiqlash)", url: tgDestination },
+    ]);
+  }
+  buttons.push([
+    { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+  ]);
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
 // Yordamchi: Foydalanuvchi ruxsatini tekshirish
 async function checkUserPermission(
   telegramId?: number | string
@@ -432,12 +548,13 @@ Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilid
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 5 ta amal turidan birini aniqlang:
+Quyidagi 6 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
 3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
 4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
-5. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti).
+5. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash (masalan: "Akmal akaga qarzini eslat", "Anvar Angorga qarzi bo'yicha xabar yozish kerak", "Bahodir akaga qarz eslatmasini yubor").
+6. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti).
 
 JSON strukturasi 1-4 amallar uchun:
 {
@@ -462,6 +579,13 @@ JSON strukturasi 1-4 amallar uchun:
       "narx": 0.0
     }
   ]
+}
+
+JSON strukturasi "qarz_eslatma" amali uchun:
+{
+  "amal": "qarz_eslatma",
+  "mijoz_nomi": "Mijoz ismi yoki do'koni",
+  "xabar_matni": "Ixtiyoriy foydalanuvchi aytgan maxsus xabar matni yoki null (agar aytmagan bo'lsa)"
 }
 
 JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qidirish):
@@ -817,6 +941,50 @@ export default async function handler(req: any, res: any) {
         .eq("id", draftId);
 
       const nextCard = buildQarzTolovCard(draftId, p);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    if (data.startsWith("pk:em:")) {
+      // Qarz eslatmasida noaniq mijoz tanlandi: pk:em:draftId:mijozId
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const mId = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .single();
+
+      if (!draft) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Bu amal muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      const { data: selM } = await supabase
+        .from("mijozlar")
+        .select("*")
+        .eq("id", mId)
+        .single();
+      p.selectedMijoz = selM;
+      p.mijozStatus = "resolved";
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const nextCard = buildQarzEslatmaCard(draftId, p);
       await tgPost("editMessageText", {
         chat_id: chatId,
         message_id: msgId,
@@ -1694,7 +1862,33 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         return res.status(200).send("OK");
       }
 
-      // 3. RASXOD VA TOVAR KIRIMI UCHUN
+      // 3. QARZ ESLATMASI AMALI: MIJOZGA TELEGRAM XABAR TAYYORLASH
+      if (parsedData.amal === "qarz_eslatma") {
+        await resolveQarzEslatmaEntities(parsedData);
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const card = buildQarzEslatmaCard(draftId, parsedData);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // 4. RASXOD VA TOVAR KIRIMI UCHUN
       await getSupabase().from("tranzaksiya_qoralama").insert({
         id: draftId,
         malumot: parsedData,

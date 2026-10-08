@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { 
   Search, Phone, MapPin, HandCoins, CheckCircle, ChevronRight, 
-  Users, UserPlus, FileText, DollarSign, Wallet, Plus, X 
+  Users, UserPlus, FileText, DollarSign, Wallet, Plus, X,
+  MessageCircle, Send
 } from "lucide-react";
-import { MijozDetailsModal } from "./MijozDetailsModal";
+import { MijozDetailsModal, yuborTelegramEslatma, standartEslatmaMatni } from "./MijozDetailsModal";
 import { Combobox } from "./ui/Combobox";
 import { toast } from "sonner";
 
@@ -33,6 +34,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
   const [yangiMijozModalOchiq, setYangiMijozModalOchiq] = useState(false);
   const [yangiNom, setYangiNom] = useState("");
   const [yangiTelefon, setYangiTelefon] = useState("");
+  const [yangiTelegram, setYangiTelegram] = useState("");
   const [yangiManzil, setYangiManzil] = useState("");
   const [yangiQarzUzs, setYangiQarzUzs] = useState("");
   const [yangiQarzUsd, setYangiQarzUsd] = useState("");
@@ -139,6 +141,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
           nom: yangiNom.trim(),
           nom_norm: yangiNom.trim().toLowerCase(),
           telefon: yangiTelefon.trim() || null,
+          telegram: yangiTelegram.trim() || null,
           manzil: yangiManzil.trim() || null,
           qarz_uzs: Number(yangiQarzUzs) || 0,
           qarz_usd: Number(yangiQarzUsd) || 0,
@@ -158,6 +161,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       // Tozalash va modalni yopish
       setYangiNom("");
       setYangiTelefon("");
+      setYangiTelegram("");
       setYangiManzil("");
       setYangiQarzUzs("");
       setYangiQarzUsd("");
@@ -296,6 +300,11 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                           <Phone className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.telefon}
                         </span>
                       )}
+                      {m.telegram && (
+                        <span className="flex items-center gap-1 text-sky-600 dark:text-sky-400 font-semibold">
+                          <MessageCircle className="w-3 h-3 text-sky-500" /> {m.telegram}
+                        </span>
+                      )}
                       {m.manzil && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.manzil}
@@ -309,16 +318,30 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                     </div>
                   </div>
 
-                  {/* Qarz to'lash tugmasi */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      ochTolovModali(m);
-                    }}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs flex-shrink-0 active:scale-95 transition-transform text-xs"
-                  >
-                    <HandCoins className="w-3.5 h-3.5" /> To'lov
-                  </button>
+                  {/* Amallar: Eslatma va To'lov */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {(m.telegram || m.telefon) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          yuborTelegramEslatma(m, standartEslatmaMatni(m));
+                        }}
+                        title="Telegram orqali qarz eslatmasini yuborish"
+                        className="p-1.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900 text-sky-600 dark:text-sky-400 rounded-lg flex items-center justify-center transition-all active:scale-90 border border-sky-200 dark:border-sky-800"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ochTolovModali(m);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs active:scale-95 transition-transform text-xs"
+                    >
+                      <HandCoins className="w-3.5 h-3.5" /> To'lov
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -399,6 +422,11 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                         {m.telefon && (
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3 text-slate-400 dark:text-slate-500" /> {m.telefon}
+                          </span>
+                        )}
+                        {m.telegram && (
+                          <span className="flex items-center gap-1 text-sky-600 dark:text-sky-400 font-semibold">
+                            <MessageCircle className="w-3 h-3 text-sky-500" /> {m.telegram}
                           </span>
                         )}
                         {m.manzil && (
@@ -490,6 +518,18 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
                 value={yangiTelefon}
                 onChange={(e) => setYangiTelefon(e.target.value)}
                 placeholder="+998 90 123 45 67"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Telegram */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Telegram manzili:</label>
+              <input
+                type="text"
+                value={yangiTelegram}
+                onChange={(e) => setYangiTelegram(e.target.value)}
+                placeholder="@username yoki https://t.me/..."
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
