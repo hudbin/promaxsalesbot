@@ -944,7 +944,6 @@ export default async function handler(req: any, res: any) {
           `💵 To'landi: <b>${pul(tolangan)} ${valyuta}</b>\n` +
           `📝 Qarzga: <b>${pul(qarz)} ${valyuta}</b>\n` +
           `✍️ Sotuvchi: <b>${fromName}</b>`;
-      }
       } else if (p.amal === "tovar_kirim") {
         // Omborga tovar kirimi / yangi tovar qo'shish
         const tovarNomi = (p.tovar_nomi || "").trim();
