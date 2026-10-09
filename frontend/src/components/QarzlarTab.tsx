@@ -12,11 +12,12 @@ import { toast } from "sonner";
 interface QarzlarTabProps {
   xodimNomi?: string;
   telegramUserId?: number | string | null;
+  userRole?: string;
 }
 
 type SubTab = "qarzlar" | "mijozlar";
 
-export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) {
+export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }: QarzlarTabProps = {}) {
   const [subTab, setSubTab] = useState<SubTab>("qarzlar");
   const [barchaMijozlar, setBarchaMijozlar] = useState<any[]>([]);
   const [qidiruv, setQidiruv] = useState("");
@@ -247,17 +248,19 @@ export function QarzlarTab({ xodimNomi, telegramUserId }: QarzlarTabProps = {}) 
       {/* 1-TAB: QARZLAR (QARZDORLAR VA BALANS) */}
       {subTab === "qarzlar" && (
         <div className="space-y-3 animate-fade-in">
-          {/* Jami Qarzdorlik Balansi */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">So'mdagi jami qarz</span>
-              <p className="text-base font-black text-amber-950 dark:text-amber-200 tabular-nums mt-0.5">{pul(jamiQarzUZS)} so'm</p>
+          {/* Jami Qarzdorlik Balansi - Faqat Admin uchun */}
+          {userRole === "admin" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 p-2.5 rounded-xl shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">So'mdagi jami qarz</span>
+                <p className="text-base font-black text-amber-950 dark:text-amber-200 tabular-nums mt-0.5">{pul(jamiQarzUZS)} so'm</p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">Dollardagi jami qarz</span>
+                <p className="text-base font-black text-emerald-950 dark:text-emerald-200 tabular-nums mt-0.5">${pul(jamiQarzUSD)}</p>
+              </div>
             </div>
-            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 p-2.5 rounded-xl shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">Dollardagi jami qarz</span>
-              <p className="text-base font-black text-emerald-950 dark:text-emerald-200 tabular-nums mt-0.5">${pul(jamiQarzUSD)}</p>
-            </div>
-          </div>
+          )}
 
           {/* Qidiruv */}
           <div className="relative">

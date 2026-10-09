@@ -43,7 +43,7 @@ export default async function handler(req: any, res: any) {
     // 1. Savdolar
     const { data: savdolar, error: savdoErr } = await supabase
       .from("savdolar")
-      .select("*, mijoz:mijozlar(nom, telefon)")
+      .select("*, mijoz:mijozlar(nom, telefon), hisob:hisoblar(nom)")
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso)
       .order("sana_vaqt", { ascending: true });
@@ -53,7 +53,7 @@ export default async function handler(req: any, res: any) {
     // 2. Rasxodlar
     const { data: rasxodlar, error: rasxodErr } = await supabase
       .from("rasxodlar")
-      .select("*")
+      .select("*, hisob:hisoblar(nom)")
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso)
       .order("sana_vaqt", { ascending: true });
@@ -63,7 +63,7 @@ export default async function handler(req: any, res: any) {
     // 3. Qarz to'lovlari
     const { data: qarzTolovlari, error: qarzErr } = await supabase
       .from("qarz_tolovlari")
-      .select("*, mijoz:mijozlar(nom, telefon)")
+      .select("*, mijoz:mijozlar(nom, telefon), hisob:hisoblar(nom)")
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso)
       .order("sana_vaqt", { ascending: true });
@@ -114,9 +114,13 @@ export default async function handler(req: any, res: any) {
       else qaytganQarzUZS += s;
     });
 
-    const kassaMap: Record<string, number> = {};
+    const kassaMapList: any[][] = [];
     kassaBalans?.forEach((k) => {
-      kassaMap[k.kassa_turi] = Number(k.joriy_balans || 0);
+      if (k.valyuta === "USD") {
+        kassaMapList.push([k.kassa_nomi, 0, Number(k.joriy_balans || 0)]);
+      } else {
+        kassaMapList.push([k.kassa_nomi, Number(k.joriy_balans || 0), 0]);
+      }
     });
 
     // Excel yaratish
@@ -137,13 +141,10 @@ export default async function handler(req: any, res: any) {
       ["Sof Kassa Farqi (Tushum - Chiqim)", (tushganNaqdUZS + qaytganQarzUZS) - jamiChiqimUZS, (tushganNaqdUSD + qaytganQarzUSD) - jamiChiqimUSD],
       [],
       ["XARAJATLAR TAQSIMOTI (KATEGORIYALAR BO'YICHA):"],
-      ...Object.entries(rasxodKategoriyaMap).map(([kat, sum]) => [kat, sum]),
+      ...Object.entries(rasxodKategoriyaMap).map(([kat, sum]) => [kat, sum, ""]),
       [],
-      ["JORIY KASSA QOLDIG'I:"],
-      ["Naqd so'm kassasi", kassaMap["naqd_uzs"] || 0],
-      ["Naqd dollar kassasi", kassaMap["naqd_usd"] || 0],
-      ["Plastik karta kassasi", kassaMap["plastik_uzs"] || 0],
-      ["Bank hisob raqami", kassaMap["bank_uzs"] || 0],
+      ["JORIY HISOBLAR (KASSALAR) QOLDIG'I:"],
+      ...kassaMapList
     ];
     const wsXulosa = XLSX.utils.aoa_to_sheet(xulosaData);
     XLSX.utils.book_append_sheet(wb, wsXulosa, "Umumiy Xulosa");
@@ -161,7 +162,7 @@ export default async function handler(req: any, res: any) {
         "Qarz (Nasiya)": Number(s.qarz_summa || 0),
         "Valyuta": s.valyuta,
         "To'lov turi": s.tolov_turi || "-",
-        "Kassa": s.kassa_turi || "-",
+        "Hisob": s.hisob?.nom || "-",
         "Holat": s.holat,
         "Izoh": s.izoh || "",
       }));
@@ -178,7 +179,7 @@ export default async function handler(req: any, res: any) {
         "Summa": Number(r.summa || 0),
         "Valyuta": r.valyuta,
         "To'lov turi": r.tolov_turi || "-",
-        "Kassa": r.kassa_turi || "-",
+        "Hisob": r.hisob?.nom || "-",
         "Xodim": r.xodim || "-",
         "Izoh": r.izoh || "",
       }));
@@ -196,7 +197,7 @@ export default async function handler(req: any, res: any) {
         "Summa": Number(q.summa || 0),
         "Valyuta": q.valyuta,
         "To'lov turi": q.tolov_turi || "-",
-        "Kassa": q.kassa_turi || "-",
+        "Hisob": q.hisob?.nom || "-",
         "Xodim": q.xodim || "-",
         "Izoh": q.izoh || "",
       }));

@@ -26,6 +26,7 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
   const [yangiMijozTel, setYangiMijozTel] = useState("");
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
   const [muvaffaqiyat, setMuvaffaqiyat] = useState<string | null>(null);
+  const [hisoblar, setHisoblar] = useState<any[]>([]);
 
   // Tovarni savatga qo'shish/tahrirlash dialog oynasi (Modal)
   const [tovarModalOchiq, setTovarModalOchiq] = useState(false);
@@ -44,6 +45,13 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
 
     const { data: m } = await supabase.from("mijozlar").select("*").eq("faol", true).order("nom");
     if (m) setMijozlar(m);
+    
+    const { data: h } = await supabase.from("hisoblar").select("*").eq("faol", true);
+    if (h) {
+      setHisoblar(h);
+      if (h.length > 0) setKassaTuri(h[0].id);
+    }
+    
     setYuklanmoqda(false);
   }
 
@@ -563,9 +571,9 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
                   value={tolovTuri}
                   onChange={(val) => {
                     setTolovTuri(val);
-                    if (val === "plastik") setKassaTuri("plastik_uzs");
-                    else if (valyuta === "USD") setKassaTuri("naqd_usd");
-                    else setKassaTuri("naqd_uzs");
+                    // Dynamically set based on type
+                    const matching = hisoblar.find(h => h.turi === val && h.valyuta === valyuta);
+                    if (matching) setKassaTuri(matching.id);
                   }}
                   options={[
                     { value: "naqd", label: "Naqd pul", icon: "💵" },
@@ -580,12 +588,9 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
                   title="Kassani tanlang"
                   value={kassaTuri}
                   onChange={setKassaTuri}
-                  options={[
-                    { value: "naqd_uzs", label: "Naqd (So'm)" },
-                    { value: "naqd_usd", label: "Naqd (Dollar)" },
-                    { value: "plastik_uzs", label: "Plastik (So'm)" },
-                    { value: "bank_uzs", label: "Bank (So'm)" },
-                  ]}
+                  options={hisoblar.filter(h => h.valyuta === valyuta || h.valyuta === "BARCHASI").map(h => ({
+                    value: h.id, label: h.nom
+                  }))}
                 />
               </div>
             </div>

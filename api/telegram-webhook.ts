@@ -684,6 +684,19 @@ async function geminiTahlil(
     };
   }
 
+  // Hisoblarni bazadan olish
+  let hisoblarRo'yxatiText = "";
+  try {
+    const { data: hisoblar } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
+    if (hisoblar && hisoblar.length > 0) {
+      hisoblarRo'yxatiText = hisoblar.map((h: any, i: number) => `${i + 1}. ${h.nom} (ID: ${h.id})`).join("\n");
+    } else {
+      hisoblarRo'yxatiText = "Hisoblar topilmadi.";
+    }
+  } catch (err) {
+    hisoblarRo'yxatiText = "Hisoblar ro'yxatini olishda xato.";
+  }
+
   const prompt = `
 Siz ulgurji va chakana savdo (B2B) do'koni uchun buxgalter yordamchi AI hisoblanasiz.
 Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilida (lotin yoki kirill) matn yoki ovozli xabar yuboradi.
@@ -706,7 +719,7 @@ JSON strukturasi 1-4 amallar uchun:
   "jami_summa": 0.0,
   "tolangan_summa": 0.0,
   "tolov_turi": "naqd" | "plastik" | "perechisleniya",
-  "kassa_turi": "naqd_uzs" | "naqd_usd" | "plastik_uzs" | "bank_uzs",
+  "hisob_id": "eng mos hisob UUID raqami yoki null",
   "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo yoki qarz to'lovi bo'lsa, aks holda null),
   "kategoriya": "Ovqatlanish" | "Taksi" | "Elektr" | "Ijara" | "Oylik" | "Boshqa" (agar rasxod bo'lsa),
   "tovar_nomi": "Tovar nomi" (agar tovar_kirim bo'lsa),
@@ -760,11 +773,11 @@ Jadvallar va Maxsus Aqlli Funksiyalar (Smart AI Tools):
 3. DO'KON XULOSASI VA KO'RSATKICHLARI (Kassa, Savdo, Rasxod, Qarz):
    - Tayyor ko'rinish: view_ai_xulosa (jami_mijozlar_soni, qarzdor_mijozlar_soni, umumiy_qarz_uzs, umumiy_qarz_usd, ombordagi_jami_dona, kam_qolgan_tovarlar_soni, bugungi_savdo_uzs, bugungi_savdo_usd, bugungi_rasxod_uzs, bugungi_rasxod_usd)
    - Bugungi balans va savdo oboroti: view_bugungi_hisobot (savdo_uzs, savdo_usd, rasxod_uzs, rasxod_usd, qarz_tolov_uzs, qarz_tolov_usd)
-   - Kassa sandig'idagi naqd pul: view_kassa_balans (kassa_turi, valyuta, joriy_balans)
-   - Savdolar jadvali: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
+   - Kassa sandig'idagi naqd pul: view_kassa_balans (hisob_id, kassa_nomi, kassa_turi, valyuta, joriy_balans)
+   - Savdolar jadvali: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, hisob_id, holat, xodim)
      DIQQAT: Ustun nomi "tolov_turi" ('naqd', 'plastik', 'perechisleniya') - HECH QACHON "tolq_turi" yoki "tolov" deb xato yozmang!
-   - Rasxodlar: rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, kassa_turi, izoh, xodim)
-   - Qarz to'lovlari: qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, xodim)
+   - Rasxodlar: rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, hisob_id, izoh, xodim)
+   - Qarz to'lovlari: qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, hisob_id, xodim)
 
 Muhim Qidiruv va Mantiq Qoidalari:
 - SAVDO VA KASSA FARQI (O'TA MUHIM): Foydalanuvchi "Bugun qancha savdo bo'ldi?" yoki "Bugungi savdoning umumiy summasi" deb so'rasa, bu KASSA SANDIG'I EMAS, BUGUNGI SAVDO OBOROTI! Har doim "SELECT * FROM view_bugungi_hisobot" yoki "SELECT * FROM view_ai_xulosa" yozing! Agar savdo nasiyaga/qarzga bo'lsa, kassa 0 so'm bo'ladi, lekin savdo 0 EMAS!
@@ -775,13 +788,17 @@ Muhim Qidiruv va Mantiq Qoidalari:
 - STATISTIKA YOKI BUGUNGI KUN: "Bugun nima gap?", "Umumiy holat qanday?" deyilsa -> SELECT * FROM view_ai_xulosa yozing.
 - Faqat va faqat bitta SELECT so'rov yozing. So'rovni 1 qatorda, ikki qo'shtirnoq ichiga olib yozing.
 - Hozirgi vaqtni olish uchun now() yoki CURRENT_DATE ishlating.
-- Agar valyuta aytilmasa yoki "so'm", "ming", "mln" bo'lsa -> valyuta: "UZS", kassa_turi: "naqd_uzs" (agar plastik aytilmasa).
-- Agar "dollar", "$", "yashil" aytilsa -> valyuta: "USD", kassa_turi: "naqd_usd".
+- Agar valyuta aytilmasa yoki "so'm", "ming", "mln" bo'lsa -> valyuta: "UZS".
+- Agar "dollar", "$", "yashil" aytilsa -> valyuta: "USD".
 - Agar savdoda qarzga berilgan bo'lsa, tolangan_summa = naqd berilgani, qolgani avtomatik qarz bo'ladi.
-- Agar "obedga 60 ming ketdi" yoki "ovqatlanishga 60 ming ketdi" deyilsa: amal: "rasxod", kategoriya: "Ovqatlanish", jami_summa: 60000, valyuta: "UZS", kassa_turi: "naqd_uzs".
-- Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", kassa_turi: "naqd_usd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
+- Agar "obedga 60 ming ketdi" yoki "ovqatlanishga 60 ming ketdi" deyilsa: amal: "rasxod", kategoriya: "Ovqatlanish", jami_summa: 60000, valyuta: "UZS".
+- Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
 - Agar omborga tovar kelgani, kirim bo'lgani, yangi tovar qo'shilishi aytilsa:
   amal: "tovar_kirim", tovar_nomi: "...", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
+
+BAZADAGI MAVJUD HISOBLAR RO'YXATI (Kassalar):
+${hisoblarRo'yxatiText}
+Matndan kelib chiqib, pul qaysi hisobga tushgani yoki qaysi hisobdan chiqqanini aniqlang va "hisob_id" ga mos UUID ni yozing. Agar matnda aniq aytilmagan bo'lsa, eng to'g'ri keladiganini (masalan, Naqd UZS bo'lsa "Asosiy Do'kon Kassasi (Naqd UZS)") ni tanlang.
 `;
 
   const contents: any[] = [];
@@ -798,7 +815,7 @@ Muhim Qidiruv va Mantiq Qoidalari:
         .select("role, content")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(2);
       
       if (history && history.length > 0) {
         // Eski xabarlardan yangisiga qarab taxlash
@@ -1164,12 +1181,12 @@ export default async function handler(req: any, res: any) {
       let javobMatn = "";
 
       if (p.amal === "rasxod") {
-        await getSupabase().rpc("fn_rasxod_yaratish", {
+        await getSupabase().rpc("fn_rasxod_yaratish_v2", {
           p_summa: p.jami_summa,
           p_valyuta: p.valyuta || "UZS",
           p_kategoriya: p.kategoriya || "Boshqa",
           p_tolov_turi: p.tolov_turi || "naqd",
-          p_kassa_turi: p.kassa_turi || "naqd_uzs",
+          p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
@@ -1181,12 +1198,12 @@ export default async function handler(req: any, res: any) {
         const summa = Number(p.jami_summa) || 0;
 
         if (mijozId) {
-          const { error: tolovErr } = await getSupabase().rpc("fn_qarz_tolov_yaratish", {
+          const { error: tolovErr } = await getSupabase().rpc("fn_qarz_tolov_yaratish_v2", {
             p_mijoz_id: mijozId,
             p_summa: summa,
             p_valyuta: valyuta,
             p_tolov_turi: p.tolov_turi || "naqd",
-            p_kassa_turi: p.kassa_turi || "naqd_uzs",
+            p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
             p_izoh: p.izoh || "",
             p_xodim: fromName,
             p_telegram_user_id: cq.from?.id,
@@ -1218,12 +1235,12 @@ export default async function handler(req: any, res: any) {
         const qarz = Math.max(0, jami - tolangan);
         const valyuta = p.valyuta || "UZS";
 
-        const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish", {
+        const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish_v2", {
           p_mijoz_id: p.selectedMijoz?.id || null,
           p_valyuta: valyuta,
           p_tolangan: tolangan,
           p_tolov_turi: p.tolov_turi || "naqd",
-          p_kassa_turi: p.kassa_turi || "naqd_uzs",
+          p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,

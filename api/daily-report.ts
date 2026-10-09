@@ -16,8 +16,8 @@ function pul(n: number): string {
 }
 
 export default async function handler(req: any, res: any) {
-  if (!BOT_TOKEN || !GROUP_CHAT_ID) {
-    console.error("BOT_TOKEN yoki TELEGRAM_GROUP_ID sozlanmagan.");
+  if (!BOT_TOKEN) {
+    console.error("BOT_TOKEN sozlanmagan.");
     return res.status(500).json({ error: "Missing bot configuration" });
   }
 
@@ -78,11 +78,16 @@ export default async function handler(req: any, res: any) {
       else eskiQarzTushdiUZS += Number(q.summa || 0);
     });
 
-    // Kassa qoldiqlari xaritasi
-    const kassaMap: Record<string, number> = {};
+    // Kassa qoldiqlari xaritasi (Dinamik Hisoblar)
+    const kassaMatnList: string[] = [];
     kassaBalans?.forEach((k) => {
-      kassaMap[k.kassa_turi] = Number(k.joriy_balans || 0);
+      let valIcon = k.valyuta === "USD" ? "💲" : "💵";
+      if (k.kassa_turi === "plastik") valIcon = "💳";
+      if (k.kassa_turi === "bank") valIcon = "🏦";
+      const summaPul = k.valyuta === "USD" ? `$${pul(k.joriy_balans || 0)}` : `${pul(k.joriy_balans || 0)} so'm`;
+      kassaMatnList.push(`   ${valIcon} ${k.kassa_nomi}: <b>${summaPul}</b>`);
     });
+    const kassaMatn = kassaMatnList.length > 0 ? kassaMatnList.join("\n") : "   <i>Hisoblar bo'sh</i>";
 
     // Telegram uchun xabar matnini tuzish
     const kun = new Date().toLocaleDateString("ru-RU");
@@ -102,22 +107,29 @@ export default async function handler(req: any, res: any) {
       `🧾 <b>XARAJATLAR (RASXOD):</b>\n` +
       `   • Jami chiqim: <b>${pul(rasxodUZS)} so'm</b> ${rasxodUSD > 0 ? `| <b>$${pul(rasxodUSD)}</b>` : ""}\n` +
       (katMatn ? `${katMatn}\n\n` : `\n`) +
-      `💰 <b>KASSA QOLDIG'I (JORIY HOLAT):</b>\n` +
-      `   💵 Naqd so'm: <b>${pul(kassaMap["naqd_uzs"] || 0)} so'm</b>\n` +
-      `   💲 Naqd dollar: <b>$${pul(kassaMap["naqd_usd"] || 0)}</b>\n` +
-      `   💳 Plastik karta: <b>${pul(kassaMap["plastik_uzs"] || 0)} so'm</b>\n` +
-      `   🏦 Bank hisobi: <b>${pul(kassaMap["bank_uzs"] || 0)} so'm</b>\n\n` +
+      `💰 <b>HISOB-KITOB (KASSALAR) JORIY HOLATI:</b>\n` +
+      `${kassaMatn}\n\n` +
       `📱 <i>Batafsil ro'yxat va filtrlash — Mini App ilovasida.</i>`;
 
-    await fetch(`${TELEGRAM_API}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: GROUP_CHAT_ID,
-        text: matn,
-        parse_mode: "HTML",
-      }),
-    });
+    // Adminlarni bazadan olish
+    const { data: adminlar } = await supabase.from("xodimlar").select("telegram_id").eq("rol", "admin").eq("faol", true);
+    let adminList = adminlar?.map((a) => a.telegram_id) || [];
+    if (adminList.length === 0) {
+      // Agar bazada admin topilmasa, fallback sifatida asosiy guruhga jo'natamiz
+      adminList = [GROUP_CHAT_ID];
+    }
+
+    for (const chatId of adminList) {
+      await fetch(`${TELEGRAM_API}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: matn,
+          parse_mode: "HTML",
+        }),
+      });
+    }
 
     console.log("Kunlik hisobot guruhga yuborildi:", today);
     return res.status(200).json({ ok: true, message: "Report sent" });

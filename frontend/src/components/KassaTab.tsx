@@ -2,17 +2,24 @@ import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { 
   ArrowDownLeft, ArrowUpRight, Wallet, CreditCard, Building2, 
-  DollarSign, History, ChevronRight, Filter, Layers 
+  DollarSign, History, ChevronRight, ArrowRightLeft 
 } from "lucide-react";
 import { KassaDetailsModal } from "./KassaDetailsModal";
+import { TransferModal } from "./TransferModal";
 
 type AmalFilter = "hammasi" | "kirim" | "chiqim";
 
-export function KassaTab() {
-  const [balanslar, setBalanslar] = useState<Record<string, number>>({});
+interface Props {
+  userRole?: string;
+}
+
+export function KassaTab({ userRole = "sotuvchi" }: Props) {
+  const [balanslar, setBalanslar] = useState<any[]>([]);
+  const [hisoblar, setHisoblar] = useState<any[]>([]);
   const [harakatlar, setHarakatlar] = useState<any[]>([]);
   const [amalFilter, setAmalFilter] = useState<AmalFilter>("hammasi");
   const [tanlanganHarakat, setTanlanganHarakat] = useState<any>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
 
   useEffect(() => {
@@ -21,20 +28,18 @@ export function KassaTab() {
 
   async function yuklaKassa() {
     setYuklanmoqda(true);
-    // 1. Jonli balanslar
+    // 1. Jonli balanslar (view dan)
     const { data: b } = await supabase.from("view_kassa_balans").select("*");
-    if (b) {
-      const xarita: Record<string, number> = {};
-      b.forEach((item: any) => {
-        xarita[item.kassa_turi] = Number(item.joriy_balans || 0);
-      });
-      setBalanslar(xarita);
-    }
+    if (b) setBalanslar(b);
 
-    // 2. Oxirgi 50 ta kassa harakati
+    // 2. Active hisoblar
+    const { data: hList } = await supabase.from("hisoblar").select("*").eq("faol", true);
+    if (hList) setHisoblar(hList);
+
+    // 3. Oxirgi 50 ta kassa harakati
     const { data: h } = await supabase
       .from("kassa_harakatlari")
-      .select("*")
+      .select("*, hisob:hisoblar(nom)")
       .order("sana_vaqt", { ascending: false })
       .limit(50);
 
@@ -54,79 +59,52 @@ export function KassaTab() {
 
   function getManbaYozuv(manba: string) {
     switch (manba) {
-      case "savdo":
-        return "Savdo tushumi";
-      case "rasxod":
-        return "Xarajat (Rasxod)";
-      case "qarz_tolov":
-        return "Qarz to'lovi";
-      case "kassalar_aro":
-        return "Kassalar aro";
-      case "boshlangich":
-        return "Boshlang'ich";
-      default:
-        return manba || "Boshqa";
-    }
-  }
-
-  function getKassaBadge(kassa: string) {
-    switch (kassa) {
-      case "naqd_uzs":
-        return "Naqd UZS";
-      case "naqd_usd":
-        return "Naqd USD";
-      case "plastik_uzs":
-        return "Plastik";
-      case "bank_uzs":
-        return "Bank";
-      default:
-        return kassa;
+      case "savdo": return "Savdo tushumi";
+      case "rasxod": return "Xarajat (Rasxod)";
+      case "qarz_tolov": return "Qarz to'lovi";
+      case "kassalar_aro": return "Kassalar aro";
+      case "transfer": return "O'tkazma";
+      case "boshlangich": return "Boshlang'ich";
+      default: return manba || "Boshqa";
     }
   }
 
   return (
     <div className="space-y-3 pb-8">
-      {/* 4 Ta Kassa Balans Kartochkalari (Ixcham va chiroyli) */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Naqd So'm */}
-        <div className="bg-emerald-600 text-white p-2.5 rounded-xl shadow-2xs space-y-0.5">
-          <div className="flex items-center gap-1.5 opacity-85">
-            <Wallet className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Naqd (So'm)</span>
-          </div>
-          <p className="text-base font-black tabular-nums leading-tight">{pul(balanslar["naqd_uzs"] || 0)}</p>
-          <p className="text-[10px] font-medium text-emerald-100">so'm</p>
-        </div>
+      {/* 4 Ta Kassa Balans Kartochkalari (Ixcham va chiroyli) - Faqat Admin uchun */}
+      {userRole === "admin" && (
+        <div className="grid grid-cols-2 gap-2">
+          {balanslar.map((b) => {
+            let Icon = Wallet;
+            let bgColor = "bg-emerald-600";
+            let textColor = "text-emerald-100";
+            if (b.valyuta === "USD") { Icon = DollarSign; bgColor = "bg-amber-600"; textColor = "text-amber-100"; }
+            if (b.kassa_turi === "plastik") { Icon = CreditCard; bgColor = "bg-blue-600"; textColor = "text-blue-100"; }
+            if (b.kassa_turi === "bank") { Icon = Building2; bgColor = "bg-purple-700"; textColor = "text-purple-100"; }
 
-        {/* Naqd Dollar */}
-        <div className="bg-amber-600 text-white p-2.5 rounded-xl shadow-2xs space-y-0.5">
-          <div className="flex items-center gap-1.5 opacity-85">
-            <DollarSign className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Naqd (Dollar)</span>
-          </div>
-          <p className="text-base font-black tabular-nums leading-tight">${pul(balanslar["naqd_usd"] || 0)}</p>
-          <p className="text-[10px] font-medium text-amber-100">AQSH dollari</p>
+            return (
+              <div key={b.hisob_id} className={`${bgColor} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5`}>
+                <div className="flex items-center gap-1.5 opacity-85">
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{b.kassa_nomi}</span>
+                </div>
+                <p className="text-base font-black tabular-nums leading-tight">
+                  {b.valyuta === "USD" ? "$" : ""}{pul(b.joriy_balans)}
+                </p>
+                <p className={`text-[10px] font-medium ${textColor}`}>{b.valyuta}</p>
+              </div>
+            );
+          })}
         </div>
+      )}
 
-        {/* Plastik Karta */}
-        <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow-2xs space-y-0.5">
-          <div className="flex items-center gap-1.5 opacity-85">
-            <CreditCard className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Plastik karta</span>
-          </div>
-          <p className="text-base font-black tabular-nums leading-tight">{pul(balanslar["plastik_uzs"] || 0)}</p>
-          <p className="text-[10px] font-medium text-blue-100">so'm</p>
-        </div>
-
-        {/* Bank Hisobi */}
-        <div className="bg-purple-700 text-white p-2.5 rounded-xl shadow-2xs space-y-0.5">
-          <div className="flex items-center gap-1.5 opacity-85">
-            <Building2 className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Bank hisobi</span>
-          </div>
-          <p className="text-base font-black tabular-nums leading-tight">{pul(balanslar["bank_uzs"] || 0)}</p>
-          <p className="text-[10px] font-medium text-purple-100">so'm (bank)</p>
-        </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => { haptic("light"); setShowTransfer(true); }}
+          className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+        >
+          <ArrowRightLeft className="w-4 h-4" /> Pul O'tkazish
+        </button>
       </div>
 
       {/* Pul Harakati Oqimi (Journal / Audit Trail) */}
@@ -137,9 +115,6 @@ export function KassaTab() {
             <h3 className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
               <History className="w-4 h-4 text-slate-500 dark:text-slate-400" /> Pul Oqimi Jurnali
             </h3>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-              To'liq tafsilotlar (kim, nima, qanday to'lov) uchun qator ustiga bosing
-            </p>
           </div>
           <button
             onClick={() => {
@@ -147,135 +122,60 @@ export function KassaTab() {
               haptic("light");
             }}
             disabled={yuklanmoqda}
-            className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg active:scale-95 transition-all flex-shrink-0"
+            className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg active:scale-95 transition-all flex-shrink-0"
           >
             {yuklanmoqda ? "..." : "Yangilash ⟳"}
           </button>
         </div>
 
-        {/* FILTR TUGMALARI: BARCHASI | KIRIM | CHIQIM */}
+        {/* FILTR TUGMALARI */}
         <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
           <button
-            onClick={() => {
-              setAmalFilter("hammasi");
-              haptic("light");
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
-              amalFilter === "hammasi"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-            }`}
-          >
-            <span>Barchasi</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "hammasi" ? "bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200" : "bg-slate-200/60 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400"
-            }`}>
-              {harakatlar.length}
-            </span>
-          </button>
-
+            onClick={() => { setAmalFilter("hammasi"); haptic("light"); }}
+            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "hammasi" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+          >Barchasi</button>
           <button
-            onClick={() => {
-              setAmalFilter("kirim");
-              haptic("light");
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
-              amalFilter === "kirim"
-                ? "bg-emerald-600 text-white shadow-sm"
-                : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40"
-            }`}
-          >
-            <ArrowDownLeft className="w-3 h-3" />
-            <span>Kirim</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "kirim" ? "bg-white/20 text-white" : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300"
-            }`}>
-              {kirimlar.length}
-            </span>
-          </button>
-
+            onClick={() => { setAmalFilter("kirim"); haptic("light"); }}
+            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "kirim" ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700"}`}
+          ><ArrowDownLeft className="w-3 h-3" /> Kirim</button>
           <button
-            onClick={() => {
-              setAmalFilter("chiqim");
-              haptic("light");
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${
-              amalFilter === "chiqim"
-                ? "bg-rose-600 text-white shadow-sm"
-                : "text-rose-700 dark:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/40"
-            }`}
-          >
-            <ArrowUpRight className="w-3 h-3" />
-            <span>Chiqim</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-              amalFilter === "chiqim" ? "bg-white/20 text-white" : "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300"
-            }`}>
-              {chiqimlar.length}
-            </span>
-          </button>
+            onClick={() => { setAmalFilter("chiqim"); haptic("light"); }}
+            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "chiqim" ? "bg-rose-600 text-white shadow-sm" : "text-rose-700"}`}
+          ><ArrowUpRight className="w-3 h-3" /> Chiqim</button>
         </div>
 
         {/* Harakatlar Ro'yxati */}
         <div className="space-y-1.5">
           {saralanganHarakatlar.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs font-medium">
-              {amalFilter === "kirim" ? "Kirim harakatlari topilmadi." : 
-               amalFilter === "chiqim" ? "Chiqim harakatlari topilmadi." : 
-               "Kassa harakatlari mavjud emas."}
-            </div>
+            <div className="text-center py-8 text-slate-400 text-xs font-medium">Harakatlar topilmadi.</div>
           ) : (
             saralanganHarakatlar.map((h) => {
               const kirimmi = h.amal === "kirim";
               return (
                 <div
                   key={h.id}
-                  onClick={() => {
-                    setTanlanganHarakat(h);
-                    haptic("light");
-                  }}
-                  className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer active:bg-slate-100 dark:active:bg-slate-800 transition-all group shadow-2xs"
+                  onClick={() => { setTanlanganHarakat(h); haptic("light"); }}
+                  className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border hover:border-slate-300 cursor-pointer active:bg-slate-100 transition-all group shadow-2xs"
                 >
                   <div className="flex items-center gap-2.5 min-w-0 pr-1">
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        kirimmi ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400" : "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400"
-                      }`}
-                    >
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${kirimmi ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                       {kirimmi ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                     </div>
-
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate leading-tight">
-                          {getManbaYozuv(h.manba_turi)}
-                        </span>
-                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase flex-shrink-0">
-                          {getKassaBadge(h.kassa_turi)}
-                        </span>
+                        <span className="font-bold text-xs group-hover:text-indigo-600 truncate">{getManbaYozuv(h.manba_turi)}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-slate-200 uppercase">{h.hisob?.nom || h.kassa_turi}</span>
                       </div>
-                      
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[190px] mt-0.5">
-                        {h.izoh || (kirimmi ? "Savdo / To'lov tushumi" : "Xarajat")}
-                      </p>
+                      <p className="text-[11px] text-slate-500 truncate max-w-[190px] mt-0.5">{h.izoh || (kirimmi ? "Tushum" : "Xarajat")}</p>
                     </div>
                   </div>
-
                   <div className="text-right flex items-center gap-2 flex-shrink-0">
                     <div>
-                      <span
-                        className={`font-black text-xs tabular-nums block ${
-                          kirimmi ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"
-                        }`}
-                      >
-                        {kirimmi ? "+" : "−"}
-                        {pul(h.summa)} {h.valyuta}
+                      <span className={`font-black text-xs tabular-nums block ${kirimmi ? "text-emerald-700" : "text-rose-700"}`}>
+                        {kirimmi ? "+" : "−"}{pul(h.summa)} {h.valyuta}
                       </span>
-                      <p className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
-                        {new Date(h.sana_vaqt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}{" "}
-                        {new Date(h.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                      </p>
                     </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
                   </div>
                 </div>
               );
@@ -284,15 +184,18 @@ export function KassaTab() {
         </div>
       </div>
 
-      {/* Kassa Harakati Tafsilotlari Modali (To'liq savdo/tovar/mijoz ma'lumotlari) */}
       {tanlanganHarakat && (
         <KassaDetailsModal
           harakat={tanlanganHarakat}
           onClose={() => setTanlanganHarakat(null)}
-          onYangilandi={() => {
-            yuklaKassa();
-            setTanlanganHarakat(null);
-          }}
+          onYangilandi={() => { yuklaKassa(); setTanlanganHarakat(null); }}
+        />
+      )}
+      {showTransfer && (
+        <TransferModal 
+          hisoblar={hisoblar} 
+          onClose={() => setShowTransfer(false)} 
+          onSuccess={() => { setShowTransfer(false); yuklaKassa(); }} 
         />
       )}
     </div>

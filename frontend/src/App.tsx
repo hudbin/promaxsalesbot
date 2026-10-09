@@ -462,9 +462,10 @@ export default function App() {
           <QarzlarTab
             xodimNomi={telegramFoydalanuvchi}
             telegramUserId={currentUserTgId}
+            userRole={currentUserRole}
           />
         )}
-        {faolTab === "kassa" && <KassaTab />}
+        {faolTab === "kassa" && <KassaTab userRole={currentUserRole} />}
         {faolTab === "ombor" && <OmborTab />}
         {faolTab === "hisobotlar" && (
           <HisobotlarTab
@@ -550,18 +551,20 @@ export default function App() {
             <span className="text-[10px] mt-0.5 tracking-tight">Ombor</span>
           </button>
 
-          {/* 6. Hisobotlar */}
-          <button
-            onClick={() => tabOzgarti("hisobotlar")}
-            className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
-              faolTab === "hisobotlar"
-                ? "bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 font-bold"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
-            }`}
-          >
-            <BarChart className={`w-5 h-5 ${faolTab === "hisobotlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Hisobot</span>
-          </button>
+          {/* 6. Hisobotlar (Faqat Admin) */}
+          {currentUserRole === "admin" && (
+            <button
+              onClick={() => tabOzgarti("hisobotlar")}
+              className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
+                faolTab === "hisobotlar"
+                  ? "bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 font-bold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+              }`}
+            >
+              <BarChart className={`w-5 h-5 ${faolTab === "hisobotlar" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
+              <span className="text-[10px] mt-0.5 tracking-tight">Hisobot</span>
+            </button>
+          )}
         </div>
       </nav>
       <Toaster />
