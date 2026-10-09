@@ -1360,10 +1360,13 @@ export default async function handler(req: any, res: any) {
           return res.status(200).send("OK");
         }
 
+        const { data: hList } = await getSupabase().from("hisoblar").select("id, nom").in("id", [p.chiqim_hisob_id, p.kirim_hisob_id]);
+        const getHNom = (id: string) => hList?.find((h: any) => h.id === id)?.nom || id;
+
         javobMatn = `✅ <b>PUL O'TKAZMA MUVAFFAQIYATLI BAJARILDI</b>\n\n` +
           `💰 Summa: <b>${pul(p.jami_summa)} ${p.valyuta || "UZS"}</b>\n` +
-          `📤 Qayerdan (ID): <b>${p.chiqim_hisob_id}</b>\n` +
-          `📥 Qayerga (ID): <b>${p.kirim_hisob_id}</b>\n` +
+          `📤 Qayerdan: <b>${getHNom(p.chiqim_hisob_id)}</b>\n` +
+          `📥 Qayerga: <b>${getHNom(p.kirim_hisob_id)}</b>\n` +
           `✍️ Bajardi: <b>${fromName}</b>`;
       }
 
@@ -2110,12 +2113,15 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         yaratildi: new Date().toISOString(),
       });
 
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom");
+      const getHisobNom = (id: string) => hisoblarDB?.find((h: any) => h.id === id)?.nom || id || "Kiritilmagan";
+
       let preview = "";
       if (parsedData.amal === "rasxod") {
         preview = `🧾 <b>XARAJAT (RASXOD) ANIQLANDI</b>\n\n` +
           `💵 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
           `📂 Kategoriya: <b>${parsedData.kategoriya || "Boshqa"}</b>\n` +
-          `💳 To'lov: <b>${parsedData.tolov_turi || "Naqd"}</b>\n` +
+          `💳 Hisobdan: <b>${getHisobNom(parsedData.hisob_id)}</b>\n` +
           (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
       } else if (parsedData.amal === "tovar_kirim") {
         const jamiTannarx = (parsedData.soni || 0) * (parsedData.tannarx || 0);
@@ -2129,8 +2135,8 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
       } else if (parsedData.amal === "pul_otkazma") {
         preview = `🔄 <b>PUL O'TKAZMA (TRANSFER) ANIQLANDI</b>\n\n` +
           `💰 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-          `📤 Qayerdan (ID): <b>${parsedData.chiqim_hisob_id || "Kiritilmagan"}</b>\n` +
-          `📥 Qayerga (ID): <b>${parsedData.kirim_hisob_id || "Kiritilmagan"}</b>\n` +
+          `📤 Qayerdan: <b>${getHisobNom(parsedData.chiqim_hisob_id)}</b>\n` +
+          `📥 Qayerga: <b>${getHisobNom(parsedData.kirim_hisob_id)}</b>\n` +
           (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
       }
 
