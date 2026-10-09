@@ -1,0 +1,1 @@
+{ "compilerOptions": { "target": "ESNext", "module": "CommonJS", "esModuleInterop": true, "skipLibCheck": true, "strict": true } }

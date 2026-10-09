@@ -498,7 +498,7 @@ async function checkUserPermission(
 
   // 1. Netlify muhit o'zgaruvchisidagi ADMIN_TELEGRAM_ID
   if (ADMIN_TELEGRAM_ID) {
-    const adminIds = ADMIN_TELEGRAM_ID.split(",").map((s) => s.trim());
+    const adminIds = ADMIN_TELEGRAM_ID.split(",").map((s: string) => s.trim());
     if (adminIds.includes(idStr)) {
       return { isAllowed: true, role: "admin" };
     }
@@ -685,16 +685,16 @@ async function geminiTahlil(
   }
 
   // Hisoblarni bazadan olish
-  let hisoblarRo'yxatiText = "";
+  let hisoblarRoyxatiText = "";
   try {
     const { data: hisoblar } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
     if (hisoblar && hisoblar.length > 0) {
-      hisoblarRo'yxatiText = hisoblar.map((h: any, i: number) => `${i + 1}. ${h.nom} (ID: ${h.id})`).join("\n");
+      hisoblarRoyxatiText = hisoblar.map((h: any, i: number) => `${i + 1}. ${h.nom} (ID: ${h.id})`).join("\n");
     } else {
-      hisoblarRo'yxatiText = "Hisoblar topilmadi.";
+      hisoblarRoyxatiText = "Hisoblar topilmadi.";
     }
   } catch (err) {
-    hisoblarRo'yxatiText = "Hisoblar ro'yxatini olishda xato.";
+    hisoblarRoyxatiText = "Hisoblar ro'yxatini olishda xato.";
   }
 
   const prompt = `
@@ -797,7 +797,7 @@ Muhim Qidiruv va Mantiq Qoidalari:
   amal: "tovar_kirim", tovar_nomi: "...", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
 
 BAZADAGI MAVJUD HISOBLAR RO'YXATI (Kassalar):
-${hisoblarRo'yxatiText}
+${hisoblarRoyxatiText}
 Matndan kelib chiqib, pul qaysi hisobga tushgani yoki qaysi hisobdan chiqqanini aniqlang va "hisob_id" ga mos UUID ni yozing. Agar matnda aniq aytilmagan bo'lsa, eng to'g'ri keladiganini (masalan, Naqd UZS bo'lsa "Asosiy Do'kon Kassasi (Naqd UZS)") ni tanlang.
 `;
 
@@ -1642,9 +1642,9 @@ export default async function handler(req: any, res: any) {
 
     if (ADMIN_TELEGRAM_ID) {
       ADMIN_TELEGRAM_ID.split(",")
-        .map((s) => s.trim())
+        .map((s: string) => s.trim())
         .filter(Boolean)
-        .forEach((id) => adminTargets.add(id));
+        .forEach((id: string) => adminTargets.add(id));
     }
 
     try {
@@ -1782,6 +1782,9 @@ export default async function handler(req: any, res: any) {
   let geminiRes: { ok: boolean; data?: any; error?: string } | null = null;
 
   if (voice) {
+    // Tepadagi status: Yozayapti yoki Ovoz yozayapti
+    await tgPost("sendChatAction", { chat_id: chatId, action: "record_voice" });
+
     await tgPost("sendMessage", {
       chat_id: chatId,
       text: "🎙 <i>Ovoz eshitilmoqda va tahlil qilinmoqda...</i>",
@@ -1821,6 +1824,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send("OK");
     }
   } else if (text && !text.startsWith("/")) {
+    await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
     // Matnli xabarni xotiraga saqlash
     await getSupabase().from("ai_chat_history").insert({
       chat_id: chatId,
