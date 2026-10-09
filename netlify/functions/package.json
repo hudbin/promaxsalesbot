@@ -1,9 +1,0 @@
-{
-  "name": "promax-functions",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "@netlify/functions": "^2.8.2",
-    "@supabase/supabase-js": "^2.49.1"
-  }
-}
