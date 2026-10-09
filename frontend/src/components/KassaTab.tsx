@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { 
   ArrowDownLeft, ArrowUpRight, Wallet, CreditCard, Building2, 
-  DollarSign, History, ChevronRight, ArrowRightLeft 
+  DollarSign, History, ChevronRight, ArrowRightLeft, Settings
 } from "lucide-react";
 import { KassaDetailsModal } from "./KassaDetailsModal";
 import { TransferModal } from "./TransferModal";
+import { HisoblarModal } from "./HisoblarModal";
 
 type AmalFilter = "hammasi" | "kirim" | "chiqim";
 
@@ -20,6 +21,7 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
   const [amalFilter, setAmalFilter] = useState<AmalFilter>("hammasi");
   const [tanlanganHarakat, setTanlanganHarakat] = useState<any>(null);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showHisoblar, setShowHisoblar] = useState(false);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
 
   useEffect(() => {
@@ -105,6 +107,14 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
         >
           <ArrowRightLeft className="w-4 h-4" /> Pul O'tkazish
         </button>
+        {userRole === "admin" && (
+          <button
+            onClick={() => { haptic("light"); setShowHisoblar(true); }}
+            className="flex-none px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-md active:scale-95"
+          >
+            <Settings className="w-4 h-4" /> Hisoblar
+          </button>
+        )}
       </div>
 
       {/* Pul Harakati Oqimi (Journal / Audit Trail) */}
@@ -162,9 +172,9 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
                       {kirimmi ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-xs group-hover:text-indigo-600 truncate">{getManbaYozuv(h.manba_turi)}</span>
-                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-slate-200 uppercase">{h.hisob?.nom || h.kassa_turi}</span>
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[130px]">{h.hisob?.nom || h.kassa_turi}</span>
                       </div>
                       <p className="text-[11px] text-slate-500 truncate max-w-[190px] mt-0.5">{h.izoh || (kirimmi ? "Tushum" : "Xarajat")}</p>
                     </div>
@@ -196,6 +206,13 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
           hisoblar={hisoblar} 
           onClose={() => setShowTransfer(false)} 
           onSuccess={() => { setShowTransfer(false); yuklaKassa(); }} 
+        />
+      )}
+      {showHisoblar && (
+        <HisoblarModal
+          hisoblar={hisoblar}
+          onClose={() => setShowHisoblar(false)}
+          onSuccess={() => { yuklaKassa(); }}
         />
       )}
     </div>
