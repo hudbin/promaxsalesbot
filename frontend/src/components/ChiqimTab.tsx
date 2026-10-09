@@ -25,12 +25,13 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
   const [tanlanganKat, setTanlanganKat] = useState("Ovqatlanish");
   const [tolovTuri, setTolovTuri] = useState("naqd");
-  const [kassaTuri, setKassaTuri] = useState("naqd_uzs");
   const [izoh, setIzoh] = useState("");
   const [bugungiRasxodlar, setBugungiRasxodlar] = useState<any[]>([]);
   const [tanlanganChiqim, setTanlanganChiqim] = useState<any>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
   const [xabar, setXabar] = useState<string | null>(null);
+  const [hisoblar, setHisoblar] = useState<any[]>([]);
+  const [hisobId, setHisobId] = useState<string | null>(null);
 
   useEffect(() => {
     yuklaRasxodlar();
@@ -38,14 +39,20 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
 
   async function yuklaRasxodlar() {
     const today = new Date().toISOString().split("T")[0];
-    const { data } = await supabase
+    const { data: rData } = await supabase
       .from("rasxodlar")
-      .select("*")
+      .select("*, hisob:hisoblar(nom)")
       .gte("sana_vaqt", `${today}T00:00:00Z`)
       .eq("holat", "faol")
       .order("sana_vaqt", { ascending: false });
 
-    if (data) setBugungiRasxodlar(data);
+    if (rData) setBugungiRasxodlar(rData);
+
+    const { data: hData } = await supabase.from("hisoblar").select("*").eq("faol", true);
+    if (hData && hData.length > 0) {
+      setHisoblar(hData);
+      setHisobId(hData[0].id);
+    }
   }
 
   async function rasxodSaqla() {
@@ -54,17 +61,21 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
       alert("Iltimos, summani kiriting!");
       return;
     }
+    if (!hisobId) {
+      alert("Iltimos, hisobni tanlang!");
+      return;
+    }
 
     setYuklanmoqda(true);
     haptic("medium");
 
     try {
-      const { data, error } = await supabase.rpc("fn_rasxod_yaratish", {
+      const { data, error } = await supabase.rpc("fn_rasxod_yaratish_v2", {
         p_summa: sonSumma,
         p_valyuta: valyuta,
         p_kategoriya: tanlanganKat,
         p_tolov_turi: tolovTuri,
-        p_kassa_turi: kassaTuri,
+        p_hisob_id: hisobId,
         p_izoh: izoh.trim() || null,
         p_xodim: xodimNomi || "Mini App",
         p_telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
@@ -136,7 +147,8 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
             onClick={() => {
               const yangi = valyuta === "UZS" ? "USD" : "UZS";
               setValyuta(yangi);
-              setKassaTuri(yangi === "USD" ? "naqd_usd" : "naqd_uzs");
+              const mosHisob = hisoblar.find(h => h.valyuta === yangi && h.turi === tolovTuri);
+              if (mosHisob) setHisobId(mosHisob.id);
               haptic("light");
             }}
             className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1"
@@ -205,9 +217,9 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
             value={tolovTuri}
             onChange={(val) => {
               setTolovTuri(val);
-              if (val === "plastik") setKassaTuri("plastik_uzs");
-              else if (valyuta === "USD") setKassaTuri("naqd_usd");
-              else setKassaTuri("naqd_uzs");
+              // Avtomatik mos hisobni topishga harakat qilamiz
+              const mosHisob = hisoblar.find(h => h.valyuta === valyuta && h.turi === val);
+              if (mosHisob) setHisobId(mosHisob.id);
             }}
             options={[
               { value: "naqd", label: "Naqd pul", icon: "💵" },
@@ -217,17 +229,15 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
           />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Qaysi kassadan chiqdi:</label>
+          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Qaysi hisobdan chiqdi:</label>
           <Combobox
-            title="Kassani tanlang"
-            value={kassaTuri}
-            onChange={setKassaTuri}
-            options={[
-              { value: "naqd_uzs", label: "Naqd (So'm)" },
-              { value: "naqd_usd", label: "Naqd (Dollar)" },
-              { value: "plastik_uzs", label: "Plastik karta" },
-              { value: "bank_uzs", label: "Bank hisobi" },
-            ]}
+            title="Hisobni tanlang"
+            value={hisobId || ""}
+            onChange={setHisobId}
+            options={hisoblar.map(h => ({
+              value: h.id,
+              label: `${h.nom} (${h.valyuta})`,
+            }))}
           />
         </div>
       </div>
@@ -277,7 +287,7 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
                   </div>
                   <span className="text-[10px] text-slate-400 dark:text-slate-500">
                     {new Date(r.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} ·{" "}
-                    {r.tolov_turi}
+                    {r.hisob?.nom || r.tolov_turi}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
