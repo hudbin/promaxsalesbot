@@ -703,14 +703,15 @@ Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilid
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 7 ta amal turidan birini aniqlang:
+Quyidagi 8 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
 3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
 4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
-5. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash (masalan: "Akmal akaga qarzini eslat", "Anvar Angorga qarzi bo'yicha xabar yozish kerak", "Bahodir akaga qarz eslatmasini yubor").
-6. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozlar qarzini PDF fayl/hujjat ko'rinishida so'raganda (masalan: "Qarzdorlar ro'yxatini PDF qilib ber", "Qarzlar ro'yxatini PDF jo'nat", "Mijozlar qarzini PDF qilib tashla", "Qarzdorlarni PDF fayl qilib ber", "Qarzdorlar PDF").
-7. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya kiritmayapti va PDF so'ramayapti).
+5. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish (masalan: "Asosiy hisobdan Qahramonning hisobiga 100 ming olindi/o'tkazildi", "Naqddan plastikga 50 dollar tashladim").
+6. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
+7. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozlar qarzini PDF fayl/hujjat ko'rinishida so'raganda.
+8. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1-4 amallar uchun:
 {
@@ -735,6 +736,16 @@ JSON strukturasi 1-4 amallar uchun:
       "narx": 0.0
     }
   ]
+}
+
+JSON strukturasi "pul_otkazma" amali uchun:
+{
+  "amal": "pul_otkazma",
+  "valyuta": "UZS" | "USD",
+  "jami_summa": 0.0,
+  "chiqim_hisob_id": "Pul chiqib ketayotgan hisob UUID",
+  "kirim_hisob_id": "Pul tushayotgan hisob UUID",
+  "izoh": "Qisqa izoh"
 }
 
 JSON strukturasi "qarz_eslatma" amali uchun:
@@ -1332,6 +1343,28 @@ export default async function handler(req: any, res: any) {
               `✍️ Kiritdi: <b>${fromName}</b>`;
           }
         }
+      } else if (p.amal === "pul_otkazma") {
+        const { error: otkazmaErr } = await getSupabase().rpc("fn_pul_otkazish", {
+          p_chiqim_hisob_id: p.chiqim_hisob_id,
+          p_kirim_hisob_id: p.kirim_hisob_id,
+          p_summa: p.jami_summa,
+          p_valyuta: p.valyuta || "UZS",
+          p_izoh: p.izoh || "O'tkazma",
+          p_xodim: fromName,
+          p_telegram_user_id: cq.from?.id,
+        });
+
+        if (otkazmaErr) {
+          console.error("fn_pul_otkazish xatosi:", otkazmaErr);
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xatolik: " + otkazmaErr.message });
+          return res.status(200).send("OK");
+        }
+
+        javobMatn = `✅ <b>PUL O'TKAZMA MUVAFFAQIYATLI BAJARILDI</b>\n\n` +
+          `💰 Summa: <b>${pul(p.jami_summa)} ${p.valyuta || "UZS"}</b>\n` +
+          `📤 Qayerdan (ID): <b>${p.chiqim_hisob_id}</b>\n` +
+          `📥 Qayerga (ID): <b>${p.kirim_hisob_id}</b>\n` +
+          `✍️ Bajardi: <b>${fromName}</b>`;
       }
 
       await tgPost("editMessageText", {
@@ -2092,6 +2125,12 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           (parsedData.tannarx ? `💲 Tannarxi: <b>${pul(parsedData.tannarx)} ${parsedData.valyuta}</b>\n` : "") +
           (parsedData.narx_optom ? `💰 Sotish (optom) narxi: <b>${pul(parsedData.narx_optom)} ${parsedData.valyuta}</b>\n` : "") +
           (jamiTannarx > 0 ? `💵 Jami partiya tannarxi: <b>${pul(jamiTannarx)} ${parsedData.valyuta}</b>\n` : "") +
+          (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
+      } else if (parsedData.amal === "pul_otkazma") {
+        preview = `🔄 <b>PUL O'TKAZMA (TRANSFER) ANIQLANDI</b>\n\n` +
+          `💰 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
+          `📤 Qayerdan (ID): <b>${parsedData.chiqim_hisob_id || "Kiritilmagan"}</b>\n` +
+          `📥 Qayerga (ID): <b>${parsedData.kirim_hisob_id || "Kiritilmagan"}</b>\n` +
           (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
       }
 
