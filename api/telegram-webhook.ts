@@ -477,6 +477,12 @@ function buildQarzEslatmaCard(draftId: string, p: any): { text: string; keyboard
     `<i>Xabarni mijozga shaxsan yuborish uchun quyidagi tasdiqlash tugmasini bosing:</i>`;
 
   const buttons: any[] = [];
+  // PDF akt-sverka tugmasi
+  if (m?.id) {
+    buttons.push([
+      { text: "📄 Qarz Tarixi (PDF Akt-Sverka)", callback_data: `pdf:m:${m.id}` },
+    ]);
+  }
   if (tgDestination) {
     buttons.push([
       { text: "📲 Telegram orqali yuborish (Tasdiqlash)", url: tgDestination },
@@ -669,6 +675,272 @@ async function sendQarzdorlarPdf(chatId: number | string): Promise<{ ok: boolean
 }
 
 // -----------------------------------------------------------------------------
+// BITTA QARZDOR MIJOZNING TO'LIQ QARZ VA TO'LOVLAR TARIXI (AKT-SVERKA) PDF HUJJATI
+// -----------------------------------------------------------------------------
+async function sendMijozQarzPdf(
+  chatId: number | string,
+  mijozIdOrNom: string
+): Promise<{ ok: boolean; mijoz?: any; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    // 1. Mijozni aniqlash
+    let mijoz: any = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mijozIdOrNom.trim());
+    
+    if (isUuid) {
+      const { data } = await client.from("mijozlar").select("*").eq("id", mijozIdOrNom.trim()).maybeSingle();
+      mijoz = data;
+    } else {
+      const { data: topilganlar } = await client.rpc("fn_ai_mijoz_qidirish", {
+        qidiruv_sozi: mijozIdOrNom.trim(),
+      });
+      if (topilganlar && topilganlar.length > 0) {
+        const { data } = await client.from("mijozlar").select("*").eq("id", topilganlar[0].id).maybeSingle();
+        mijoz = data;
+      }
+    }
+
+    if (!mijoz) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>Mijoz topilmadi:</b> <i>"${mijozIdOrNom}"</i> bo'yicha ma'lumot topilmadi.`,
+        parse_mode: "HTML",
+      });
+      return { ok: false, error: "Mijoz topilmadi" };
+    }
+
+    // 2. Savdolar va to'lovlar tarixini yuklash
+    const { data: savdolar } = await client
+      .from("savdolar")
+      .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, holat")
+      .eq("mijoz_id", mijoz.id)
+      .neq("holat", "bekor_qilindi")
+      .order("sana_vaqt", { ascending: true });
+
+    const { data: tolovlar } = await client
+      .from("qarz_tolovlari")
+      .select("id, sana_vaqt, valyuta, summa, tolov_turi, izoh")
+      .eq("mijoz_id", mijoz.id)
+      .order("sana_vaqt", { ascending: true });
+
+    // Tarix qatorlarini birlashtirish
+    const hodisalar: any[] = [];
+    let jamiSavdoUzs = 0;
+    let jamiSavdoUsd = 0;
+    let jamiTolandiUzs = 0;
+    let jamiTolandiUsd = 0;
+
+    if (savdolar) {
+      savdolar.forEach((s: any) => {
+        const jami = Number(s.jami_summa || 0);
+        const tolandi = Number(s.tolangan_summa || 0);
+        const qarz = Number(s.qarz_summa || 0);
+        if (s.valyuta === "USD") {
+          jamiSavdoUsd += jami;
+          jamiTolandiUsd += tolandi;
+        } else {
+          jamiSavdoUzs += jami;
+          jamiTolandiUzs += tolandi;
+        }
+        hodisalar.push({
+          sana: s.sana_vaqt,
+          turi: "Savdo",
+          tafsilot: `Savdo #${s.raqam || ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+          valyuta: s.valyuta || "UZS",
+          berilganQarz: qarz,
+          tolanganQarz: tolandi,
+          summa: jami,
+        });
+      });
+    }
+
+    if (tolovlar) {
+      tolovlar.forEach((t: any) => {
+        const summa = Number(t.summa || 0);
+        if (t.valyuta === "USD") {
+          jamiTolandiUsd += summa;
+        } else {
+          jamiTolandiUzs += summa;
+        }
+        hodisalar.push({
+          sana: t.sana_vaqt,
+          turi: "Qarz to'lovi",
+          tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})${t.izoh ? ` - ${t.izoh}` : ""}`,
+          valyuta: t.valyuta || "UZS",
+          berilganQarz: 0,
+          tolanganQarz: summa,
+          summa: summa,
+        });
+      });
+    }
+
+    // Sanasi bo'yicha tartiblash
+    hodisalar.sort((a, b) => new Date(a.sana).getTime() - new Date(b.sana).getTime());
+
+    // 3. jsPDF orqali professional PDF yaratish
+    const { jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    // Yuqori shlyapa / Header
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, 210, 26, "F");
+
+    doc.setFontSize(15);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PROMAX STORE - MIJOZ QARZ HISOBOTI (AKT-SVERKA)", 14, 12);
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(203, 213, 225);
+    const hozirgiVaqt = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    doc.text(`Chop etilgan vaqt: ${hozirgiVaqt}`, 14, 20);
+
+    // Mijoz haqida ma'lumot bloki (Karta ko'rinishida)
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 31, 182, 32, 2, 2, "F");
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(14, 31, 182, 32, 2, 2, "S");
+
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Mijoz: ${mijoz.nom || "Noma'lum"}`, 18, 38);
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Telefon: ${mijoz.telefon || "Kiritilmagan"}`, 18, 45);
+    doc.text(`Telegram: ${mijoz.telegram || "Mavjud emas"}`, 18, 51);
+    doc.text(`Manzil: ${mijoz.manzil || "Ko'rsatilmagan"}`, 18, 57);
+
+    // Joriy qarz bloki (O'ng tarafda)
+    const qarzUzs = Number(mijoz.qarz_uzs || 0);
+    const qarzUsd = Number(mijoz.qarz_usd || 0);
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("JORIY QARZ BALANSI:", 120, 38);
+
+    doc.setFontSize(11);
+    doc.setTextColor(185, 28, 28); // Qizil
+    doc.text(`UZS: ${pul(qarzUzs)} so'm`, 120, 46);
+    doc.text(`USD: $${pul(qarzUsd)}`, 120, 54);
+
+    // Jadval yaratish
+    const tableRows = hodisalar.map((h, idx) => {
+      const sanaFormatted = new Date(h.sana).toLocaleDateString("ru-RU") + " " + new Date(h.sana).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      return [
+        String(idx + 1),
+        sanaFormatted,
+        h.turi,
+        h.tafsilot,
+        h.valyuta,
+        h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
+        h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
+      ];
+    });
+
+    // Jami yig'indi qatori
+    tableRows.push([
+      "",
+      "JAMI:",
+      `${hodisalar.length} ta amal`,
+      `Jami savdolar: ${pul(jamiSavdoUzs)} UZS | $${pul(jamiSavdoUsd)}`,
+      "",
+      `Qolgan qarz:`,
+      `${pul(qarzUzs)} UZS / $${pul(qarzUsd)}`,
+    ]);
+
+    autoTable(doc, {
+      startY: 68,
+      head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
+      body: tableRows,
+      theme: "grid",
+      headStyles: {
+        fillColor: [79, 70, 229],
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 7.5,
+        halign: "center",
+      },
+      styles: {
+        fontSize: 7.5,
+        cellPadding: 2,
+        textColor: [30, 41, 59],
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 20, fontStyle: "bold" },
+        3: { cellWidth: 58 },
+        4: { cellWidth: 14, halign: "center" },
+        5: { cellWidth: 27, halign: "right", textColor: [185, 28, 28] },
+        6: { cellWidth: 27, halign: "right", textColor: [16, 149, 90] },
+      },
+      didParseCell: (data: any) => {
+        if (data.row.index === tableRows.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [241, 245, 249];
+        }
+      },
+    });
+
+    // Pastki izoh / Footer
+    const finalY = (doc as any).lastAutoTable?.finalY || 200;
+    if (finalY < 270) {
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Ushbu hujjat PROMAX STORE avtomatlashtirilgan tizimi orqali shakllantirildi.", 14, finalY + 12);
+      doc.text("Imzo / Muhir: _____________________", 140, finalY + 12);
+    }
+
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const xavfsizNom = (mijoz.nom || "Mijoz").replace(/[^a-zA-Z0-9_\u0400-\u04FF]/g, "_");
+    const filename = `PROMAX_Qarz_${xavfsizNom}_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📄 <b>MIJOZ QARZ HISOBOTI (PDF): ${mijoz.nom}</b>\n\n` +
+      `👤 <b>Mijoz:</b> ${mijoz.nom}\n` +
+      `📞 <b>Telefon:</b> ${mijoz.telefon || "Yo'q"}\n` +
+      `💵 <b>Joriy qarzi (UZS):</b> <b>${pul(qarzUzs)} so'm</b>\n` +
+      `💲 <b>Joriy qarzi (USD):</b> <b>$${pul(qarzUsd)}</b>\n\n` +
+      `📊 <i>Oxirgi amallar soni: ${hodisalar.length} ta</i>\n` +
+      `📅 <i>Sana: ${hozirgiVaqt}</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    if (!resData.ok) {
+      console.error("sendMijozQarzPdf sendDocument xatosi:", resData);
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `❌ <b>PDF yuborishda xatolik:</b>\n<code>${resData.description || "Noma'lum"}</code>`,
+        parse_mode: "HTML",
+      });
+    }
+    return { ok: resData.ok, mijoz, error: resData.description };
+  } catch (err: any) {
+    console.error("sendMijozQarzPdf xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>PDF yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
+
+// -----------------------------------------------------------------------------
 // GEMINI AI TAHLILCHISI (O'zbek tilidagi matn va audio xabarlar)
 // -----------------------------------------------------------------------------
 async function geminiTahlil(
@@ -755,9 +1027,10 @@ JSON strukturasi "qarz_eslatma" amali uchun:
   "xabar_matni": "Ixtiyoriy foydalanuvchi aytgan maxsus xabar matni yoki null (agar aytmagan bo'lsa)"
 }
 
-JSON strukturasi "qarz_pdf" amali uchun:
+JSON strukturasi "qarz_pdf" amali uchun (Umumiy qarzdorlar ro'yxati yoki bitta mijozning qarz akti PDF fayl ko'rinishida so'ralganda):
 {
-  "amal": "qarz_pdf"
+  "amal": "qarz_pdf",
+  "mijoz_nomi": "Bitta aniq mijoz so'ralgan bo'lsa uning ismi/do'koni, butun ro'yxat bo'lsa null"
 }
 
 JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qidirish):
@@ -1170,6 +1443,15 @@ export default async function handler(req: any, res: any) {
       });
 
       await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // MIJOZ QARZ TARIXI (PDF AKT-SVERKA) CHIQARISH CALLBACK: pdf:m:mijozId
+    if (data.startsWith("pdf:m:")) {
+      const mId = data.replace("pdf:m:", "");
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "PDF tayyorlanmoqda..." });
+      await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+      await sendMijozQarzPdf(chatId, mId);
       return res.status(200).send("OK");
     }
 
@@ -2004,7 +2286,16 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         // Agar foydalanuvchi savolida PDF yoki fayl so'ralgan bo'lsa, PDF hujjatni ham yuboramiz
         if (text && /pdf|fayl/i.test(text) && /qarz|qarzdor/i.test(text)) {
           await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
-          await sendQarzdorlarPdf(chatId);
+          // Agar bazadan aynan bitta mijoz so'rovi qaytgan bo'lsa (masalan dbResult ichida bitta mijoz yoki mijoz nomi bo'lsa)
+          let topilganMijozId: string | null = null;
+          if (Array.isArray(dbResult) && dbResult.length === 1 && (dbResult[0].id || dbResult[0].nom)) {
+            topilganMijozId = dbResult[0].id || dbResult[0].nom;
+          }
+          if (topilganMijozId) {
+            await sendMijozQarzPdf(chatId, topilganMijozId);
+          } else {
+            await sendQarzdorlarPdf(chatId);
+          }
         }
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
@@ -2099,10 +2390,14 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         return res.status(200).send("OK");
       }
 
-      // 4. QARZ RO'YXATINI PDF HUJJAT QILIB YUBORISH
+      // 4. QARZ RO'YXATINI YOKI BITTA MIJOZ AKTINI PDF HUJJAT QILIB YUBORISH
       if (parsedData.amal === "qarz_pdf") {
         await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
-        await sendQarzdorlarPdf(chatId);
+        if (parsedData.mijoz_nomi && String(parsedData.mijoz_nomi).trim()) {
+          await sendMijozQarzPdf(chatId, String(parsedData.mijoz_nomi).trim());
+        } else {
+          await sendQarzdorlarPdf(chatId);
+        }
         return res.status(200).send("OK");
       }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   X, User, Phone, MapPin, HandCoins, History, ArrowDownLeft, 
   ShoppingBag, Edit2, Trash2, Check, AlertTriangle, Loader2,
-  Send, MessageCircle, ExternalLink
+  Send, MessageCircle, ExternalLink, FileText
 } from "lucide-react";
 import { pul, haptic, supabase } from "../lib/supabase";
 import { toast } from "sonner";
@@ -160,6 +160,195 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       console.error(e);
     } finally {
       setYuklanmoqda(false);
+    }
+  }
+
+  // Mijoz qarz akti va tarixini PDF qilib yuklab olish
+  const [pdfYuklanmoqda, setPdfYuklanmoqda] = useState(false);
+
+  async function exportQarzPdf() {
+    setPdfYuklanmoqda(true);
+    haptic("medium");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const autoTableModule = await import("jspdf-autotable");
+      const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+      // Mijozning barcha savdo va to'lovlarini to'liq yuklash
+      const [{ data: barchaSavdolar }, { data: barchaTolovlar }] = await Promise.all([
+        supabase
+          .from("savdolar")
+          .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh")
+          .eq("mijoz_id", mijoz.id)
+          .neq("holat", "bekor_qilindi")
+          .order("sana_vaqt", { ascending: true }),
+        supabase
+          .from("qarz_tolovlari")
+          .select("id, sana_vaqt, valyuta, summa, tolov_turi, izoh")
+          .eq("mijoz_id", mijoz.id)
+          .order("sana_vaqt", { ascending: true }),
+      ]);
+
+      const hodisalar: any[] = [];
+      let jamiSavdoUzs = 0;
+      let jamiSavdoUsd = 0;
+
+      if (barchaSavdolar) {
+        barchaSavdolar.forEach((s) => {
+          const jami = Number(s.jami_summa || 0);
+          const tolandi = Number(s.tolangan_summa || 0);
+          const qarz = Number(s.qarz_summa || 0);
+          if (s.valyuta === "USD") {
+            jamiSavdoUsd += jami;
+          } else {
+            jamiSavdoUzs += jami;
+          }
+          hodisalar.push({
+            sana: s.sana_vaqt,
+            turi: "Savdo",
+            tafsilot: `Savdo #${s.raqam || ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+            valyuta: s.valyuta || "UZS",
+            berilganQarz: qarz,
+            tolanganQarz: tolandi,
+          });
+        });
+      }
+
+      if (barchaTolovlar) {
+        barchaTolovlar.forEach((t) => {
+          const summa = Number(t.summa || 0);
+          hodisalar.push({
+            sana: t.sana_vaqt,
+            turi: "Qarz to'lovi",
+            tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})${t.izoh ? ` - ${t.izoh}` : ""}`,
+            valyuta: t.valyuta || "UZS",
+            berilganQarz: 0,
+            tolanganQarz: summa,
+          });
+        });
+      }
+
+      hodisalar.sort((a, b) => new Date(a.sana).getTime() - new Date(b.sana).getTime());
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      // Sarlavha
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, 210, 26, "F");
+
+      doc.setFontSize(15);
+      doc.setTextColor(255, 255, 255);
+      doc.text("PROMAX STORE - MIJOZ QARZ HISOBOTI (AKT-SVERKA)", 14, 12);
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(203, 213, 225);
+      const hozirgiVaqt = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      doc.text(`Chop etilgan vaqt: ${hozirgiVaqt}`, 14, 20);
+
+      // Mijoz kartasi
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 31, 182, 32, 2, 2, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(14, 31, 182, 32, 2, 2, "S");
+
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Mijoz: ${mijoz.nom || "Noma'lum"}`, 18, 38);
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Telefon: ${mijoz.telefon || "Kiritilmagan"}`, 18, 45);
+      doc.text(`Telegram: ${mijoz.telegram || "Mavjud emas"}`, 18, 51);
+      doc.text(`Manzil: ${mijoz.manzil || "Ko'rsatilmagan"}`, 18, 57);
+
+      const qarzUzs = Number(mijoz.qarz_uzs || 0);
+      const qarzUsd = Number(mijoz.qarz_usd || 0);
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("JORIY QARZ BALANSI:", 120, 38);
+
+      doc.setFontSize(11);
+      doc.setTextColor(185, 28, 28);
+      doc.text(`UZS: ${pul(qarzUzs)} so'm`, 120, 46);
+      doc.text(`USD: $${pul(qarzUsd)}`, 120, 54);
+
+      // Jadval
+      const tableRows = hodisalar.map((h, idx) => {
+        const sanaFormatted = new Date(h.sana).toLocaleDateString("ru-RU") + " " + new Date(h.sana).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        return [
+          String(idx + 1),
+          sanaFormatted,
+          h.turi,
+          h.tafsilot,
+          h.valyuta,
+          h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
+          h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
+        ];
+      });
+
+      tableRows.push([
+        "",
+        "JAMI:",
+        `${hodisalar.length} ta amal`,
+        `Jami savdolar: ${pul(jamiSavdoUzs)} UZS | $${pul(jamiSavdoUsd)}`,
+        "",
+        "Qolgan qarz:",
+        `${pul(qarzUzs)} UZS / $${pul(qarzUsd)}`,
+      ]);
+
+      autoTable(doc, {
+        startY: 68,
+        head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
+        body: tableRows,
+        theme: "grid",
+        headStyles: {
+          fillColor: [79, 70, 229],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 7.5,
+          halign: "center",
+        },
+        styles: {
+          fontSize: 7.5,
+          cellPadding: 2,
+          textColor: [30, 41, 59],
+        },
+        columnStyles: {
+          0: { cellWidth: 8, halign: "center" },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 20, fontStyle: "bold" },
+          3: { cellWidth: 58 },
+          4: { cellWidth: 14, halign: "center" },
+          5: { cellWidth: 27, halign: "right", textColor: [185, 28, 28] },
+          6: { cellWidth: 27, halign: "right", textColor: [16, 149, 90] },
+        },
+        didParseCell: (data: any) => {
+          if (data.row.index === tableRows.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [241, 245, 249];
+          }
+        },
+      });
+
+      const finalY = (doc as any).lastAutoTable?.finalY || 200;
+      if (finalY < 270) {
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text("Ushbu hisobot PROMAX STORE avtomatlashtirilgan tizimi orqali shakllantirildi.", 14, finalY + 12);
+        doc.text("Imzo / Muhir: _____________________", 140, finalY + 12);
+      }
+
+      const xavfsizNom = (mijoz.nom || "Mijoz").replace(/[^a-zA-Z0-9_\u0400-\u04FF]/g, "_");
+      doc.save(`PROMAX_Qarz_${xavfsizNom}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("PDF hisobot muvaffaqiyatli yuklab olindi!");
+      haptic("success");
+    } catch (err: any) {
+      console.error("PDF yaratishda xatolik:", err);
+      toast.error("PDF yaratishda xatolik: " + err.message);
+      haptic("error");
+    } finally {
+      setPdfYuklanmoqda(false);
     }
   }
 
@@ -454,28 +643,43 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
               </div>
             </div>
 
-            {/* Qarz Amallari: To'lov qabul qilish va Eslatma yuborish */}
-            {hasDebt && (
-              <div className="space-y-2">
-                <button
-                  onClick={() => onTolovOchish(mijoz)}
-                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                >
-                  <HandCoins className="w-4 h-4" /> Qarz To'lovini Qabul Qilish
-                </button>
+            {/* Qarz Amallari: To'lov qabul qilish, Eslatma va PDF Hujjat */}
+            <div className="space-y-2">
+              {hasDebt && (
+                <>
+                  <button
+                    onClick={() => onTolovOchish(mijoz)}
+                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  >
+                    <HandCoins className="w-4 h-4" /> Qarz To'lovini Qabul Qilish
+                  </button>
 
-                <button
-                  onClick={() => {
-                    setEslatmaMatn(standartEslatmaMatni(mijoz));
-                    setEslatmaOchiq(true);
-                    haptic("light");
-                  }}
-                  className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                >
-                  <Send className="w-4 h-4" /> 📩 Qarz Eslatmasini Yuborish (Telegram)
-                </button>
-              </div>
-            )}
+                  <button
+                    onClick={() => {
+                      setEslatmaMatn(standartEslatmaMatni(mijoz));
+                      setEslatmaOchiq(true);
+                      haptic("light");
+                    }}
+                    className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  >
+                    <Send className="w-4 h-4" /> 📩 Qarz Eslatmasini Yuborish (Telegram)
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={exportQarzPdf}
+                disabled={pdfYuklanmoqda}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
+              >
+                {pdfYuklanmoqda ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                <span>{pdfYuklanmoqda ? "PDF tayyorlanmoqda..." : "📄 Qarz Tarixi va Akt-Sverka (PDF)"}</span>
+              </button>
+            </div>
 
             {/* O'chirish ogohlantirish / xatoligi */}
             {ochirishXato && (
