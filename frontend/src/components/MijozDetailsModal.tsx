@@ -559,20 +559,50 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <p
-                          className={`font-black tabular-nums ${
-                            item.tur === "savdo" ? "text-slate-900 dark:text-white" : "text-emerald-700 dark:text-emerald-400"
-                          }`}
-                        >
-                          {item.tur === "qarz_tolov" ? "−" : ""}
-                          {pul(item.summa)} {item.valyuta}
-                        </p>
-                        {item.tur === "savdo" && item.qarz > 0 && (
-                          <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                            qarz: {pul(item.qarz)}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p
+                            className={`font-black tabular-nums ${
+                              item.tur === "savdo" ? "text-slate-900 dark:text-white" : "text-emerald-700 dark:text-emerald-400"
+                            }`}
+                          >
+                            {item.tur === "qarz_tolov" ? "−" : ""}
+                            {pul(item.summa)} {item.valyuta}
                           </p>
-                        )}
+                          {item.tur === "savdo" && item.qarz > 0 && (
+                            <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                              qarz: {pul(item.qarz)}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          title="Bekor qilish / O'chirish"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm("Bu amalni bekor qilib o'chirib yubormoqchimisiz?")) return;
+                            
+                            try {
+                              setYuklanmoqda(true);
+                              if (item.tur === "qarz_tolov") {
+                                const { error } = await supabase.rpc("fn_qarz_tolov_bekor_qilish", { p_tolov_id: item.id, p_xodim: "Admin" });
+                                if (error) throw error;
+                              } else {
+                                const { error } = await supabase.rpc("fn_savdoni_bekor_qilish", { p_savdo_id: item.id, p_xodim: "Admin" });
+                                if (error) throw error;
+                              }
+                              toast.success("Muvaffaqiyatli bekor qilindi");
+                              await yuklaMijozTarixi();
+                              if (onMijozYangilandi) onMijozYangilandi();
+                            } catch (err: any) {
+                              toast.error(err.message);
+                            } finally {
+                              setYuklanmoqda(false);
+                            }
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   ))}
