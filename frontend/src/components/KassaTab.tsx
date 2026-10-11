@@ -98,138 +98,194 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
     .filter((b) => b.valyuta === "USD")
     .reduce((sum, b) => sum + (Number(b.joriy_balans) || 0), 0);
 
+  // Nomdan guruh nomini ajratish (agar guruhi bo'sh bo'lsa)
+  function extractGuruh(hNom: string, hGuruhi?: string): string {
+    if (hGuruhi && hGuruhi.trim()) return hGuruhi.trim();
+    if (!hNom) return "Asosiy Do'kon";
+    const toza = hNom
+      .replace(/\s*\((Naqd|Plastik|Bank|UZS|USD)[^\)]*\)/gi, "")
+      .replace(/\s*-\s*(Naqd|Plastik|Bank|UZS|USD)[^\-]*/gi, "")
+      .trim();
+    return toza || hNom;
+  }
+
+  // Hisoblarni guruhlar bo'yicha to'plash
+  const guruhlanganBalanslar: Record<string, any[]> = {};
+  balanslar.forEach((b) => {
+    const hObj = hisoblar.find((h) => h.id === b.hisob_id);
+    const guruhNomi = extractGuruh(b.kassa_nomi, hObj?.guruhi);
+    if (!guruhlanganBalanslar[guruhNomi]) guruhlanganBalanslar[guruhNomi] = [];
+    guruhlanganBalanslar[guruhNomi].push(b);
+  });
+
   return (
     <div className="space-y-3 pb-8">
-      {/* Kassa Hisoblari Ko'rinishi (Kompakt va Keng variantlar bilan) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xs space-y-2.5">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
-                Hisoblar Balansi
-              </h3>
-              <p className="text-[10px] text-slate-400 font-medium">
-                {balanslar.length} ta hisob raqami
-              </p>
-            </div>
+      {/* Kassa Hisoblari: Umumiy Xulosa Bar */}
+      <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <Wallet className="w-4 h-4" />
           </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Jami UZS / USD indikatorlari */}
-            <div className="hidden sm:flex items-center gap-1.5 mr-1">
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900">
-                UZS: {pul(jamiUZS)}
-              </span>
-              {jamiUSD !== 0 && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900">
-                  USD: ${pul(jamiUSD)}
-                </span>
-              )}
-            </div>
-
-            {/* Kompakt / Keng Rejim Tugmasi */}
-            <button
-              onClick={toggleKompakt}
-              title={kompaktRejim ? "Keng ko'rinishga o'tish" : "Kompakt ko'rinishga o'tish"}
-              className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 transition-all flex items-center gap-1 active:scale-95"
-            >
-              <span>{kompaktRejim ? "⚡ Kompakt" : "📑 Keng"}</span>
-            </button>
+          <div>
+            <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
+              Kassa Balansi
+            </h3>
+            <p className="text-[10px] text-slate-400 font-medium">
+              {Object.keys(guruhlanganBalanslar).length} ta kassa guruhi • {balanslar.length} ta hisob
+            </p>
           </div>
         </div>
 
-        {/* Jami summalar mobil qatori */}
-        <div className="flex sm:hidden items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80">
-          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
-            <span>Jami:</span>
-            <span className="font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-              {pul(jamiUZS)} so'm
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
+            UZS: {pul(jamiUZS)}
+          </span>
           {jamiUSD !== 0 && (
-            <div className="text-[11px] font-black text-amber-600 dark:text-amber-400 tabular-nums">
-              ${pul(jamiUSD)}
-            </div>
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
+              USD: ${pul(jamiUSD)}
+            </span>
           )}
+
+          <button
+            onClick={toggleKompakt}
+            title={kompaktRejim ? "Keng ko'rinishga o'tish" : "Kompakt ko'rinishga o'tish"}
+            className="ml-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 transition-all flex items-center gap-1 active:scale-95"
+          >
+            <span>{kompaktRejim ? "⚡ Kompakt" : "📑 Keng"}</span>
+          </button>
         </div>
+      </div>
 
-        {/* 1-VARIANT: KOMPAKT KO'RINISHDAGI HISOBLAR */}
-        {kompaktRejim ? (
-          <div className="grid grid-cols-2 gap-2">
-            {balanslar.map((b) => {
-              const isUSD = b.valyuta === "USD";
-              const isPlastik = b.kassa_turi === "plastik";
-              const isBank = b.kassa_turi === "bank";
-              
-              const borderTheme = isUSD
-                ? "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20"
-                : isPlastik
-                ? "border-blue-200/80 dark:border-blue-900/50 bg-blue-50/40 dark:bg-blue-950/20"
-                : isBank
-                ? "border-purple-200/80 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20"
-                : "border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20";
-
-              const badgeColor = isUSD
-                ? "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60"
-                : isPlastik
-                ? "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60"
-                : isBank
-                ? "text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60"
-                : "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60";
-
-              return (
-                <div
-                  key={b.hisob_id}
-                  className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01]`}
-                >
-                  <div className="flex items-start justify-between gap-1 mb-1">
-                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate leading-snug" title={b.kassa_nomi}>
-                      {b.kassa_nomi}
-                    </span>
-                    <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-md ${badgeColor} flex-shrink-0 uppercase`}>
-                      {b.kassa_turi}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between mt-0.5">
-                    <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
-                      {isUSD ? "$" : ""}{pul(b.joriy_balans)}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase ml-1">
-                      {b.valyuta}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+      {/* HAR BIR KASSA (GURUH) UCHUN BITTA KARTA ICHIDA SUB-HISOBLAR */}
+      <div className="space-y-2.5">
+        {Object.keys(guruhlanganBalanslar).length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border p-4">
+            Hisoblar topilmadi.
           </div>
         ) : (
-          /* 2-VARIANT: KENG (STANDART) KO'RINISH */
-          <div className="grid grid-cols-2 gap-2">
-            {balanslar.map((b) => {
-              let Icon = Wallet;
-              let bgColor = "bg-emerald-600";
-              let textColor = "text-emerald-100";
-              if (b.valyuta === "USD") { Icon = DollarSign; bgColor = "bg-amber-600"; textColor = "text-amber-100"; }
-              if (b.kassa_turi === "plastik") { Icon = CreditCard; bgColor = "bg-blue-600"; textColor = "text-blue-100"; }
-              if (b.kassa_turi === "bank") { Icon = Building2; bgColor = "bg-purple-700"; textColor = "text-purple-100"; }
+          Object.entries(guruhlanganBalanslar).map(([guruhNomi, subBalanslar]) => {
+            const guruhUZS = subBalanslar
+              .filter((s) => s.valyuta === "UZS")
+              .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
+            const guruhUSD = subBalanslar
+              .filter((s) => s.valyuta === "USD")
+              .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
 
-              return (
-                <div key={b.hisob_id} className={`${bgColor} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5`}>
-                  <div className="flex items-center gap-1.5 opacity-85">
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">{b.kassa_nomi}</span>
+            return (
+              <div
+                key={guruhNomi}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xs space-y-2.5 transition-all"
+              >
+                {/* Karta sarlavhasi (Guruh nomi va jami balansi) */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                      <Building2 className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
+                        {guruhNomi}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {subBalanslar.length} ta hisob (UZS / USD)
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-base font-black tabular-nums leading-tight">
-                    {b.valyuta === "USD" ? "$" : ""}{pul(b.joriy_balans)}
-                  </p>
-                  <p className={`text-[10px] font-medium ${textColor}`}>{b.valyuta}</p>
+
+                  {/* Guruh jami summasi */}
+                  <div className="flex items-center gap-1.5 text-right">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
+                      {pul(guruhUZS)} UZS
+                    </span>
+                    {guruhUSD !== 0 && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
+                        ${pul(guruhUSD)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* BITTA KARTA ICHIDAGI SUB-HISOBLAR (KOMPAKT GRID) */}
+                <div className={`grid ${kompaktRejim ? "grid-cols-2 sm:grid-cols-3 gap-1.5" : "grid-cols-2 gap-2"}`}>
+                  {subBalanslar.map((b) => {
+                    const isUSD = b.valyuta === "USD";
+                    const isPlastik = b.kassa_turi === "plastik";
+                    const isBank = b.kassa_turi === "bank";
+
+                    let Icon = Wallet;
+                    let turNomi = "Naqd UZS";
+                    let borderTheme = "border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100";
+                    let badgeColor = "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60";
+
+                    if (isUSD) {
+                      Icon = DollarSign;
+                      turNomi = "Naqd USD";
+                      borderTheme = "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-amber-950 dark:text-amber-100";
+                      badgeColor = "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60";
+                    } else if (isPlastik) {
+                      Icon = CreditCard;
+                      turNomi = "Plastik UZS";
+                      borderTheme = "border-blue-200/80 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 text-blue-950 dark:text-blue-100";
+                      badgeColor = "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60";
+                    } else if (isBank) {
+                      Icon = Building2;
+                      turNomi = "Bank UZS";
+                      borderTheme = "border-purple-200/80 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 text-purple-950 dark:text-purple-100";
+                      badgeColor = "text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60";
+                    }
+
+                    if (!kompaktRejim) {
+                      let bgSolid = "bg-emerald-600";
+                      let textSolid = "text-emerald-100";
+                      if (isUSD) { bgSolid = "bg-amber-600"; textSolid = "text-amber-100"; }
+                      if (isPlastik) { bgSolid = "bg-blue-600"; textSolid = "text-blue-100"; }
+                      if (isBank) { bgSolid = "bg-purple-700"; textSolid = "text-purple-100"; }
+
+                      return (
+                        <div key={b.hisob_id} className={`${bgSolid} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5`}>
+                          <div className="flex items-center gap-1.5 opacity-85">
+                            <Icon className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{turNomi}</span>
+                          </div>
+                          <p className="text-base font-black tabular-nums leading-tight">
+                            {isUSD ? "$" : ""}{pul(b.joriy_balans)}
+                          </p>
+                          <p className={`text-[10px] font-medium ${textSolid}`}>{b.valyuta}</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={b.hisob_id}
+                        className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01]`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1 min-w-0">
+                            <Icon className="w-3 h-3 flex-shrink-0 opacity-80" />
+                            <span className="text-[10px] font-extrabold uppercase tracking-tight truncate">
+                              {turNomi}
+                            </span>
+                          </div>
+                          <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${badgeColor} flex-shrink-0 uppercase`}>
+                            {b.valyuta}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between mt-0.5">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
+                            {isUSD ? "$" : ""}{pul(b.joriy_balans)}
+                          </span>
+                          <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase ml-1">
+                            {b.valyuta}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
