@@ -58,11 +58,13 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
   async function rasxodSaqla() {
     const sonSumma = Number(summa);
     if (!sonSumma || sonSumma <= 0) {
-      alert("Iltimos, summani kiriting!");
+      haptic("error");
+      toast.error("Summa kiritilmadi!", { description: "Iltimos, chiqim summasini kiriting!" });
       return;
     }
     if (!hisobId) {
-      alert("Iltimos, hisobni tanlang!");
+      haptic("error");
+      toast.error("Hisob tanlanmadi!", { description: "Iltimos, xarajat qaysi hisobdan chiqqanini tanlang!" });
       return;
     }
 
@@ -229,7 +231,10 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
           />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Qaysi hisobdan chiqdi:</label>
+          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+            <span>Qaysi hisobdan:</span>
+            <span className="text-[10px] text-rose-500 font-extrabold">* Tanlash shart</span>
+          </label>
           <Combobox
             title="Hisobni tanlang"
             value={hisobId || ""}

@@ -128,6 +128,17 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
     haptic("medium");
 
     const tolandi = Number(tolanganSumma) || 0;
+
+    // Pul tushayotgan bo'lsa, hisob tanlangan bo'lishi SHART
+    if (tolandi > 0 && !kassaTuri) {
+      setYuklanmoqda(false);
+      haptic("error");
+      toast.error("Hisob tanlanmadi!", {
+        description: "To'lov qabul qilinayotganda qaysi hisobga tushishi kiritilishi shart!",
+      });
+      return;
+    }
+
     const qatorlar = savat.map((s) => ({
       tovar_id: s.tovar_id,
       nom: s.nom,
@@ -137,12 +148,13 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
     }));
 
     try {
-      const { data, error } = await supabase.rpc("fn_savdo_yaratish", {
+      // Yangilangan fn_savdo_yaratish_v2 (hisob_id bilan)
+      const { data, error } = await supabase.rpc("fn_savdo_yaratish_v2", {
         p_mijoz_id: tanlanganMijoz?.id || null,
         p_valyuta: valyuta,
         p_tolangan: tolandi,
         p_tolov_turi: tolovTuri,
-        p_kassa_turi: kassaTuri,
+        p_hisob_id: tolandi > 0 ? kassaTuri : null,
         p_izoh: izoh,
         p_xodim: xodimNomi || "Mini App",
         p_telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
@@ -583,13 +595,18 @@ export function SotuvTab({ xodimNomi, telegramUserId }: SotuvTabProps) {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Tushadigan Kassa:</label>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Tushadigan hisob:</span>
+                  {(Number(tolanganSumma) || 0) > 0 && (
+                    <span className="text-[10px] text-rose-500 font-extrabold">* Tanlash shart</span>
+                  )}
+                </label>
                 <Combobox
-                  title="Kassani tanlang"
+                  title="Hisobni tanlang"
                   value={kassaTuri}
                   onChange={setKassaTuri}
                   options={hisoblar.filter(h => h.valyuta === valyuta || h.valyuta === "BARCHASI").map(h => ({
-                    value: h.id, label: h.nom
+                    value: h.id, label: `${h.nom} (${h.valyuta})`
                   }))}
                 />
               </div>

@@ -1,1 +1,14 @@
-{ "compilerOptions": { "target": "ESNext", "module": "CommonJS", "esModuleInterop": true, "skipLibCheck": true, "strict": true } }
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "CommonJS",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "typeRoots": [
+      "./frontend/node_modules/@types",
+      "./node_modules/@types"
+    ]
+  },
+  "include": ["api"]
+}

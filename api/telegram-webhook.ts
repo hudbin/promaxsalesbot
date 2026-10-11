@@ -207,7 +207,7 @@ async function resolveSavdoEntities(data: any): Promise<any> {
   return data;
 }
 
-function buildSavdoCard(draftId: string, p: any): { text: string; keyboard: any } {
+function buildSavdoCard(draftId: string, p: any, hisoblar: any[] = []): { text: string; keyboard: any } {
   // 1. Agar mijoz bir nechta bo'lib noaniq bo'lsa
   if (p.mijozStatus === "ambiguous") {
     const text = `🔍 <b>MIJOZNI ANIQLASHTIRISH (1-bosqich)</b>\n\n` +
@@ -265,6 +265,28 @@ function buildSavdoCard(draftId: string, p: any): { text: string; keyboard: any 
   const qarz = Math.max(0, jami - tolangan);
   const valyuta = p.valyuta || "UZS";
 
+  // AGAR TO'LOV BOR BO'LSA (tolangan > 0) VA HISOB TANLANMAGAN BO'LSA -> FOYDALANUVCHIDAN SO'RAYMIZ!
+  if (tolangan > 0 && !p.hisob_id) {
+    const text = `📥 <b>PUL QAYSI HISOBGA TUSHDI? (Kirim)</b>\n\n` +
+      `👤 <b>Mijoz:</b> <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
+      `💵 <b>To'langan summa:</b> <b>${pul(tolangan)} ${valyuta}</b>\n\n` +
+      `❓ Ushbu to'lov qaysi kassa / hisobga kirim qilinsin?`;
+
+    const mosHisoblar = (hisoblar || []).filter((h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI");
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+    const buttons: any[] = list.map((h: any) => {
+      let icon = "💵";
+      if (h.valyuta === "USD") icon = "💲";
+      if (h.turi === "plastik") icon = "💳";
+      if (h.turi === "bank") icon = "🏦";
+      return [{ text: `${icon} ${h.nom}`, callback_data: `pk:sh:${draftId}:${h.id}` }];
+    });
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
   let itemsText = "";
   (p.qatorlar || []).forEach((it: any, i: number) => {
     const s = (Number(it.soni) || 0) * (Number(it.narx) || 0);
@@ -275,11 +297,14 @@ function buildSavdoCard(draftId: string, p: any): { text: string; keyboard: any 
     }
   });
 
+  const hisobNomi = hisoblar.find((h: any) => h.id === p.hisob_id)?.nom || p.hisob_id || "Kassa";
+
   let text = `🛒 <b>SAVDO YAKUNIY TASDIQLASH (2-bosqich)</b>\n\n` +
     `👤 <b>Mijoz:</b> <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
     (itemsText ? `📦 <b>Mahsulotlar (${(p.qatorlar || []).length} ta):</b>\n${itemsText}\n` : "") +
     `💰 <b>Jami savdo:</b> <b>${pul(jami)} ${valyuta}</b>\n` +
     `💵 <b>Naqd to'landi:</b> <b>${pul(tolangan)} ${valyuta}</b>\n` +
+    (tolangan > 0 ? `📥 <b>Kirim hisobi:</b> <b>${hisobNomi}</b>\n` : "") +
     `📝 <b>Nasiya / Qarz:</b> <b>${pul(qarz)} ${valyuta}</b>\n`;
 
   if (qarz > 0 && p.selectedMijoz) {
@@ -292,6 +317,55 @@ function buildSavdoCard(draftId: string, p: any): { text: string; keyboard: any 
   const buttons = [
     [
       { text: "✅ Tasdiqlash va Bazaga yozish", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
+// -----------------------------------------------------------------------------
+// CHIQIM (RASXOD) KARTASI: AGAR HISOB AYTILMAGAN BO'LSA SO'RASH
+// -----------------------------------------------------------------------------
+function buildRasxodCard(draftId: string, p: any, hisoblar: any[] = []): { text: string; keyboard: any } {
+  const valyuta = p.valyuta || "UZS";
+  const summa = Number(p.jami_summa) || 0;
+
+  // 1. Agar hisob aniqlanmagan bo'lsa -> FOYDALANUVCHIDAN HISOBNI SO'RAYMIZ!
+  if (!p.hisob_id) {
+    const text = `📤 <b>XARAJAT QAYSI HISOBDAN CHIQDI?</b>\n\n` +
+      `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+      `📂 <b>Kategoriya:</b> <b>${p.kategoriya || "Boshqa"}</b>\n` +
+      (p.izoh ? `💬 <b>Izoh:</b> <i>${p.izoh}</i>\n` : "") +
+      `\n❓ Ushbu xarajat qaysi kassa / hisobdan chiqim qilinsin?`;
+
+    const mosHisoblar = (hisoblar || []).filter((h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI");
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+    const buttons: any[] = list.map((h: any) => {
+      let icon = "💵";
+      if (h.valyuta === "USD") icon = "💲";
+      if (h.turi === "plastik") icon = "💳";
+      if (h.turi === "bank") icon = "🏦";
+      return [{ text: `${icon} ${h.nom}`, callback_data: `pk:rh:${draftId}:${h.id}` }];
+    });
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 2. Hisob tanlangan -> YAKUNIY TASDIQLASH
+  const hisobNomi = hisoblar.find((h: any) => h.id === p.hisob_id)?.nom || p.hisob_id || "Kassa";
+  const text = `🧾 <b>XARAJAT (RASXOD) TASDIQLASH</b>\n\n` +
+    `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+    `📂 <b>Kategoriya:</b> <b>${p.kategoriya || "Boshqa"}</b>\n` +
+    `💳 <b>Chiqim hisobi:</b> <b>${hisobNomi}</b>\n` +
+    (p.izoh ? `💬 <b>Izoh:</b> <i>${p.izoh}</i>\n` : "") +
+    `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Tasdiqlash", callback_data: `cf:${draftId}` },
       { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
     ],
   ];
@@ -332,7 +406,7 @@ async function resolveQarzTolovEntities(data: any): Promise<any> {
   return data;
 }
 
-function buildQarzTolovCard(draftId: string, p: any): { text: string; keyboard: any } {
+function buildQarzTolovCard(draftId: string, p: any, hisoblar: any[] = []): { text: string; keyboard: any } {
   if (p.mijozStatus === "ambiguous") {
     const text = `🔍 <b>QARZ TO'LOVI: MIJOZNI TANLANG</b>\n\n` +
       `Siz aytgan <i>"${p.mijoz_nomi}"</i> bo'yicha bir nechta mijoz topildi:`;
@@ -351,10 +425,34 @@ function buildQarzTolovCard(draftId: string, p: any): { text: string; keyboard: 
   const joriyQarz = m ? Number(valyuta === "USD" ? m.qarz_usd : m.qarz_uzs) || 0 : 0;
   const qolganQarz = Math.max(0, joriyQarz - summa);
 
+  // AGAR HISOB TANLANMAGAN BO'LSA -> FOYDALANUVCHIDAN HISOBNI SO'RAYMIZ!
+  if (!p.hisob_id) {
+    const text = `📥 <b>QARZ TO'LOVI QAYSI HISOBGA TUSHDI?</b>\n\n` +
+      `👤 <b>Mijoz:</b> <b>${m?.nom || p.mijoz_nomi || "Noma'lum"}</b>\n` +
+      `💵 <b>To'lov summasi:</b> <b>${pul(summa)} ${valyuta}</b>\n\n` +
+      `❓ Pul qaysi kassa / hisobga kirim qilinsin?`;
+
+    const mosHisoblar = (hisoblar || []).filter((h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI");
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+    const buttons: any[] = list.map((h: any) => {
+      let icon = "💵";
+      if (h.valyuta === "USD") icon = "💲";
+      if (h.turi === "plastik") icon = "💳";
+      if (h.turi === "bank") icon = "🏦";
+      return [{ text: `${icon} ${h.nom}`, callback_data: `pk:qh:${draftId}:${h.id}` }];
+    });
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  const hisobNomi = hisoblar.find((h: any) => h.id === p.hisob_id)?.nom || p.hisob_id || "Kassa";
+
   let text = `💳 <b>QARZ TO'LOVI ANIQLANDI</b>\n\n` +
     `👤 <b>Mijoz:</b> <b>${m?.nom || p.mijoz_nomi || "Noma'lum"}</b>\n` +
     `💵 <b>To'lov summasi:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
-    `💳 <b>Kassa / To'lov turi:</b> <b>${p.tolov_turi || "Naqd"}</b>\n`;
+    `📥 <b>Kirim hisobi:</b> <b>${hisobNomi}</b>\n`;
 
   if (m) {
     text += `📊 <b>Eski qarz:</b> ${pul(joriyQarz)} ${valyuta}\n` +
@@ -1082,7 +1180,13 @@ Muhim Qidiruv va Mantiq Qoidalari:
 
 BAZADAGI MAVJUD HISOBLAR RO'YXATI (Kassalar):
 ${hisoblarRoyxatiText}
-Matndan kelib chiqib, pul qaysi hisobga tushgani yoki qaysi hisobdan chiqqanini aniqlang va "hisob_id" ga mos UUID ni yozing. Agar matnda aniq aytilmagan bo'lsa, eng to'g'ri keladiganini (masalan, Naqd UZS bo'lsa "Asosiy Do'kon Kassasi (Naqd UZS)") ni tanlang.
+
+O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
+- Agar matnda pul QAYSI HISOBGA tushgani yoki QAYSI HISOBDAN chiqqani ANIQ aytilgan bo'lsa (masalan: "kassaga", "plastikka", "bankka", "hisob raqamga", "Qahramon hisobiga" yoki aniq hisob nomi aytilsa), mos hisobning UUID sini "hisob_id" ga yozing.
+- AGAR MATNDA YOKI OVOZDA QAYSI HISOB EKANLIGI ANIQ AYTILMAGAN BO'LSA:
+  HECH QACHON O'ZINGIZDAN TAXMIN QILIB HISOB TANLAMANG!
+  "hisob_id": null deb qaytaring!
+  Chunki tizim foydalanuvchidan pul qaysi hisobga tushayotgani yoki qaysi hisobdan chiqayotganini so'rashi SHART!
 `;
 
   const contents: any[] = [];
@@ -1287,7 +1391,8 @@ export default async function handler(req: any, res: any) {
         .update({ malumot: p })
         .eq("id", draftId);
 
-      const nextCard = buildSavdoCard(draftId, p);
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildSavdoCard(draftId, p, hisoblarDB || []);
       await tgPost("editMessageText", {
         chat_id: chatId,
         message_id: msgId,
@@ -1345,7 +1450,8 @@ export default async function handler(req: any, res: any) {
         .update({ malumot: p })
         .eq("id", draftId);
 
-      const nextCard = buildSavdoCard(draftId, p);
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildSavdoCard(draftId, p, hisoblarDB || []);
       await tgPost("editMessageText", {
         chat_id: chatId,
         message_id: msgId,
@@ -1389,7 +1495,8 @@ export default async function handler(req: any, res: any) {
         .update({ malumot: p })
         .eq("id", draftId);
 
-      const nextCard = buildQarzTolovCard(draftId, p);
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildQarzTolovCard(draftId, p, hisoblarDB || []);
       await tgPost("editMessageText", {
         chat_id: chatId,
         message_id: msgId,
@@ -1399,6 +1506,123 @@ export default async function handler(req: any, res: any) {
       });
 
       await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // 1.3 SAVDO UCHUN KIRIM HISOBINI TANLASH (pk:sh:draftId:hisobId)
+    if (data.startsWith("pk:sh:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const hId = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      p.hisob_id = hId;
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildSavdoCard(draftId, p, hisoblarDB || []);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Kirim hisobi tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // 1.4 CHIQIM (RASXOD) UCHUN HISOB TANLASH (pk:rh:draftId:hisobId)
+    if (data.startsWith("pk:rh:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const hId = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      p.hisob_id = hId;
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildRasxodCard(draftId, p, hisoblarDB || []);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Chiqim hisobi tanlandi!" });
+      return res.status(200).send("OK");
+    }
+
+    // 1.5 QARZ TO'LOVI UCHUN KIRIM HISOBINI TANLASH (pk:qh:draftId:hisobId)
+    if (data.startsWith("pk:qh:")) {
+      const parts = data.split(":");
+      const draftId = parts[2];
+      const hId = parts[3];
+
+      const { data: draft } = await supabase
+        .from("tranzaksiya_qoralama")
+        .select("*")
+        .eq("id", draftId)
+        .maybeSingle();
+
+      if (!draft || !draft.malumot) {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+        return res.status(200).send("OK");
+      }
+
+      const p = draft.malumot;
+      p.hisob_id = hId;
+
+      await getSupabase()
+        .from("tranzaksiya_qoralama")
+        .update({ malumot: p })
+        .eq("id", draftId);
+
+      const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+      const nextCard = buildQarzTolovCard(draftId, p, hisoblarDB || []);
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: nextCard.text,
+        parse_mode: "HTML",
+        reply_markup: nextCard.keyboard,
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Kirim hisobi tanlandi!" });
       return res.status(200).send("OK");
     }
 
@@ -1474,21 +1698,52 @@ export default async function handler(req: any, res: any) {
       let javobMatn = "";
 
       if (p.amal === "rasxod") {
+        if (!p.hisob_id) {
+          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+          const nextCard = buildRasxodCard(draftId, p, hisoblarDB || []);
+          await tgPost("editMessageText", {
+            chat_id: chatId,
+            message_id: msgId,
+            text: nextCard.text,
+            parse_mode: "HTML",
+            reply_markup: nextCard.keyboard,
+          });
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Iltimos, avval chiqim hisobini tanlang!" });
+          return res.status(200).send("OK");
+        }
+
         await getSupabase().rpc("fn_rasxod_yaratish_v2", {
           p_summa: p.jami_summa,
           p_valyuta: p.valyuta || "UZS",
           p_kategoriya: p.kategoriya || "Boshqa",
           p_tolov_turi: p.tolov_turi || "naqd",
-          p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
+          p_hisob_id: p.hisob_id,
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
         });
-        javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
+
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
+        const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+        javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n💳 Chiqim hisobi: <b>${hisobNom}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
       } else if (p.amal === "qarz_tolov") {
         const mijozId = p.selectedMijoz?.id || null;
         const valyuta = p.valyuta || "UZS";
         const summa = Number(p.jami_summa) || 0;
+
+        if (summa > 0 && !p.hisob_id) {
+          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+          const nextCard = buildQarzTolovCard(draftId, p, hisoblarDB || []);
+          await tgPost("editMessageText", {
+            chat_id: chatId,
+            message_id: msgId,
+            text: nextCard.text,
+            parse_mode: "HTML",
+            reply_markup: nextCard.keyboard,
+          });
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Iltimos, avval kirim hisobini tanlang!" });
+          return res.status(200).send("OK");
+        }
 
         if (mijozId) {
           const { error: tolovErr } = await getSupabase().rpc("fn_qarz_tolov_yaratish_v2", {
@@ -1496,7 +1751,7 @@ export default async function handler(req: any, res: any) {
             p_summa: summa,
             p_valyuta: valyuta,
             p_tolov_turi: p.tolov_turi || "naqd",
-            p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
+            p_hisob_id: p.hisob_id,
             p_izoh: p.izoh || "",
             p_xodim: fromName,
             p_telegram_user_id: cq.from?.id,
@@ -1514,7 +1769,9 @@ export default async function handler(req: any, res: any) {
             return res.status(200).send("OK");
           }
 
-          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi}</b>\n💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n✍️ Qabul qildi: <b>${fromName}</b>`;
+          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
+          const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi}</b>\n💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n📥 Kirim hisobi: <b>${hisobNom}</b>\n✍️ Qabul qildi: <b>${fromName}</b>`;
         } else {
           javobMatn = `⚠️ Mijoz tanlanmadi (${p.mijoz_nomi || "Noma'lum"}). Iltimos, mijozlar bo'limidan tekshiring.`;
         }
@@ -1528,12 +1785,27 @@ export default async function handler(req: any, res: any) {
         const qarz = Math.max(0, jami - tolangan);
         const valyuta = p.valyuta || "UZS";
 
+        // Agar to'langan summa bo'lsa, hisob_id bo'lishi SHART
+        if (tolangan > 0 && !p.hisob_id) {
+          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+          const nextCard = buildSavdoCard(draftId, p, hisoblarDB || []);
+          await tgPost("editMessageText", {
+            chat_id: chatId,
+            message_id: msgId,
+            text: nextCard.text,
+            parse_mode: "HTML",
+            reply_markup: nextCard.keyboard,
+          });
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Iltimos, avval kirim hisobini tanlang!" });
+          return res.status(200).send("OK");
+        }
+
         const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish_v2", {
           p_mijoz_id: p.selectedMijoz?.id || null,
           p_valyuta: valyuta,
           p_tolangan: tolangan,
           p_tolov_turi: p.tolov_turi || "naqd",
-          p_hisob_id: p.hisob_id || "00000000-0000-0000-0000-000000000001",
+          p_hisob_id: tolangan > 0 ? p.hisob_id : null,
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
@@ -1563,11 +1835,15 @@ export default async function handler(req: any, res: any) {
           itemsSummary += `  • <b>${it.aniq_nom || it.nom}</b>: ${it.soni} ${it.birlik || "dona"}\n`;
         });
 
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
+        const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+
         javobMatn = `✅ <b>SAVDO SAQLANDI VA OMBORDAN AYIRILDI</b>\n\n` +
           `👤 Mijoz: <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
           (itemsSummary ? `📦 Mahsulotlar:\n${itemsSummary}\n` : "") +
           `💰 Jami: <b>${pul(jami)} ${valyuta}</b>\n` +
           `💵 To'landi: <b>${pul(tolangan)} ${valyuta}</b>\n` +
+          (tolangan > 0 ? `📥 Kirim hisobi: <b>${hisobNom}</b>\n` : "") +
           `📝 Qarzga: <b>${pul(qarz)} ${valyuta}</b>\n` +
           `✍️ Sotuvchi: <b>${fromName}</b>`;
       } else if (p.amal === "tovar_kirim") {
@@ -2321,7 +2597,8 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           yaratildi: new Date().toISOString(),
         });
 
-        const card = buildSavdoCard(draftId, parsedData);
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+        const card = buildSavdoCard(draftId, parsedData, hisoblarDB || []);
 
         await getSupabase().from("ai_chat_history").insert({
           chat_id: chatId,
@@ -2347,7 +2624,34 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           yaratildi: new Date().toISOString(),
         });
 
-        const card = buildQarzTolovCard(draftId, parsedData);
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+        const card = buildQarzTolovCard(draftId, parsedData, hisoblarDB || []);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // 2.5. RASXOD (CHIQIM) AMALI: HISOBNI SO'RASH VA TASDIQLASH
+      if (parsedData.amal === "rasxod") {
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+        const card = buildRasxodCard(draftId, parsedData, hisoblarDB || []);
 
         await getSupabase().from("ai_chat_history").insert({
           chat_id: chatId,
@@ -2401,7 +2705,7 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         return res.status(200).send("OK");
       }
 
-      // 5. RASXOD VA TOVAR KIRIMI UCHUN
+      // 5. TOVAR KIRIMI VA PUL O'TKAZMA UCHUN
       await getSupabase().from("tranzaksiya_qoralama").insert({
         id: draftId,
         malumot: parsedData,
@@ -2411,14 +2715,7 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
       const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom");
       const getHisobNom = (id: string) => hisoblarDB?.find((h: any) => h.id === id)?.nom || id || "Kiritilmagan";
 
-      let preview = "";
-      if (parsedData.amal === "rasxod") {
-        preview = `🧾 <b>XARAJAT (RASXOD) ANIQLANDI</b>\n\n` +
-          `💵 Summa: <b>${pul(parsedData.jami_summa)} ${parsedData.valyuta}</b>\n` +
-          `📂 Kategoriya: <b>${parsedData.kategoriya || "Boshqa"}</b>\n` +
-          `💳 Hisobdan: <b>${getHisobNom(parsedData.hisob_id)}</b>\n` +
-          (parsedData.izoh ? `💬 Izoh: ${parsedData.izoh}\n` : "");
-      } else if (parsedData.amal === "tovar_kirim") {
+      let preview = ""; if (parsedData.amal === "tovar_kirim") {
         const jamiTannarx = (parsedData.soni || 0) * (parsedData.tannarx || 0);
         preview = `📦 <b>TOVAR KIRIMI (OMBOR) ANIQLANDI</b>\n\n` +
           `🏷 Tovar: <b>${parsedData.tovar_nomi || "Yangi tovar"}</b>\n` +
