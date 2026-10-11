@@ -5,7 +5,7 @@ import { ChiqimDetailsModal } from "./ChiqimDetailsModal";
 import { Combobox } from "./ui/Combobox";
 import { toast } from "sonner";
 
-const KATEGORIYALAR = [
+const STANDART_KATEGORIYALAR = [
   { nom: "Ovqatlanish", belgi: "🍲", rang: "bg-orange-50 border-orange-200 text-orange-950" },
   { nom: "Taksi", belgi: "🚕", rang: "bg-yellow-50 border-yellow-200 text-yellow-950" },
   { nom: "Elektr", belgi: "💡", rang: "bg-blue-50 border-blue-200 text-blue-950" },
@@ -23,7 +23,10 @@ interface ChiqimTabProps {
 export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
   const [summa, setSumma] = useState("");
   const [valyuta, setValyuta] = useState<"UZS" | "USD">("UZS");
+  const [kategoriyalar, setKategoriyalar] = useState(STANDART_KATEGORIYALAR);
   const [tanlanganKat, setTanlanganKat] = useState("Ovqatlanish");
+  const [yangiKatOchiq, setYangiKatOchiq] = useState(false);
+  const [yangiKatNom, setYangiKatNom] = useState("");
   const [tolovTuri, setTolovTuri] = useState("naqd");
   const [izoh, setIzoh] = useState("");
   const [bugungiRasxodlar, setBugungiRasxodlar] = useState<any[]>([]);
@@ -47,6 +50,38 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
       .order("sana_vaqt", { ascending: false });
 
     if (rData) setBugungiRasxodlar(rData);
+
+    // Bazadagi barcha unikal kategoriyalarni yuklash
+    try {
+      const { data: barchaKat } = await supabase
+        .from("rasxodlar")
+        .select("kategoriya")
+        .eq("holat", "faol")
+        .limit(300);
+
+      if (barchaKat && barchaKat.length > 0) {
+        const mavjudNomlar = new Set(STANDART_KATEGORIYALAR.map((k) => k.nom.toLowerCase()));
+        const yangiQoshimchalar: any[] = [];
+
+        barchaKat.forEach((r: any) => {
+          const nom = (r.kategoriya || "").trim();
+          if (nom && !mavjudNomlar.has(nom.toLowerCase())) {
+            mavjudNomlar.add(nom.toLowerCase());
+            yangiQoshimchalar.push({
+              nom,
+              belgi: "🏷️",
+              rang: "bg-teal-50 border-teal-200 text-teal-950",
+            });
+          }
+        });
+
+        if (yangiQoshimchalar.length > 0) {
+          setKategoriyalar([...STANDART_KATEGORIYALAR, ...yangiQoshimchalar]);
+        }
+      }
+    } catch (e) {
+      console.error("Kategoriyalarni yuklashda xatolik:", e);
+    }
 
     const { data: hData } = await supabase.from("hisoblar").select("*").eq("faol", true);
     if (hData && hData.length > 0) {
@@ -185,9 +220,64 @@ export function ChiqimTab({ xodimNomi, telegramUserId }: ChiqimTabProps = {}) {
 
       {/* Kategoriya tugmalari */}
       <div>
-        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Kategoriyani tanlang:</label>
+        <div className="flex justify-between items-center mb-1.5">
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kategoriyani tanlang:</label>
+          <button
+            type="button"
+            onClick={() => {
+              setYangiKatOchiq(!yangiKatOchiq);
+              haptic("light");
+            }}
+            className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
+          >
+            {yangiKatOchiq ? "✕ Bekor qilish" : "➕ Yangi kategoriya"}
+          </button>
+        </div>
+
+        {/* Yangi kategoriya kiritish maydoni */}
+        {yangiKatOchiq && (
+          <div className="mb-2 p-2 bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 rounded-xl flex gap-1.5 items-center animate-in fade-in">
+            <input
+              type="text"
+              placeholder="Yangi kategoriya (masalan: Reklama, Kanselyariya)..."
+              value={yangiKatNom}
+              onChange={(e) => setYangiKatNom(e.target.value)}
+              className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const nom = yangiKatNom.trim();
+                if (!nom) {
+                  toast.error("Kategoriya nomini yozing!");
+                  return;
+                }
+                const mavjud = kategoriyalar.find((k) => k.nom.toLowerCase() === nom.toLowerCase());
+                if (mavjud) {
+                  setTanlanganKat(mavjud.nom);
+                } else {
+                  const yangi = {
+                    nom,
+                    belgi: "🏷️",
+                    rang: "bg-teal-50 border-teal-200 text-teal-950",
+                  };
+                  setKategoriyalar((prev) => [...prev, yangi]);
+                  setTanlanganKat(nom);
+                }
+                setYangiKatNom("");
+                setYangiKatOchiq(false);
+                haptic("medium");
+                toast.success(`"${nom}" kategoriyasi tanlandi!`);
+              }}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors"
+            >
+              Qo'shish
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2">
-          {KATEGORIYALAR.map((kat) => {
+          {kategoriyalar.map((kat) => {
             const tanlangan = tanlanganKat === kat.nom;
             return (
               <button

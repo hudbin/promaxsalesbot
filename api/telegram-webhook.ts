@@ -1067,6 +1067,29 @@ async function geminiTahlil(
     hisoblarRoyxatiText = "Hisoblar ro'yxatini olishda xato.";
   }
 
+  // Chiqim (rasxod) kategoriyalarini bazadan olish
+  let mavjudKategoriyalarText = "";
+  try {
+    const { data: rKategoriyalar } = await getSupabase()
+      .from("rasxodlar")
+      .select("kategoriya")
+      .eq("holat", "faol")
+      .limit(300);
+    const katSet = new Set<string>([
+      "Ovqatlanish", "Taksi", "Elektr", "Ijara", "Oylik", "Xo'jalik"
+    ]);
+    if (rKategoriyalar && rKategoriyalar.length > 0) {
+      rKategoriyalar.forEach((r: any) => {
+        if (r.kategoriya && typeof r.kategoriya === "string" && r.kategoriya.trim()) {
+          katSet.add(r.kategoriya.trim());
+        }
+      });
+    }
+    mavjudKategoriyalarText = Array.from(katSet).join(", ");
+  } catch (err) {
+    mavjudKategoriyalarText = "Ovqatlanish, Taksi, Elektr, Ijara, Oylik, Xo'jalik";
+  }
+
   const prompt = `
 Siz ulgurji va chakana savdo (B2B) do'koni uchun buxgalter yordamchi AI hisoblanasiz.
 Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilida (lotin yoki kirill) matn yoki ovozli xabar yuboradi.
@@ -1092,7 +1115,7 @@ JSON strukturasi 1-4 amallar uchun:
   "tolov_turi": "naqd" | "plastik" | "perechisleniya",
   "hisob_id": "eng mos hisob UUID raqami yoki null",
   "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo yoki qarz to'lovi bo'lsa, aks holda null),
-  "kategoriya": "Ovqatlanish" | "Taksi" | "Elektr" | "Ijara" | "Oylik" | "Boshqa" (agar rasxod bo'lsa),
+  "kategoriya": "Xarajat kategoriyasi nomi (string: mavjudlardan biri yoki yangi aniq kategoriya)" (agar rasxod bo'lsa),
   "tovar_nomi": "Tovar nomi" (agar tovar_kirim bo'lsa),
   "soni": 0.0 (agar tovar_kirim bo'lsa),
   "tannarx": 0.0 (agar tovar_kirim bo'lsa),
@@ -1177,6 +1200,27 @@ Muhim Qidiruv va Mantiq Qoidalari:
 - Agar "Akrom akaga 50 ta velikan 100 dollarga berdim, 40 dollar berdi" bo'lsa: amal: "savdo", mijoz_nomi: "Akrom aka", valyuta: "USD", jami_summa: 100, tolangan_summa: 40, tolov_turi: "naqd", qatorlar: [{"nom": "velikan", "soni": 50, "narx": 2}].
 - Agar omborga tovar kelgani, kirim bo'lgani, yangi tovar qo'shilishi aytilsa:
   amal: "tovar_kirim", tovar_nomi: "...", soni: 200, tannarx: 1.5, narx_optom: 2.0, valyuta: "USD", birlik: "dona", jami_summa: 300.
+
+BAZADAGI MAVJUD CHIQIM (RASXOD) KATEGORIYALARI:
+[${mavjudKategoriyalarText}]
+
+CHIQIM (RASXOD) KATEGORIYASINI BELGILASH VA DINAMIK YARATISH QOIDALARI:
+1. Xarajat matnini tushunib, uning nima maqsadda sarflanganini aniqlang.
+2. Agar xarajat yuqoridagi mavjud kategoriyalardan biriga to'g'ri kelsa (yoki uning sinonimi bo'lsa, masalan: tushlik/obed/somsa/choy -> "Ovqatlanish", yandex/yo'lkira/benzin -> "Taksi" yoki "Yoqilg'i"), O'SHA MAVJUD KATEGORIYANI tanlang (bosh harf bilan, imlosini buzmasdan).
+3. 🚨 AGAR XARAJAT MAVJUD KATEGORIYALARNING BIRORTASIGA HAM MOS KELMASA:
+   HECH QACHON "Boshqa" DEB YOZMANG! "Boshqa" so'zidan qat'iyan saqlaning!
+   Buning o'rniga, xarajatning tub maqsadi va mazmunidan kelib chiqib, O'ZBEK TILIDA 1-2 SO'ZLI, ANIQ VA CHROYLI YANGI KATEGORIYA YARATING (Bosh harfi katta bilan).
+   Misollar:
+   - "Reklama uchun 500 ming berdim", "Instagram reklama", "SMM" -> "Reklama"
+   - "Ofisga qog'oz, ruchka, daftar oldik" -> "Kanselyariya"
+   - "Usta kelib konditsionerni/kranni tuzatdi", "kraska oldik" -> "Ta'mirlash"
+   - "Yukni Andijonga yuborishga", "pochta", "fura yo'lkirasi" -> "Yuk tashish" (yoki "Logistika")
+   - "Skotch, qutilar, korobka, paket sotib oldik" -> "Qadoqlash"
+   - "Suv, gaz, musor to'lovi" -> "Kommunal"
+   - "Internet provayderga to'landi", "Wi-Fi" -> "Internet"
+   - "Yangi printer/stellaj/uskuna oldik" -> "Uskunalar"
+   - "Xodimga dori-darmon", "apteka" -> "Tibbiyot"
+   Har doim 1-2 so'zdan iborat toza o'zbekcha kategoriya nomini bering.
 
 BAZADAGI MAVJUD HISOBLAR RO'YXATI (Kassalar):
 ${hisoblarRoyxatiText}
