@@ -168,8 +168,26 @@ async function resolveSavdoEntities(data: any): Promise<any> {
   }
 
   // 2. Tovarlarni aniqlash
-  data.qatorlar = data.qatorlar || [];
+  data.qatorlar = Array.isArray(data.qatorlar) ? data.qatorlar : [];
+  if (data.qatorlar.length === 0 && Number(data.jami_summa || 0) > 0) {
+    data.qatorlar = [
+      {
+        nom: data.izoh || "Mahsulot",
+        soni: 1,
+        narx: Number(data.jami_summa),
+      },
+    ];
+  } else if (data.qatorlar.length === 1 && Number(data.jami_summa || 0) > 0) {
+    const first = data.qatorlar[0];
+    first.soni = Number(first.soni) || 1;
+    if (!Number(first.narx)) {
+      first.narx = Math.round((Number(data.jami_summa) / first.soni) * 100) / 100;
+    }
+  }
+
   for (const it of data.qatorlar) {
+    it.soni = Number(it.soni) || 1;
+    it.narx = Number(it.narx) || 0;
     if (it.nom && !it.status) {
       try {
         const { data: tList } = await client.rpc("fn_ai_tovar_qidirish", {
@@ -185,6 +203,9 @@ async function resolveSavdoEntities(data: any): Promise<any> {
             it.aniq_nom = tList[0].nom;
             it.qoldiq = Number(tList[0].qoldiq) || 0;
             it.birlik = tList[0].birlik || "dona";
+            if (!it.narx && Number(tList[0].narx_optom) > 0) {
+              it.narx = Number(tList[0].narx_optom);
+            }
             it.status = "resolved";
           } else {
             it.status = "ambiguous";
@@ -813,7 +834,7 @@ async function sendMijozQarzPdf(
     // 2. Savdolar va to'lovlar tarixini yuklash
     const { data: savdolar } = await client
       .from("savdolar")
-      .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, holat")
+      .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, holat, qatorlar:savdo_qatorlari(tovar_nomi, soni, narx, summa)")
       .eq("mijoz_id", mijoz.id)
       .neq("holat", "bekor_qilindi")
       .order("sana_vaqt", { ascending: true });
@@ -836,18 +857,30 @@ async function sendMijozQarzPdf(
         const jami = Number(s.jami_summa || 0);
         const tolandi = Number(s.tolangan_summa || 0);
         const qarz = Number(s.qarz_summa || 0);
-        if (s.valyuta === "USD") {
+        const val = s.valyuta || "UZS";
+        if (val === "USD") {
           jamiSavdoUsd += jami;
           jamiTolandiUsd += tolandi;
         } else {
           jamiSavdoUzs += jami;
           jamiTolandiUzs += tolandi;
         }
+        const qatorMatn =
+          Array.isArray(s.qatorlar) && s.qatorlar.length > 0
+            ? s.qatorlar
+                .map((q: any) => {
+                  const qSoni = Number(q.soni || 1);
+                  const qNarx = Number(q.narx || 0);
+                  const qSum = Number(q.summa || qSoni * qNarx);
+                  return `${q.tovar_nomi}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
+                })
+                .join("; ")
+            : "";
         hodisalar.push({
           sana: s.sana_vaqt,
           turi: "Savdo",
-          tafsilot: `Savdo #${s.raqam || ""}${s.izoh ? ` (${s.izoh})` : ""}`,
-          valyuta: s.valyuta || "UZS",
+          tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+          valyuta: val,
           berilganQarz: qarz,
           tolanganQarz: tolandi,
           summa: jami,
@@ -1104,7 +1137,7 @@ Quyidagi 8 ta amal turidan birini aniqlang:
 4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
 5. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish (masalan: "Asosiy hisobdan Qahramonning hisobiga 100 ming olindi/o'tkazildi", "Naqddan plastikga 50 dollar tashladim").
 6. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
-7. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozlar qarzini PDF fayl/hujjat ko'rinishida so'raganda.
+7. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini, mijozning qarz hisobotini (akt-sverka, savdo va qarzlar tarixi) yoki mijozlar qarzini PDF fayl / hujjat / hisobot ko'rinishida so'raganda.
 8. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1-4 amallar uchun:
@@ -1149,7 +1182,7 @@ JSON strukturasi "qarz_eslatma" amali uchun:
   "xabar_matni": "Ixtiyoriy foydalanuvchi aytgan maxsus xabar matni yoki null (agar aytmagan bo'lsa)"
 }
 
-JSON strukturasi "qarz_pdf" amali uchun (Umumiy qarzdorlar ro'yxati yoki bitta mijozning qarz akti PDF fayl ko'rinishida so'ralganda):
+JSON strukturasi "qarz_pdf" amali uchun (Umumiy qarzdorlar ro'yxati yoki bitta mijozning hisoboti / qarz akti so'ralganda):
 {
   "amal": "qarz_pdf",
   "mijoz_nomi": "Bitta aniq mijoz so'ralgan bo'lsa uning ismi/do'koni, butun ro'yxat bo'lsa null"
@@ -1898,8 +1931,13 @@ export default async function handler(req: any, res: any) {
         }
 
         let itemsSummary = "";
-        (p.qatorlar || []).forEach((it: any) => {
-          itemsSummary += `  • <b>${it.aniq_nom || it.nom}</b>: ${it.soni} ${it.birlik || "dona"}\n`;
+        (finalQatorlar || []).forEach((it: any, i: number) => {
+          const orig = (p.qatorlar || [])[i] || it;
+          const soni = Number(it.soni) || 1;
+          const narx = Number(it.narx) || 0;
+          const s = soni * narx;
+          const birlik = orig.birlik || "dona";
+          itemsSummary += `  ${i + 1}️⃣ <b>${orig.aniq_nom || it.nom}</b>: <code>${soni} ${birlik}</code> × <code>${pul(narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
         });
 
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
@@ -2634,17 +2672,51 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           });
         }
 
-        // Agar foydalanuvchi savolida PDF yoki fayl so'ralgan bo'lsa, PDF hujjatni ham yuboramiz
-        if (text && /pdf|fayl/i.test(text) && /qarz|qarzdor/i.test(text)) {
-          await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
-          // Agar bazadan aynan bitta mijoz so'rovi qaytgan bo'lsa (masalan dbResult ichida bitta mijoz yoki mijoz nomi bo'lsa)
+        // Agar savol mijoz, mijoz hisoboti yoki qarzdorlar haqida bo'lsa (matn yoki ovoz orqali), PDF hujjatni ham avtomatik yuboramiz
+        const sqlLower = cleanSql.toLowerCase();
+        const izohLower = (parsedData.izoh || "").toLowerCase();
+        const textLower = (text || "").toLowerCase();
+        const combinedQueryText = `${textLower} ${izohLower}`;
+
+        const isMijozOrQarzQuery =
+          sqlLower.includes("fn_ai_mijoz_qidirish") ||
+          sqlLower.includes("mijozlar") ||
+          sqlLower.includes("view_ai_qarzdorlar") ||
+          sqlLower.includes("qarz_tolovlari") ||
+          /qarz|qarzdor|hisobot|akt|sverka|pdf|fayl|mijoz/i.test(combinedQueryText);
+
+        if (isMijozOrQarzQuery && !sqlLower.includes("view_ai_xulosa") && !sqlLower.includes("view_bugungi_hisobot")) {
           let topilganMijozId: string | null = null;
-          if (Array.isArray(dbResult) && dbResult.length === 1 && (dbResult[0].id || dbResult[0].nom)) {
-            topilganMijozId = dbResult[0].id || dbResult[0].nom;
+          if (Array.isArray(dbResult) && dbResult.length === 1) {
+            const row = dbResult[0];
+            if (row.mijoz_id) topilganMijozId = String(row.mijoz_id);
+            else if (row.id && (row.qarz_uzs !== undefined || row.nom !== undefined || sqlLower.includes("mijoz"))) {
+              topilganMijozId = String(row.id);
+            } else if (row.nom && (row.qarz_uzs !== undefined || sqlLower.includes("mijoz"))) {
+              topilganMijozId = String(row.nom);
+            }
+          } else if (Array.isArray(dbResult) && dbResult.length > 1) {
+            const uniqueMijozIds = Array.from(new Set(dbResult.map((r: any) => r.mijoz_id).filter(Boolean)));
+            if (uniqueMijozIds.length === 1) {
+              topilganMijozId = String(uniqueMijozIds[0]);
+            }
           }
+
+          if (!topilganMijozId) {
+            const fnMatch = cleanSql.match(/fn_ai_mijoz_qidirish\(\s*'([^']+)'\s*\)/i);
+            const ilikeMatch = cleanSql.match(/nom\s+ILIKE\s+'%([^%']+)%'/i);
+            if (fnMatch && fnMatch[1]) topilganMijozId = fnMatch[1].trim();
+            else if (ilikeMatch && ilikeMatch[1]) topilganMijozId = ilikeMatch[1].trim();
+          }
+
           if (topilganMijozId) {
+            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
             await sendMijozQarzPdf(chatId, topilganMijozId);
-          } else {
+          } else if (
+            sqlLower.includes("view_ai_qarzdorlar") ||
+            (/pdf|fayl|hisobot|ro'yxat|royxat/i.test(combinedQueryText) && /qarz|qarzdor/i.test(combinedQueryText))
+          ) {
+            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
             await sendQarzdorlarPdf(chatId);
           }
         }

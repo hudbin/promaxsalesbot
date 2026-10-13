@@ -375,7 +375,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       const [{ data: barchaSavdolar }, { data: barchaTolovlar }] = await Promise.all([
         supabase
           .from("savdolar")
-          .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh")
+          .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, qatorlar:savdo_qatorlari(tovar_nomi, soni, narx, summa)")
           .eq("mijoz_id", mijoz.id)
           .neq("holat", "bekor_qilindi")
           .order("sana_vaqt", { ascending: true }),
@@ -391,20 +391,32 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       let jamiSavdoUsd = 0;
 
       if (barchaSavdolar) {
-        barchaSavdolar.forEach((s) => {
+        barchaSavdolar.forEach((s: any) => {
           const jami = Number(s.jami_summa || 0);
           const tolandi = Number(s.tolangan_summa || 0);
           const qarz = Number(s.qarz_summa || 0);
-          if (s.valyuta === "USD") {
+          const val = s.valyuta || "UZS";
+          if (val === "USD") {
             jamiSavdoUsd += jami;
           } else {
             jamiSavdoUzs += jami;
           }
+          const qatorMatn =
+            Array.isArray(s.qatorlar) && s.qatorlar.length > 0
+              ? s.qatorlar
+                  .map((q: any) => {
+                    const qSoni = Number(q.soni || 1);
+                    const qNarx = Number(q.narx || 0);
+                    const qSum = Number(q.summa || qSoni * qNarx);
+                    return `${q.tovar_nomi}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
+                  })
+                  .join("; ")
+              : "";
           hodisalar.push({
             sana: s.sana_vaqt,
             turi: "Savdo",
-            tafsilot: `Savdo #${s.raqam || ""}${s.izoh ? ` (${s.izoh})` : ""}`,
-            valyuta: s.valyuta || "UZS",
+            tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+            valyuta: val,
             berilganQarz: qarz,
             tolanganQarz: tolandi,
           });
