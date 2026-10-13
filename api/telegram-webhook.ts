@@ -309,6 +309,7 @@ function buildSavdoCard(draftId: string, p: any, hisoblar: any[] = []): { text: 
 
   if (qarz > 0 && p.selectedMijoz) {
     const joriyQarz = Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0;
+    text += `📂 <b>Mijozning eski umumiy qarzi:</b> <b>${pul(joriyQarz)} ${valyuta}</b>\n`;
     text += `📊 <b>Mijozning yangi umumiy qarzi:</b> <b>${pul(joriyQarz + qarz)} ${valyuta}</b>\n`;
   }
 
@@ -1815,7 +1816,19 @@ export default async function handler(req: any, res: any) {
 
           const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
           const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
-          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi}</b>\n💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n📥 Kirim hisobi: <b>${hisobNom}</b>\n✍️ Qabul qildi: <b>${fromName}</b>`;
+          const eskiQarz = p.selectedMijoz
+            ? Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0
+            : 0;
+          const qolganQarz = Math.max(0, eskiQarz - summa);
+          javobMatn = `✅ <b>QARZ TO'LOVI QABUL QILINDI</b>\n\n` +
+            `👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi}</b>\n` +
+            `💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n` +
+            `📥 Kirim hisobi: <b>${hisobNom}</b>\n` +
+            (p.selectedMijoz
+              ? `📂 Mijozning eski umumiy qarzi: <b>${pul(eskiQarz)} ${valyuta}</b>\n` +
+                `📉 To'lovdan keyingi qarzi: <b>${pul(qolganQarz)} ${valyuta}</b>\n`
+              : "") +
+            `✍️ Qabul qildi: <b>${fromName}</b>`;
         } else {
           javobMatn = `⚠️ Mijoz tanlanmadi (${p.mijoz_nomi || "Noma'lum"}). Iltimos, mijozlar bo'limidan tekshiring.`;
         }
@@ -1891,6 +1904,10 @@ export default async function handler(req: any, res: any) {
 
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
         const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+        const eskiQarz = p.selectedMijoz
+          ? Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0
+          : 0;
+        const yangiQarz = eskiQarz + qarz;
 
         javobMatn = `✅ <b>SAVDO SAQLANDI VA OMBORDAN AYIRILDI</b>\n\n` +
           `👤 Mijoz: <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
@@ -1899,6 +1916,10 @@ export default async function handler(req: any, res: any) {
           `💵 To'landi: <b>${pul(tolangan)} ${valyuta}</b>\n` +
           (tolangan > 0 ? `📥 Kirim hisobi: <b>${hisobNom}</b>\n` : "") +
           `📝 Qarzga: <b>${pul(qarz)} ${valyuta}</b>\n` +
+          (qarz > 0 && p.selectedMijoz
+            ? `📂 Mijozning eski umumiy qarzi: <b>${pul(eskiQarz)} ${valyuta}</b>\n` +
+              `📊 Mijozning yangi umumiy qarzi: <b>${pul(yangiQarz)} ${valyuta}</b>\n`
+            : "") +
           `✍️ Sotuvchi: <b>${fromName}</b>`;
       } else if (p.amal === "tovar_kirim") {
         // Omborga tovar kirimi / yangi tovar qo'shish
