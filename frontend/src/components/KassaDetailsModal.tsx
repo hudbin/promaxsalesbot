@@ -4,7 +4,7 @@ import {
   Calendar, FileText, Layers, User, Phone, MapPin, ShoppingBag, 
   Receipt, UserCheck, AlertCircle, Loader2, Edit2, Trash2, Check, AlertTriangle 
 } from "lucide-react";
-import { pul, supabase, haptic } from "../lib/supabase";
+import { pul, supabase, haptic, getJoriyXodimNomi, yuborTelegramXabar } from "../lib/supabase";
 import { toast } from "sonner";
 
 interface KassaDetailsModalProps {
@@ -170,6 +170,7 @@ export function KassaDetailsModal({ harakat, onClose, onYangilandi }: KassaDetai
   async function harakatniOchirish() {
     setOchirilmoqda(true);
     haptic("medium");
+    const xodimNom = getJoriyXodimNomi();
 
     try {
       const { error: kassaErr } = await supabase
@@ -182,6 +183,14 @@ export function KassaDetailsModal({ harakat, onClose, onYangilandi }: KassaDetai
       if (harakat.manba_turi === "rasxod" && harakat.manba_id) {
         await supabase.from("rasxodlar").delete().eq("id", harakat.manba_id);
       }
+
+      yuborTelegramXabar(
+        `🗑 <b>KASSA HARAKATI O'CHIRILDI</b>\n\n` +
+        `📌 Turi: <b>${harakat.amal === "kirim" ? "Kirim" : "Chiqim"} (${harakat.manba_turi || "Boshqa"})</b>\n` +
+        `💵 Summa: <b>${pul(harakat.summa)} ${harakat.valyuta}</b>\n` +
+        (harakat.izoh ? `💬 Izoh: <i>${harakat.izoh}</i>\n` : "") +
+        `✍️ O'chirdi: <b>${xodimNom}</b>`
+      );
 
       haptic("success");
       toast.success("Kassa yozuvi o'chirildi!");

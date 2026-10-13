@@ -86,6 +86,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       const { data: sData, error: sErr } = await supabase
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom, telefon)")
+        .neq("holat", "bekor_qilindi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: false });
@@ -97,6 +98,7 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
       const { data: rData, error: rErr } = await supabase
         .from("rasxodlar")
         .select("*")
+        .neq("holat", "bekor_qilindi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: false });

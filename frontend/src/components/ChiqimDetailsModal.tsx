@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { X, TrendingDown, Calendar, Wallet, CreditCard, User, FileText, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { pul, supabase, haptic } from "../lib/supabase";
+import { pul, supabase, haptic, getJoriyXodimNomi, yuborTelegramXabar } from "../lib/supabase";
 
 interface ChiqimDetailsModalProps {
   rasxod: any;
@@ -17,6 +17,7 @@ export function ChiqimDetailsModal({ rasxod, onClose, onOchirildi }: ChiqimDetai
   async function rasxodniOchirish() {
     setOchirilmoqda(true);
     haptic("medium");
+    const xodimNom = getJoriyXodimNomi();
 
     try {
       // 1. Kassa harakatlaridan ushbu rasxodni o'chirish (pul avtomatik kassa balansiga qaytadi)
@@ -37,6 +38,14 @@ export function ChiqimDetailsModal({ rasxod, onClose, onOchirildi }: ChiqimDetai
         .eq("id", rasxod.id);
 
       if (rasxodErr) throw rasxodErr;
+
+      yuborTelegramXabar(
+        `🗑 <b>CHIQIM (RASXOD) O'CHIRILDI</b>\n\n` +
+        `📂 Kategoriya: <b>${rasxod.kategoriya || "Chiqim"}</b>\n` +
+        `💵 Summa: <b>${pul(rasxod.summa)} ${rasxod.valyuta}</b>\n` +
+        (rasxod.izoh ? `💬 Izoh: <i>${rasxod.izoh}</i>\n` : "") +
+        `✍️ O'chirdi: <b>${xodimNom}</b>`
+      );
 
       haptic("success");
       if (onOchirildi) {

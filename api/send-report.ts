@@ -44,6 +44,7 @@ export default async function handler(req: any, res: any) {
     const { data: savdolar, error: savdoErr } = await supabase
       .from("savdolar")
       .select("*, mijoz:mijozlar(nom, telefon), hisob:hisoblar(nom)")
+      .neq("holat", "bekor_qilindi")
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso)
       .order("sana_vaqt", { ascending: true });
@@ -54,6 +55,7 @@ export default async function handler(req: any, res: any) {
     const { data: rasxodlar, error: rasxodErr } = await supabase
       .from("rasxodlar")
       .select("*, hisob:hisoblar(nom)")
+      .neq("holat", "bekor_qilindi")
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso)
       .order("sana_vaqt", { ascending: true });
@@ -70,8 +72,11 @@ export default async function handler(req: any, res: any) {
 
     if (qarzErr) throw qarzErr;
 
-    // 4. Kassa qoldiqlari
-    const { data: kassaBalans } = await supabase.from("view_kassa_balans").select("*");
+    // 4. Kassa qoldiqlari va faol hisoblar
+    const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
+      supabase.from("view_kassa_balans").select("*"),
+      supabase.from("hisoblar").select("*").eq("faol", true),
+    ]);
 
     // Hisob-kitoblar
     let jamiSavdoUZS = 0, jamiSavdoUSD = 0;
@@ -114,8 +119,45 @@ export default async function handler(req: any, res: any) {
       else qaytganQarzUZS += s;
     });
 
+    const hisobMap = new Map<string, any>();
+    (faolHisoblar || []).forEach((h: any) => hisobMap.set(h.id, h));
+
+    const extractGuruh = (hNom: string, hGuruhi?: string): string => {
+      if (hGuruhi && hGuruhi.trim()) {
+        const g = hGuruhi.trim();
+        if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(g)) return "Asosiy Do'kon";
+        return g;
+      }
+      if (!hNom) return "Asosiy Do'kon";
+      const toza = hNom
+        .replace(/\s*\((Naqd|Plastik|Bank|UZS|USD)[^\)]*\)/gi, "")
+        .replace(/\s*-\s*(Naqd|Plastik|Bank|UZS|USD)[^\-]*/gi, "")
+        .trim();
+      if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(toza)) return "Asosiy Do'kon";
+      return toza || hNom;
+    };
+
+    const getSubTartib = (k: any): number => {
+      if (k.valyuta === "UZS" && k.kassa_turi === "naqd") return 1;
+      if (k.valyuta === "UZS" && k.kassa_turi === "plastik") return 2;
+      if (k.valyuta === "UZS" && k.kassa_turi === "bank") return 3;
+      if (k.valyuta === "USD") return 4;
+      return 5;
+    };
+
+    const sortedKassa = (kassaBalans || [])
+      .filter((k) => hisobMap.size === 0 || hisobMap.has(k.hisob_id))
+      .sort((a, b) => {
+        const gA = extractGuruh(a.kassa_nomi, hisobMap.get(a.hisob_id)?.guruhi);
+        const gB = extractGuruh(b.kassa_nomi, hisobMap.get(b.hisob_id)?.guruhi);
+        if (gA === "Asosiy Do'kon" && gB !== "Asosiy Do'kon") return -1;
+        if (gA !== "Asosiy Do'kon" && gB === "Asosiy Do'kon") return 1;
+        if (gA !== gB) return gA.localeCompare(gB, "uz");
+        return getSubTartib(a) - getSubTartib(b);
+      });
+
     const kassaMapList: any[][] = [];
-    kassaBalans?.forEach((k) => {
+    sortedKassa.forEach((k) => {
       if (k.valyuta === "USD") {
         kassaMapList.push([k.kassa_nomi, 0, Number(k.joriy_balans || 0)]);
       } else {

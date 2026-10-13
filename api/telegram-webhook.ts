@@ -1844,6 +1844,22 @@ export default async function handler(req: any, res: any) {
           return res.status(200).send("OK");
         }
 
+        const mappedQatorlar = (p.qatorlar || []).map((it: any) => ({
+          tovar_id: it.tovar_id || null,
+          nom: it.aniq_nom || it.nom || "Mahsulot",
+          soni: Number(it.soni) || 1,
+          narx: Number(it.narx) || 0,
+          tannarx: Number(it.tannarx) || 0,
+        }));
+
+        const qatorlarSum = mappedQatorlar.reduce((s: number, it: any) => s + it.soni * it.narx, 0);
+        const finalQatorlar =
+          qatorlarSum > 0
+            ? mappedQatorlar
+            : jami > 0
+            ? [{ tovar_id: null, nom: p.izoh || "Savdo", soni: 1, narx: jami, tannarx: 0 }]
+            : mappedQatorlar;
+
         const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish_v2", {
           p_mijoz_id: p.selectedMijoz?.id || null,
           p_valyuta: valyuta,
@@ -1853,13 +1869,7 @@ export default async function handler(req: any, res: any) {
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
-          p_qatorlar: (p.qatorlar || []).map((it: any) => ({
-            tovar_id: it.tovar_id || null,
-            nom: it.aniq_nom || it.nom,
-            soni: Number(it.soni) || 0,
-            narx: Number(it.narx) || 0,
-            tannarx: Number(it.tannarx) || 0,
-          })),
+          p_qatorlar: finalQatorlar,
         });
 
         if (saveErr) {

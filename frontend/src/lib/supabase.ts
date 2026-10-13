@@ -30,3 +30,31 @@ export function haptic(type: "light" | "medium" | "heavy" | "success" | "error" 
     }
   } catch {}
 }
+
+export function getJoriyXodimNomi(): string {
+  try {
+    const user = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+    if (user) {
+      const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+      if (fullName) return fullName;
+      if (user.username) return `@${user.username}`;
+    }
+  } catch {}
+  return "Admin (Mini App)";
+}
+
+export async function yuborTelegramXabar(text: string): Promise<void> {
+  try {
+    const user = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+    await fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        chat_id: user?.id || null,
+      }),
+    });
+  } catch (err) {
+    console.warn("Telegram xabarnoma yuborishda xatolik:", err);
+  }
+}

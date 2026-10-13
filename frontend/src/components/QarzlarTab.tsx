@@ -715,7 +715,6 @@ export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }:
             ochTolovModali(m);
           }}
           onMijozYangilandi={() => {
-            setTanlanganMijozDetali(null);
             yuklaMijozlar();
           }}
         />

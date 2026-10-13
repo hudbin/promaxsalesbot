@@ -83,6 +83,7 @@ SELECT
     COALESCE(SUM(CASE WHEN kh.amal = 'kirim' THEN kh.summa ELSE -kh.summa END), 0) AS joriy_balans
 FROM hisoblar h
 LEFT JOIN kassa_harakatlari kh ON h.id = kh.hisob_id
+WHERE h.faol = true
 GROUP BY h.id, h.nom, h.turi, COALESCE(kh.valyuta, h.valyuta);
 
 -- ==============================================================================

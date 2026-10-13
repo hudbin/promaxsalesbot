@@ -90,33 +90,67 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
     });
   };
 
+  // Faqat faol hisoblarni ajratib olish
+  const faolBalanslar = hisoblar.length > 0
+    ? balanslar.filter((b) => hisoblar.some((h) => h.id === b.hisob_id))
+    : balanslar;
+
   // Jami summalarni hisoblash
-  const jamiUZS = balanslar
+  const jamiUZS = faolBalanslar
     .filter((b) => b.valyuta === "UZS")
     .reduce((sum, b) => sum + (Number(b.joriy_balans) || 0), 0);
-  const jamiUSD = balanslar
+  const jamiUSD = faolBalanslar
     .filter((b) => b.valyuta === "USD")
     .reduce((sum, b) => sum + (Number(b.joriy_balans) || 0), 0);
 
   // Nomdan guruh nomini ajratish (agar guruhi bo'sh bo'lsa)
   function extractGuruh(hNom: string, hGuruhi?: string): string {
-    if (hGuruhi && hGuruhi.trim()) return hGuruhi.trim();
+    if (hGuruhi && hGuruhi.trim()) {
+      const g = hGuruhi.trim();
+      if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(g)) return "Asosiy Do'kon";
+      return g;
+    }
     if (!hNom) return "Asosiy Do'kon";
     const toza = hNom
       .replace(/\s*\((Naqd|Plastik|Bank|UZS|USD)[^\)]*\)/gi, "")
       .replace(/\s*-\s*(Naqd|Plastik|Bank|UZS|USD)[^\-]*/gi, "")
       .trim();
+    if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(toza)) return "Asosiy Do'kon";
     return toza || hNom;
+  }
+
+  function getSubTartib(b: any): number {
+    if (b.valyuta === "UZS" && b.kassa_turi === "naqd") return 1;
+    if (b.valyuta === "UZS" && b.kassa_turi === "plastik") return 2;
+    if (b.valyuta === "UZS" && b.kassa_turi === "bank") return 3;
+    if (b.valyuta === "USD") return 4;
+    return 5;
   }
 
   // Hisoblarni guruhlar bo'yicha to'plash
   const guruhlanganBalanslar: Record<string, any[]> = {};
-  balanslar.forEach((b) => {
+  faolBalanslar.forEach((b) => {
     const hObj = hisoblar.find((h) => h.id === b.hisob_id);
     const guruhNomi = extractGuruh(b.kassa_nomi, hObj?.guruhi);
     if (!guruhlanganBalanslar[guruhNomi]) guruhlanganBalanslar[guruhNomi] = [];
     guruhlanganBalanslar[guruhNomi].push(b);
   });
+
+  // Har bir guruh ichidagi sub-hisoblarni tartiblash va guruhlarni tartiblash
+  const saralanganGuruhlar = Object.entries(guruhlanganBalanslar)
+    .map(([gNom, subs]) => {
+      const sortedSubs = [...subs].sort((a, b) => getSubTartib(a) - getSubTartib(b));
+      return [gNom, sortedSubs] as [string, any[]];
+    })
+    .sort(([nomA, subsA], [nomB, subsB]) => {
+      if (nomA === "Asosiy Do'kon" && nomB !== "Asosiy Do'kon") return -1;
+      if (nomA !== "Asosiy Do'kon" && nomB === "Asosiy Do'kon") return 1;
+      const faolA = subsA.some((s) => Number(s.joriy_balans || 0) !== 0);
+      const faolB = subsB.some((s) => Number(s.joriy_balans || 0) !== 0);
+      if (faolA && !faolB) return -1;
+      if (!faolA && faolB) return 1;
+      return nomA.localeCompare(nomB, "uz");
+    });
 
   return (
     <div className="space-y-3 pb-8">
@@ -131,7 +165,7 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
               Kassa Balansi
             </h3>
             <p className="text-[10px] text-slate-400 font-medium">
-              {Object.keys(guruhlanganBalanslar).length} ta kassa guruhi • {balanslar.length} ta hisob
+              {saralanganGuruhlar.length} ta kassa guruhi • {faolBalanslar.length} ta hisob
             </p>
           </div>
         </div>
@@ -158,12 +192,12 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
 
       {/* HAR BIR KASSA (GURUH) UCHUN BITTA KARTA ICHIDA SUB-HISOBLAR */}
       <div className="space-y-2.5">
-        {Object.keys(guruhlanganBalanslar).length === 0 ? (
+        {saralanganGuruhlar.length === 0 ? (
           <div className="text-center py-6 text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border p-4">
             Hisoblar topilmadi.
           </div>
         ) : (
-          Object.entries(guruhlanganBalanslar).map(([guruhNomi, subBalanslar]) => {
+          saralanganGuruhlar.map(([guruhNomi, subBalanslar]) => {
             const guruhUZS = subBalanslar
               .filter((s) => s.valyuta === "UZS")
               .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);

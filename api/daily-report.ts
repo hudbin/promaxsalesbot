@@ -15,6 +15,27 @@ function pul(n: number): string {
   return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
 }
 
+function formatUsd(n: number): string {
+  const num = Math.round(n || 0);
+  if (num < 0) return `-$${pul(Math.abs(num))}`;
+  return `$${pul(num)}`;
+}
+
+function extractGuruh(hNom: string, hGuruhi?: string): string {
+  if (hGuruhi && hGuruhi.trim()) {
+    const g = hGuruhi.trim();
+    if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(g)) return "Asosiy Do'kon";
+    return g;
+  }
+  if (!hNom) return "Asosiy Do'kon";
+  const toza = hNom
+    .replace(/\s*\((Naqd|Plastik|Bank|UZS|USD)[^\)]*\)/gi, "")
+    .replace(/\s*-\s*(Naqd|Plastik|Bank|UZS|USD)[^\-]*/gi, "")
+    .trim();
+  if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(toza)) return "Asosiy Do'kon";
+  return toza || hNom;
+}
+
 export default async function handler(req: any, res: any) {
   if (!BOT_TOKEN) {
     console.error("BOT_TOKEN sozlanmagan.");
@@ -24,19 +45,19 @@ export default async function handler(req: any, res: any) {
   try {
     const today = new Date().toISOString().split("T")[0];
 
-    // 1. Bugungi savdolar
+    // 1. Bugungi savdolar (bekor qilinganlardan tashqari)
     const { data: savdolar } = await supabase
       .from("savdolar")
       .select("valyuta, jami_summa, tolangan_summa, qarz_summa")
       .gte("sana_vaqt", `${today}T00:00:00Z`)
-      .eq("holat", "yakunlandi");
+      .neq("holat", "bekor_qilindi");
 
-    // 2. Bugungi rasxodlar
+    // 2. Bugungi rasxodlar (bekor qilinganlardan tashqari)
     const { data: rasxodlar } = await supabase
       .from("rasxodlar")
       .select("valyuta, summa, kategoriya")
       .gte("sana_vaqt", `${today}T00:00:00Z`)
-      .eq("holat", "faol");
+      .neq("holat", "bekor_qilindi");
 
     // 3. Bugungi qarz to'lovlari
     const { data: qarzTolovlari } = await supabase
@@ -44,8 +65,11 @@ export default async function handler(req: any, res: any) {
       .select("valyuta, summa")
       .gte("sana_vaqt", `${today}T00:00:00Z`);
 
-    // 4. Kassa qoldiqlari
-    const { data: kassaBalans } = await supabase.from("view_kassa_balans").select("*");
+    // 4. Kassa qoldiqlari va faol hisoblar
+    const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
+      supabase.from("view_kassa_balans").select("*"),
+      supabase.from("hisoblar").select("*").eq("faol", true),
+    ]);
 
     // Hisob-kitoblar
     let savdoUZS = 0, savdoUSD = 0, naqdUZS = 0, naqdUSD = 0, qarzBerildiUZS = 0, qarzBerildiUSD = 0;
@@ -78,48 +102,141 @@ export default async function handler(req: any, res: any) {
       else eskiQarzTushdiUZS += Number(q.summa || 0);
     });
 
-    // Kassa qoldiqlari xaritasi (Dinamik Hisoblar)
-    const kassaMatnList: string[] = [];
-    kassaBalans?.forEach((k) => {
-      let valIcon = k.valyuta === "USD" ? "💲" : "💵";
-      if (k.kassa_turi === "plastik") valIcon = "💳";
-      if (k.kassa_turi === "bank") valIcon = "🏦";
-      const summaPul = k.valyuta === "USD" ? `$${pul(k.joriy_balans || 0)}` : `${pul(k.joriy_balans || 0)} so'm`;
-      kassaMatnList.push(`   ${valIcon} ${k.kassa_nomi}: <b>${summaPul}</b>`);
+    // Faol hisoblar xaritasi
+    const hisobMap = new Map<string, any>();
+    (faolHisoblar || []).forEach((h: any) => hisobMap.set(h.id, h));
+
+    // Faqat faol hisoblarni olib, guruhlar bo'yicha yig'ish
+    type SubSlot = { naqdUZS: number; plastikUZS: number; bankUZS: number; hasBank: boolean; naqdUSD: number };
+    const guruhMap = new Map<string, SubSlot>();
+    let jamiKassaUZS = 0;
+    let jamiKassaUSD = 0;
+
+    (kassaBalans || []).forEach((k: any) => {
+      if (hisobMap.size > 0 && !hisobMap.has(k.hisob_id)) return;
+      const hObj = hisobMap.get(k.hisob_id);
+      const guruhNomi = extractGuruh(k.kassa_nomi, hObj?.guruhi);
+      const balans = Number(k.joriy_balans || 0);
+      const isUSD = k.valyuta === "USD";
+
+      if (isUSD) jamiKassaUSD += balans;
+      else jamiKassaUZS += balans;
+
+      if (!guruhMap.has(guruhNomi)) {
+        guruhMap.set(guruhNomi, { naqdUZS: 0, plastikUZS: 0, bankUZS: 0, hasBank: false, naqdUSD: 0 });
+      }
+      const slot = guruhMap.get(guruhNomi)!;
+      if (isUSD) {
+        slot.naqdUSD += balans;
+      } else if (k.kassa_turi === "plastik") {
+        slot.plastikUZS += balans;
+      } else if (k.kassa_turi === "bank") {
+        slot.bankUZS += balans;
+        slot.hasBank = true;
+      } else {
+        slot.naqdUZS += balans;
+      }
     });
-    const kassaMatn = kassaMatnList.length > 0 ? kassaMatnList.join("\n") : "   <i>Hisoblar bo'sh</i>";
+
+    // Guruhlarni tartiblash: 1) Asosiy Do'kon, 2) Balansi borlar, 3) Balansi 0 lar (alifbo bo'yicha)
+    const sortedGuruhlar = Array.from(guruhMap.entries()).sort(([nomA, a], [nomB, b]) => {
+      const isMainA = nomA === "Asosiy Do'kon";
+      const isMainB = nomB === "Asosiy Do'kon";
+      if (isMainA && !isMainB) return -1;
+      if (!isMainA && isMainB) return 1;
+
+      const faolA = a.naqdUZS !== 0 || a.plastikUZS !== 0 || a.bankUZS !== 0 || a.naqdUSD !== 0;
+      const faolB = b.naqdUZS !== 0 || b.plastikUZS !== 0 || b.bankUZS !== 0 || b.naqdUSD !== 0;
+      if (faolA && !faolB) return -1;
+      if (!faolA && faolB) return 1;
+
+      return nomA.localeCompare(nomB, "uz");
+    });
+
+    const asosiyQatorlar: string[] = [];
+    const xodimQatorlar: string[] = [];
+
+    for (const [guruhNomi, slot] of sortedGuruhlar) {
+      const isMain = guruhNomi === "Asosiy Do'kon";
+      const hasNonZero = slot.naqdUZS !== 0 || slot.plastikUZS !== 0 || slot.bankUZS !== 0 || slot.naqdUSD !== 0;
+
+      if (isMain) {
+        const subLines: string[] = [
+          `💵 Naqd: <b>${pul(slot.naqdUZS)} so'm</b>`,
+          `💳 Plastik: <b>${pul(slot.plastikUZS)} so'm</b>`,
+        ];
+        if (slot.hasBank || slot.bankUZS !== 0) {
+          subLines.push(`🏦 Bank: <b>${pul(slot.bankUZS)} so'm</b>`);
+        }
+        subLines.push(`💲 Dollar: <b>${formatUsd(slot.naqdUSD)}</b>`);
+
+        const formattedSubs = subLines
+          .map((line, i) => `   ${i === subLines.length - 1 ? "└" : "├"} ${line}`)
+          .join("\n");
+        asosiyQatorlar.push(`🏢 <b>${guruhNomi}:</b>\n${formattedSubs}`);
+      } else if (hasNonZero) {
+        const subLines: string[] = [
+          `💵 Naqd: <b>${pul(slot.naqdUZS)} so'm</b>`,
+          `💳 Plastik: <b>${pul(slot.plastikUZS)} so'm</b>`,
+        ];
+        if (slot.hasBank || slot.bankUZS !== 0) {
+          subLines.push(`🏦 Bank: <b>${pul(slot.bankUZS)} so'm</b>`);
+        }
+        subLines.push(`💲 Dollar: <b>${formatUsd(slot.naqdUSD)}</b>`);
+
+        const formattedSubs = subLines
+          .map((line, i) => `      ${i === subLines.length - 1 ? "└" : "├"} ${line}`)
+          .join("\n");
+        xodimQatorlar.push(`   • 👤 <b>${guruhNomi}:</b>\n${formattedSubs}`);
+      } else {
+        xodimQatorlar.push(`   • 👤 <b>${guruhNomi}:</b> 0 so'm | $0`);
+      }
+    }
+
+    let kassaMatn = `   📊 <b>Jami balans:</b> <b>${pul(jamiKassaUZS)} so'm</b> | <b>${formatUsd(jamiKassaUSD)}</b>\n`;
+    if (asosiyQatorlar.length > 0) {
+      kassaMatn += `\n${asosiyQatorlar.join("\n\n")}\n`;
+    }
+    if (xodimQatorlar.length > 0) {
+      kassaMatn += `\n👥 <b>Xodimlar hisoblari:</b>\n${xodimQatorlar.join("\n")}`;
+    }
 
     // Telegram uchun xabar matnini tuzish
-    const kun = new Date().toLocaleDateString("ru-RU");
+    const now = new Date();
+    const kun = now.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" });
+    const soat = now.toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" });
     const katMatn = Object.entries(katMap)
       .map(([k, v]) => `   • ${k}: ${pul(v)} so'm`)
       .join("\n");
 
     const matn =
       `📊 <b>PROMAX · KUNLIK YAKUNIY HISOBOT</b>\n` +
-      `📅 <b>Sana: ${kun} (21:00)</b>\n\n` +
+      `📅 <b>Sana: ${kun} (${soat})</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
       `🛒 <b>SAVDO:</b>\n` +
-      `   • Jami savdo: <b>${pul(savdoUZS)} so'm</b> ${savdoUSD > 0 ? `| <b>$${pul(savdoUSD)}</b>` : ""}\n` +
-      `   • Kassaga tushdi: <b>${pul(naqdUZS)} so'm</b> ${naqdUSD > 0 ? `| <b>$${pul(naqdUSD)}</b>` : ""}\n` +
-      `   • Qarzga berildi: <b>${pul(qarzBerildiUZS)} so'm</b> ${qarzBerildiUSD > 0 ? `| <b>$${pul(qarzBerildiUSD)}</b>` : ""}\n\n` +
+      `   • Jami savdo: <b>${pul(savdoUZS)} so'm</b>${savdoUSD > 0 ? ` | <b>${formatUsd(savdoUSD)}</b>` : ""}\n` +
+      `   • Kassaga tushdi: <b>${pul(naqdUZS)} so'm</b>${naqdUSD > 0 ? ` | <b>${formatUsd(naqdUSD)}</b>` : ""}\n` +
+      `   • Qarzga berildi: <b>${pul(qarzBerildiUZS)} so'm</b>${qarzBerildiUSD > 0 ? ` | <b>${formatUsd(qarzBerildiUSD)}</b>` : ""}\n\n` +
       `💳 <b>ESKI QARZDAN TUSHUM:</b>\n` +
-      `   • Qaytarilgan qarz: <b>${pul(eskiQarzTushdiUZS)} so'm</b> ${eskiQarzTushdiUSD > 0 ? `| <b>$${pul(eskiQarzTushdiUSD)}</b>` : ""}\n\n` +
+      `   • Qaytarilgan qarz: <b>${pul(eskiQarzTushdiUZS)} so'm</b>${eskiQarzTushdiUSD > 0 ? ` | <b>${formatUsd(eskiQarzTushdiUSD)}</b>` : ""}\n\n` +
       `🧾 <b>XARAJATLAR (RASXOD):</b>\n` +
-      `   • Jami chiqim: <b>${pul(rasxodUZS)} so'm</b> ${rasxodUSD > 0 ? `| <b>$${pul(rasxodUSD)}</b>` : ""}\n` +
-      (katMatn ? `${katMatn}\n\n` : `\n`) +
-      `💰 <b>HISOB-KITOB (KASSALAR) JORIY HOLATI:</b>\n` +
+      `   • Jami chiqim: <b>${pul(rasxodUZS)} so'm</b>${rasxodUSD > 0 ? ` | <b>${formatUsd(rasxodUSD)}</b>` : ""}\n` +
+      (katMatn ? `${katMatn}\n` : ``) +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `💰 <b>KASSALAR JORIY HOLATI:</b>\n` +
       `${kassaMatn}\n\n` +
       `📱 <i>Batafsil ro'yxat va filtrlash — Mini App ilovasida.</i>`;
 
-    // Adminlarni bazadan olish
-    const { data: adminlar } = await supabase.from("xodimlar").select("telegram_id").eq("rol", "admin").eq("faol", true);
-    let adminList = adminlar?.map((a) => a.telegram_id) || [];
-    if (adminList.length === 0) {
-      // Agar bazada admin topilmasa, fallback sifatida asosiy guruhga jo'natamiz
-      adminList = [GROUP_CHAT_ID];
-    }
+    // Adminlarni va guruhni yig'ish
+    const targets = new Set<string>();
+    if (GROUP_CHAT_ID) targets.add(String(GROUP_CHAT_ID).trim());
 
-    for (const chatId of adminList) {
+    const { data: adminlar } = await supabase.from("xodimlar").select("telegram_id").eq("rol", "admin").eq("faol", true);
+    adminlar?.forEach((a) => {
+      if (a.telegram_id) targets.add(String(a.telegram_id).trim());
+    });
+
+    for (const chatId of targets) {
       await fetch(`${TELEGRAM_API}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,7 +248,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    console.log("Kunlik hisobot guruhga yuborildi:", today);
+    console.log("Kunlik hisobot yuborildi:", today);
     return res.status(200).json({ ok: true, message: "Report sent" });
   } catch (err: any) {
     console.error("Hisobot yuborishda xatolik:", err);

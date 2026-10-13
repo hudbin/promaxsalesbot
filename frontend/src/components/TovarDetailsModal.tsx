@@ -3,7 +3,7 @@ import {
   X, Package, DollarSign, TrendingUp, AlertTriangle, Layers, Edit2, Plus, 
   Check, Camera, ImagePlus, Loader2, Trash2 
 } from "lucide-react";
-import { pul, haptic, supabase } from "../lib/supabase";
+import { pul, haptic, supabase, getJoriyXodimNomi, yuborTelegramXabar } from "../lib/supabase";
 import { uploadTovarRasm } from "../lib/imageUtils";
 import { toast } from "sonner";
 
@@ -127,6 +127,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
     setOchirilmoqda(true);
     setOchirishXato("");
     haptic("medium");
+    const xodimNom = getJoriyXodimNomi();
 
     try {
       // Savdo qatorlarida mavjudligini tekshirish
@@ -154,6 +155,13 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
         if (error) throw error;
         toast.success("Tovar butunlay o'chirildi");
       }
+
+      yuborTelegramXabar(
+        `🗑 <b>TOVAR O'CHIRILDI / ARXIVLANDI</b>\n\n` +
+        `📦 Tovar: <b>${tovar.nom}</b>\n` +
+        `📊 Qoldiq: <code>${qoldiq} ${birlik}</code>\n` +
+        `✍️ O'chirdi: <b>${xodimNom}</b>`
+      );
 
       haptic("success");
       onUpdate();

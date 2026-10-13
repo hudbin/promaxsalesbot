@@ -46,12 +46,17 @@ export function HisoblarModal({ hisoblar, onClose, onSuccess }: Props) {
 
   // Nomdan guruh nomini ajratib olish (agar bazada guruhi bo'sh bo'lsa)
   function extractGuruh(hNom: string, hGuruhi?: string): string {
-    if (hGuruhi && hGuruhi.trim()) return hGuruhi.trim();
-    if (!hNom) return "Asosiy";
+    if (hGuruhi && hGuruhi.trim()) {
+      const g = hGuruhi.trim();
+      if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(g)) return "Asosiy Do'kon";
+      return g;
+    }
+    if (!hNom) return "Asosiy Do'kon";
     const toza = hNom
       .replace(/\s*\((Naqd|Plastik|Bank|UZS|USD)[^\)]*\)/gi, "")
       .replace(/\s*-\s*(Naqd|Plastik|Bank|UZS|USD)[^\-]*/gi, "")
       .trim();
+    if (/^asosiy\s+(do['’`]?kon|kassa)/i.test(toza)) return "Asosiy Do'kon";
     return toza || hNom;
   }
 
