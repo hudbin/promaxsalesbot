@@ -126,6 +126,22 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
+// Yordamchi: tolov_turi qiymatini bazadagi CHECK constraint ('naqd' | 'plastik' | 'perechisleniya') ga moslash
+function normalizeTolovTuri(raw?: string, hisobTuri?: string): "naqd" | "plastik" | "perechisleniya" {
+  if (hisobTuri === "plastik") return "plastik";
+  if (hisobTuri === "bank") return "perechisleniya";
+  if (hisobTuri === "naqd") return "naqd";
+
+  const s = String(raw || "").toLowerCase().trim();
+  if (s === "plastik" || /karta|plastik|click|payme|uzcard|humo/i.test(s)) {
+    return "plastik";
+  }
+  if (s === "perechisleniya" || /perechis|bank|hisob\s*raqam|otkazma|o'tkazma/i.test(s)) {
+    return "perechisleniya";
+  }
+  return "naqd";
+}
+
 // -----------------------------------------------------------------------------
 // AQLLI ENTITY ANIQLASHTIRISH VA IKKI BOSQICHLI TASDIQLASH YORDAMCHILARI
 // -----------------------------------------------------------------------------
@@ -1776,8 +1792,8 @@ export default async function handler(req: any, res: any) {
       let javobMatn = "";
 
       if (p.amal === "rasxod") {
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         if (!p.hisob_id) {
-          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
           const nextCard = buildRasxodCard(draftId, p, hisoblarDB || []);
           await tgPost("editMessageText", {
             chat_id: chatId,
@@ -1790,27 +1806,41 @@ export default async function handler(req: any, res: any) {
           return res.status(200).send("OK");
         }
 
-        await getSupabase().rpc("fn_rasxod_yaratish_v2", {
+        const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+        const tolovTuriNorm = normalizeTolovTuri(p.tolov_turi, tanlanganHisob?.turi);
+
+        const { error: rasxodErr } = await getSupabase().rpc("fn_rasxod_yaratish_v2", {
           p_summa: p.jami_summa,
           p_valyuta: p.valyuta || "UZS",
           p_kategoriya: p.kategoriya || "Boshqa",
-          p_tolov_turi: p.tolov_turi || "naqd",
+          p_tolov_turi: tolovTuriNorm,
           p_hisob_id: p.hisob_id,
           p_izoh: p.izoh || "",
           p_xodim: fromName,
           p_telegram_user_id: cq.from?.id,
         });
 
-        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
-        const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+        if (rasxodErr) {
+          console.error("fn_rasxod_yaratish xatosi:", rasxodErr);
+          await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xatolik: " + rasxodErr.message });
+          await tgPost("editMessageText", {
+            chat_id: chatId,
+            message_id: msgId,
+            text: `❌ <b>Xarajatni saqlashda xatolik:</b>\n<code>${rasxodErr.message}</code>`,
+            parse_mode: "HTML",
+          });
+          return res.status(200).send("OK");
+        }
+
+        const hisobNom = tanlanganHisob?.nom || "Kassa";
         javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n💳 Chiqim hisobi: <b>${hisobNom}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
       } else if (p.amal === "qarz_tolov") {
         const mijozId = p.selectedMijoz?.id || null;
         const valyuta = p.valyuta || "UZS";
         const summa = Number(p.jami_summa) || 0;
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
 
         if (summa > 0 && !p.hisob_id) {
-          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
           const nextCard = buildQarzTolovCard(draftId, p, hisoblarDB || []);
           await tgPost("editMessageText", {
             chat_id: chatId,
@@ -1824,11 +1854,14 @@ export default async function handler(req: any, res: any) {
         }
 
         if (mijozId) {
+          const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+          const tolovTuriNorm = normalizeTolovTuri(p.tolov_turi, tanlanganHisob?.turi);
+
           const { error: tolovErr } = await getSupabase().rpc("fn_qarz_tolov_yaratish_v2", {
             p_mijoz_id: mijozId,
             p_summa: summa,
             p_valyuta: valyuta,
-            p_tolov_turi: p.tolov_turi || "naqd",
+            p_tolov_turi: tolovTuriNorm,
             p_hisob_id: p.hisob_id,
             p_izoh: p.izoh || "",
             p_xodim: fromName,
@@ -1847,8 +1880,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).send("OK");
           }
 
-          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
-          const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+          const hisobNom = tanlanganHisob?.nom || "Kassa";
           const eskiQarz = p.selectedMijoz
             ? Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0
             : 0;
@@ -1874,10 +1906,10 @@ export default async function handler(req: any, res: any) {
         const tolangan = Number(p.tolangan_summa) || 0;
         const qarz = Math.max(0, jami - tolangan);
         const valyuta = p.valyuta || "UZS";
+        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
 
         // Agar to'langan summa bo'lsa, hisob_id bo'lishi SHART
         if (tolangan > 0 && !p.hisob_id) {
-          const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
           const nextCard = buildSavdoCard(draftId, p, hisoblarDB || []);
           await tgPost("editMessageText", {
             chat_id: chatId,
@@ -1906,11 +1938,14 @@ export default async function handler(req: any, res: any) {
             ? [{ tovar_id: null, nom: p.izoh || "Savdo", soni: 1, narx: jami, tannarx: 0 }]
             : mappedQatorlar;
 
+        const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+        const tolovTuriNorm = normalizeTolovTuri(p.tolov_turi, tanlanganHisob?.turi);
+
         const { data: savdoId, error: saveErr } = await getSupabase().rpc("fn_savdo_yaratish_v2", {
           p_mijoz_id: p.selectedMijoz?.id || null,
           p_valyuta: valyuta,
           p_tolangan: tolangan,
-          p_tolov_turi: p.tolov_turi || "naqd",
+          p_tolov_turi: tolovTuriNorm,
           p_hisob_id: tolangan > 0 ? p.hisob_id : null,
           p_izoh: p.izoh || "",
           p_xodim: fromName,
@@ -1940,8 +1975,7 @@ export default async function handler(req: any, res: any) {
           itemsSummary += `  ${i + 1}️⃣ <b>${orig.aniq_nom || it.nom}</b>: <code>${soni} ${birlik}</code> × <code>${pul(narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
         });
 
-        const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
-        const hisobNom = hisoblarDB?.find((h: any) => h.id === p.hisob_id)?.nom || "Kassa";
+        const hisobNom = tanlanganHisob?.nom || "Kassa";
         const eskiQarz = p.selectedMijoz
           ? Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0
           : 0;
@@ -2229,16 +2263,20 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // 2.2 KONTAKT (TELEFON RAQAM) KELGANDA YOKI MATNDA TELEFON RAQAM YUBORILGANDA
+  // 2.2 KONTAKT (TELEFON RAQAM) KELGANDA YOKI MATNDA FAQAT TELEFON RAQAM YUBORILGANDA
   let rawPhoneNumber = contact?.phone_number;
   if (!rawPhoneNumber && text && !text.startsWith("/")) {
-    const cleanDigits = text.replace(/[^\d+]/g, "");
-    if (
-      (cleanDigits.startsWith("+998") && cleanDigits.length === 13) ||
-      (cleanDigits.startsWith("998") && cleanDigits.length === 12) ||
-      (cleanDigits.length === 9 && !cleanDigits.startsWith("+"))
-    ) {
-      rawPhoneNumber = cleanDigits;
+    // Matn ichida birorta ham harf bo'lmasligi shart (aks holda "114573517 som" kabi summalar telefon deb o'ylanib qoladi)
+    const hasLetters = /[a-zA-Zа-яА-ЯёЁўқғҳЎҚҒҲ]/i.test(text);
+    if (!hasLetters) {
+      const cleanDigits = text.replace(/[^\d+]/g, "");
+      if (
+        (cleanDigits.startsWith("+998") && cleanDigits.length === 13) ||
+        (cleanDigits.startsWith("998") && cleanDigits.length === 12) ||
+        (/^(90|91|93|94|95|97|98|99|33|88|77|50|55|71)\d{7}$/.test(cleanDigits))
+      ) {
+        rawPhoneNumber = cleanDigits;
+      }
     }
   }
 
@@ -2732,6 +2770,7 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
     }
 
     if (parsedData && parsedData.amal) {
+      parsedData.tolov_turi = normalizeTolovTuri(parsedData.tolov_turi);
       // Vaqtinchalik qoralama sifatida saqlash (UUID bilan)
       const draftId = Math.random().toString(36).substring(2, 10);
 
