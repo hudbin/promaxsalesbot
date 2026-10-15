@@ -815,7 +815,9 @@ async function sendQarzdorlarPdf(chatId: number | string): Promise<{ ok: boolean
 // -----------------------------------------------------------------------------
 async function sendMijozQarzPdf(
   chatId: number | string,
-  mijozIdOrNom: string
+  mijozIdOrNom: string,
+  boshSana?: string | null,
+  tugashSana?: string | null
 ): Promise<{ ok: boolean; mijoz?: any; error?: string }> {
   try {
     const client = getSupabase();
@@ -847,19 +849,98 @@ async function sendMijozQarzPdf(
       return { ok: false, error: "Mijoz topilmadi" };
     }
 
-    // 2. Savdolar va to'lovlar tarixini yuklash
-    const { data: savdolar } = await client
+    // Sanalarni normalizatsiya qilish va ISO formatga keltirish
+    let boshSanaIso: string | null = null;
+    let tugashSanaIso: string | null = null;
+    let davrMatni = "";
+
+    if (boshSana && String(boshSana).trim()) {
+      const s = String(boshSana).trim();
+      boshSanaIso = s.length === 10 ? `${s}T00:00:00.000+05:00` : new Date(s).toISOString();
+    }
+    if (tugashSana && String(tugashSana).trim()) {
+      const s = String(tugashSana).trim();
+      tugashSanaIso = s.length === 10 ? `${s}T23:59:59.999+05:00` : new Date(s).toISOString();
+    }
+
+    if (boshSanaIso && tugashSanaIso) {
+      davrMatni = `${new Date(boshSanaIso).toLocaleDateString("ru-RU")} — ${new Date(tugashSanaIso).toLocaleDateString("ru-RU")}`;
+    } else if (tugashSanaIso) {
+      davrMatni = `${new Date(tugashSanaIso).toLocaleDateString("ru-RU")} gacha`;
+    } else if (boshSanaIso) {
+      davrMatni = `${new Date(boshSanaIso).toLocaleDateString("ru-RU")} dan boshlab`;
+    }
+
+    let boshlangichQarzUzs = 0;
+    let boshlangichQarzUsd = 0;
+    let oxirgiQarzUzs = Number(mijoz.qarz_uzs || 0);
+    let oxirgiQarzUsd = Number(mijoz.qarz_usd || 0);
+    let hisobotAmallar: any[] | null = null;
+
+    // RPC orqali hisoblashga urinib ko'rish
+    try {
+      const { data: rpcData, error: rpcErr } = await client.rpc("fn_mijoz_qarz_tarixiy", {
+        p_mijoz_id: mijoz.id,
+        p_bosh_sana: boshSanaIso,
+        p_tugash_sana: tugashSanaIso,
+      });
+      if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+        const row = rpcData[0];
+        boshlangichQarzUzs = Number(row.boshlangich_qarz_uzs || 0);
+        boshlangichQarzUsd = Number(row.boshlangich_qarz_usd || 0);
+        oxirgiQarzUzs = Number(row.oxirgi_qarz_uzs || 0);
+        oxirgiQarzUsd = Number(row.oxirgi_qarz_usd || 0);
+        if (Array.isArray(row.amallar) && row.amallar.length > 0) {
+          hisobotAmallar = row.amallar;
+        }
+      }
+    } catch (e) {
+      console.warn("fn_mijoz_qarz_tarixiy chaqiruvida xatolik, fallback ishlatiladi:", e);
+    }
+
+    // 2. Savdolar va to'lovlar tarixini yuklash (Fallback yoki to'g'ridan-to'g'ri o'qish)
+    let savdoQuery = client
       .from("savdolar")
       .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, holat, qatorlar:savdo_qatorlari(tovar_nomi, soni, narx, summa)")
       .eq("mijoz_id", mijoz.id)
       .neq("holat", "bekor_qilindi")
       .order("sana_vaqt", { ascending: true });
 
-    const { data: tolovlar } = await client
+    let tolovQuery = client
       .from("qarz_tolovlari")
       .select("id, sana_vaqt, valyuta, summa, tolov_turi, izoh")
       .eq("mijoz_id", mijoz.id)
       .order("sana_vaqt", { ascending: true });
+
+    if (boshSanaIso) {
+      savdoQuery = savdoQuery.gte("sana_vaqt", boshSanaIso);
+      tolovQuery = tolovQuery.gte("sana_vaqt", boshSanaIso);
+    }
+    if (tugashSanaIso) {
+      savdoQuery = savdoQuery.lte("sana_vaqt", tugashSanaIso);
+      tolovQuery = tolovQuery.lte("sana_vaqt", tugashSanaIso);
+    }
+
+    const [{ data: savdolar }, { data: tolovlar }] = await Promise.all([savdoQuery, tolovQuery]);
+
+    // Reverse calculation (agar tugashSanaIso berilgan bo'lsa va RPC natija bermagan bo'lsa)
+    if (tugashSanaIso && !hisobotAmallar) {
+      const [{ data: keyingiSavdolar }, { data: keyingiTolovlar }] = await Promise.all([
+        client.from("savdolar").select("valyuta, qarz_summa").eq("mijoz_id", mijoz.id).gt("sana_vaqt", tugashSanaIso).neq("holat", "bekor_qilindi"),
+        client.from("qarz_tolovlari").select("valyuta, summa").eq("mijoz_id", mijoz.id).gt("sana_vaqt", tugashSanaIso),
+      ]);
+      let kSavdoUzs = 0, kSavdoUsd = 0, kTolovUzs = 0, kTolovUsd = 0;
+      (keyingiSavdolar || []).forEach((s: any) => {
+        if (s.valyuta === "USD") kSavdoUsd += Number(s.qarz_summa || 0);
+        else kSavdoUzs += Number(s.qarz_summa || 0);
+      });
+      (keyingiTolovlar || []).forEach((t: any) => {
+        if (t.valyuta === "USD") kTolovUsd += Number(t.summa || 0);
+        else kTolovUzs += Number(t.summa || 0);
+      });
+      oxirgiQarzUzs = Math.max(0, Number(mijoz.qarz_uzs || 0) - kSavdoUzs + kTolovUzs);
+      oxirgiQarzUsd = Math.max(0, Number(mijoz.qarz_usd || 0) - kSavdoUsd + kTolovUsd);
+    }
 
     // Tarix qatorlarini birlashtirish
     const hodisalar: any[] = [];
@@ -867,6 +948,8 @@ async function sendMijozQarzPdf(
     let jamiSavdoUsd = 0;
     let jamiTolandiUzs = 0;
     let jamiTolandiUsd = 0;
+    let davrdagiQarzSavdoUzs = 0;
+    let davrdagiQarzSavdoUsd = 0;
 
     if (savdolar) {
       savdolar.forEach((s: any) => {
@@ -877,9 +960,11 @@ async function sendMijozQarzPdf(
         if (val === "USD") {
           jamiSavdoUsd += jami;
           jamiTolandiUsd += tolandi;
+          davrdagiQarzSavdoUsd += qarz;
         } else {
           jamiSavdoUzs += jami;
           jamiTolandiUzs += tolandi;
+          davrdagiQarzSavdoUzs += qarz;
         }
         const qatorMatn =
           Array.isArray(s.qatorlar) && s.qatorlar.length > 0
@@ -924,6 +1009,12 @@ async function sendMijozQarzPdf(
       });
     }
 
+    // Boshlang'ich qarzni fallback hisoblash
+    if (!hisobotAmallar && boshSanaIso) {
+      boshlangichQarzUzs = Math.max(0, oxirgiQarzUzs - davrdagiQarzSavdoUzs + jamiTolandiUzs);
+      boshlangichQarzUsd = Math.max(0, oxirgiQarzUsd - davrdagiQarzSavdoUsd + jamiTolandiUsd);
+    }
+
     // Sanasi bo'yicha tartiblash
     hodisalar.sort((a, b) => new Date(a.sana).getTime() - new Date(b.sana).getTime());
 
@@ -938,22 +1029,26 @@ async function sendMijozQarzPdf(
     doc.setFillColor(30, 41, 59);
     doc.rect(0, 0, 210, 26, "F");
 
-    doc.setFontSize(15);
+    doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.text("PROMAX STORE - MIJOZ QARZ HISOBOTI (AKT-SVERKA)", 14, 12);
 
     doc.setFontSize(8.5);
     doc.setTextColor(203, 213, 225);
     const hozirgiVaqt = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-    doc.text(`Chop etilgan vaqt: ${hozirgiVaqt}`, 14, 20);
+    if (davrMatni) {
+      doc.text(`Hisobot davri: ${davrMatni} | Chop etildi: ${hozirgiVaqt}`, 14, 20);
+    } else {
+      doc.text(`Chop etilgan vaqt: ${hozirgiVaqt}`, 14, 20);
+    }
 
     // Mijoz haqida ma'lumot bloki (Karta ko'rinishida)
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(14, 31, 182, 32, 2, 2, "F");
+    doc.roundedRect(14, 31, 182, 34, 2, 2, "F");
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14, 31, 182, 32, 2, 2, "S");
+    doc.roundedRect(14, 31, 182, 34, 2, 2, "S");
 
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
     doc.text(`Mijoz: ${mijoz.nom || "Noma'lum"}`, 18, 38);
 
@@ -963,23 +1058,54 @@ async function sendMijozQarzPdf(
     doc.text(`Telegram: ${mijoz.telegram || "Mavjud emas"}`, 18, 51);
     doc.text(`Manzil: ${mijoz.manzil || "Ko'rsatilmagan"}`, 18, 57);
 
-    // Joriy qarz bloki (O'ng tarafda)
-    const qarzUzs = Number(mijoz.qarz_uzs || 0);
-    const qarzUsd = Number(mijoz.qarz_usd || 0);
+    // Qarz bloki (O'ng tarafda)
+    if (davrMatni) {
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`HISOBOT DAVRI: ${davrMatni}`, 115, 38);
 
-    doc.setFontSize(8.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("JORIY QARZ BALANSI:", 120, 38);
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Boshlang'ich qarz: ${pul(boshlangichQarzUzs)} UZS`, 115, 45);
 
-    doc.setFontSize(11);
-    doc.setTextColor(185, 28, 28); // Qizil
-    doc.text(`UZS: ${pul(qarzUzs)} so'm`, 120, 46);
-    doc.text(`USD: $${pul(qarzUsd)}`, 120, 54);
+      doc.setFontSize(10.5);
+      doc.setTextColor(185, 28, 28); // Qizil
+      doc.text(`Davr oxiriga: ${pul(oxirgiQarzUzs)} UZS`, 115, 53);
+      if (oxirgiQarzUsd > 0) {
+        doc.setFontSize(9);
+        doc.text(`USD qoldiq: $${pul(oxirgiQarzUsd)}`, 115, 60);
+      }
+    } else {
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("JORIY QARZ BALANSI:", 120, 38);
+
+      doc.setFontSize(11);
+      doc.setTextColor(185, 28, 28); // Qizil
+      doc.text(`UZS: ${pul(oxirgiQarzUzs)} so'm`, 120, 46);
+      doc.text(`USD: $${pul(oxirgiQarzUsd)}`, 120, 54);
+    }
 
     // Jadval yaratish
-    const tableRows = hodisalar.map((h, idx) => {
+    const tableRows: any[] = [];
+
+    // Agar boshlang'ich sana ko'rsatilgan bo'lsa, jadvalning birinchi qatoriga boshlang'ich saldo kiritiladi
+    if (boshSanaIso) {
+      const sanaBosh = new Date(boshSanaIso).toLocaleDateString("ru-RU");
+      tableRows.push([
+        "•",
+        sanaBosh,
+        "Boshlang'ich qoldiq",
+        "Hisobot davri boshidagi qarz saldosi",
+        "UZS",
+        boshlangichQarzUzs > 0 ? pul(boshlangichQarzUzs) : "-",
+        "-",
+      ]);
+    }
+
+    hodisalar.forEach((h, idx) => {
       const sanaFormatted = new Date(h.sana).toLocaleDateString("ru-RU") + " " + new Date(h.sana).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-      return [
+      tableRows.push([
         String(idx + 1),
         sanaFormatted,
         h.turi,
@@ -987,22 +1113,22 @@ async function sendMijozQarzPdf(
         h.valyuta,
         h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
         h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
-      ];
+      ]);
     });
 
     // Jami yig'indi qatori
     tableRows.push([
       "",
-      "JAMI:",
+      davrMatni ? "YAKUNIY SALDO:" : "JAMI:",
       `${hodisalar.length} ta amal`,
-      `Jami savdolar: ${pul(jamiSavdoUzs)} UZS | $${pul(jamiSavdoUsd)}`,
+      `Savdolar: ${pul(jamiSavdoUzs)} UZS | Qaytarildi: ${pul(jamiTolandiUzs)} UZS`,
       "",
-      `Qolgan qarz:`,
-      `${pul(qarzUzs)} UZS / $${pul(qarzUsd)}`,
+      davrMatni ? "Davr oxiriga qarz:" : "Qolgan qarz:",
+      `${pul(oxirgiQarzUzs)} UZS` + (oxirgiQarzUsd > 0 ? ` / $${pul(oxirgiQarzUsd)}` : ""),
     ]);
 
     autoTable(doc, {
-      startY: 68,
+      startY: 70,
       head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
       body: tableRows,
       theme: "grid",
@@ -1021,14 +1147,14 @@ async function sendMijozQarzPdf(
       columnStyles: {
         0: { cellWidth: 8, halign: "center" },
         1: { cellWidth: 28 },
-        2: { cellWidth: 20, fontStyle: "bold" },
-        3: { cellWidth: 58 },
+        2: { cellWidth: 22, fontStyle: "bold" },
+        3: { cellWidth: 56 },
         4: { cellWidth: 14, halign: "center" },
         5: { cellWidth: 27, halign: "right", textColor: [185, 28, 28] },
         6: { cellWidth: 27, halign: "right", textColor: [16, 149, 90] },
       },
       didParseCell: (data: any) => {
-        if (data.row.index === tableRows.length - 1) {
+        if (data.row.index === tableRows.length - 1 || (boshSanaIso && data.row.index === 0)) {
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.fillColor = [241, 245, 249];
         }
@@ -1046,20 +1172,31 @@ async function sendMijozQarzPdf(
 
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     const xavfsizNom = (mijoz.nom || "Mijoz").replace(/[^a-zA-Z0-9_\u0400-\u04FF]/g, "_");
-    const filename = `PROMAX_Qarz_${xavfsizNom}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const davrFaylNom = davrMatni ? `_${davrMatni.replace(/[^a-zA-Z0-9]/g, "_")}` : "";
+    const filename = `PROMAX_Qarz_${xavfsizNom}${davrFaylNom}_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    let captionText = `📄 <b>MIJOZ QARZ HISOBOTI (PDF): ${mijoz.nom}</b>\n\n` +
+      `👤 <b>Mijoz:</b> ${mijoz.nom}\n` +
+      `📞 <b>Telefon:</b> ${mijoz.telefon || "Yo'q"}\n`;
+
+    if (davrMatni) {
+      captionText += `📅 <b>Davr:</b> <b>${davrMatni}</b>\n` +
+        `💰 <b>Boshlang'ich qarz:</b> <b>${pul(boshlangichQarzUzs)} so'm</b>\n` +
+        `📦 <b>Olingan yangi qarz:</b> +${pul(davrdagiQarzSavdoUzs)} so'm\n` +
+        `💳 <b>Qaytarilgan to'lov:</b> -${pul(jamiTolandiUzs)} so'm\n` +
+        `📊 <b>Davr oxiridagi qarz:</b> <b>${pul(oxirgiQarzUzs)} so'm</b>` +
+        (oxirgiQarzUsd > 0 ? ` (va $${pul(oxirgiQarzUsd)})` : "") + `\n\n`;
+    } else {
+      captionText += `💵 <b>Joriy qarzi (UZS):</b> <b>${pul(oxirgiQarzUzs)} so'm</b>\n` +
+        `💲 <b>Joriy qarzi (USD):</b> <b>$${pul(oxirgiQarzUsd)}</b>\n\n`;
+    }
+
+    captionText += `📊 <i>Oxirgi amallar soni: ${hodisalar.length} ta</i>\n` +
+      `📅 <i>Sana: ${hozirgiVaqt}</i>`;
 
     const formData = new FormData();
     formData.append("chat_id", String(chatId));
-    formData.append(
-      "caption",
-      `📄 <b>MIJOZ QARZ HISOBOTI (PDF): ${mijoz.nom}</b>\n\n` +
-      `👤 <b>Mijoz:</b> ${mijoz.nom}\n` +
-      `📞 <b>Telefon:</b> ${mijoz.telefon || "Yo'q"}\n` +
-      `💵 <b>Joriy qarzi (UZS):</b> <b>${pul(qarzUzs)} so'm</b>\n` +
-      `💲 <b>Joriy qarzi (USD):</b> <b>$${pul(qarzUsd)}</b>\n\n` +
-      `📊 <i>Oxirgi amallar soni: ${hodisalar.length} ta</i>\n` +
-      `📅 <i>Sana: ${hozirgiVaqt}</i>`
-    );
+    formData.append("caption", captionText);
     formData.append("parse_mode", "HTML");
     formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
 
@@ -1140,9 +1277,26 @@ async function geminiTahlil(
     mavjudKategoriyalarText = "Ovqatlanish, Taksi, Elektr, Ijara, Oylik, Xo'jalik";
   }
 
+  // Toshkent vaqti bo'yicha joriy sana va vaqtni aniqlash (UTC+5)
+  const nowTashkent = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tashkent" }));
+  const bugunStr = nowTashkent.toISOString().slice(0, 10);
+  const kechaDate = new Date(nowTashkent);
+  kechaDate.setDate(kechaDate.getDate() - 1);
+  const kechaStr = kechaDate.toISOString().slice(0, 10);
+
+  const haftaKunlari = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+  const haftaKuni = haftaKunlari[nowTashkent.getDay()];
+  const soatVaqt = nowTashkent.toTimeString().slice(0, 5);
+
   const prompt = `
 Siz ulgurji va chakana savdo (B2B) do'koni uchun buxgalter yordamchi AI hisoblanasiz.
 Foydalanuvchi do'kon sotuvchisi yoki rahbari (40+ yosh). Ular sizga o'zbek tilida (lotin yoki kirill) matn yoki ovozli xabar yuboradi.
+
+BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
+- Bugun: ${bugunStr} (${haftaKuni})
+- Hozirgi soat: ${soatVaqt}
+- Kecha: ${kechaStr}
+- Joriy oy: ${bugunStr.slice(0, 7)}
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
@@ -1201,14 +1355,20 @@ JSON strukturasi "qarz_eslatma" amali uchun:
 JSON strukturasi "qarz_pdf" amali uchun (Umumiy qarzdorlar ro'yxati yoki bitta mijozning hisoboti / qarz akti so'ralganda):
 {
   "amal": "qarz_pdf",
-  "mijoz_nomi": "Bitta aniq mijoz so'ralgan bo'lsa uning ismi/do'koni, butun ro'yxat bo'lsa null"
+  "mijoz_nomi": "Bitta aniq mijoz so'ralgan bo'lsa uning ismi/do'koni, butun ro'yxat bo'lsa null",
+  "sana_boshlanish": "YYYY-MM-DD formatidagi boshlanish sanasi yoki null",
+  "sana_tugash": "YYYY-MM-DD formatidagi tugash sanasi yoki null"
 }
 
 JSON strukturasi "savol" amali uchun (Buxgalteriya va tahlil bazasidan javob qidirish):
 {
   "amal": "savol",
   "sql": "SELECT ... FROM ...",
-  "izoh": "Siz yaratgan so'rov nimani anglatishini qisqacha izohi"
+  "izoh": "Siz yaratgan so'rov nimani anglatishini qisqacha izohi",
+  "mijoz_nomi": "agar savol bitta mijoz haqida bo'lsa uning ismi, aks holda null",
+  "pdf_soraldi": true | false,
+  "sana_boshlanish": "YYYY-MM-DD yoki null",
+  "sana_tugash": "YYYY-MM-DD yoki null"
 }
 
 Agar "savol" bo'lsa, siz PROMAX do'koni rahbarining Shaxsiy Yordamchisi (Personal Assistant) sifatida eng to'g'ri, moslashuvchan Postgres SQL (SELECT) yozishingiz SHART!
@@ -1216,6 +1376,16 @@ Oldingi muloqot xotirasini (kontekstni) inobatga oling, chunki yangi savol oldin
 
 Jadvallar va Maxsus Aqlli Funksiyalar (Smart AI Tools):
 1. MIJOZ VA QARZDORLIK:
+   - SANA BO'YICHA QARZ VA OBOROT (O'TA MUHIM):
+     Agar foydalanuvchi ma'lum bir kungacha bo'lgan qarzni ("Akrom akaning 14 oktyabr 2026 gacha bo'lgan qarzi qancha edi?") yoki ma'lum bir davr oralig'idagi qarzlarini ("Akrom akaning 1-sentyabrdan 30-sentyabrgacha olgan qarzlari", "Akrom aka sentyabr oyidagi qarzi") so'rasa:
+     Har doim "fn_mijoz_qarz_tarixiy_nom" funksiyasidan foydalaning!
+     Misollar:
+     - "Akrom akaning 14 oktyabr 2026 gacha qarzi qancha edi?" ->
+       SELECT * FROM fn_mijoz_qarz_tarixiy_nom('Akrom aka', NULL, '2026-10-14 23:59:59')
+     - "Akrom akaning 1-sentyabrdan 30-sentyabrgacha olgan qarzlari" ->
+       SELECT * FROM fn_mijoz_qarz_tarixiy_nom('Akrom aka', '2026-09-01 00:00:00', '2026-09-30 23:59:59')
+     - Agar savolda PDF yoki akt-sverka so'ralgan bo'lsa (masalan: "Akrom akaning sentyabr oyi qarzini pdf qilib ber"):
+       amal: "qarz_pdf", mijoz_nomi: "Akrom aka", sana_boshlanish: "2026-09-01", sana_tugash: "2026-09-30" qaytaring!
    - AQLLI QIDIRUV FUNKSIYASI: fn_ai_mijoz_qidirish('soz') -> Mijoz ismi to'liq mos kelmasligi (sheva, xato, qisqa ism, masalan "Bobojon aga Xorazm", "Bobo", "Bobojon") mumkin. HECH QACHON mijozlar jadvalida nom = '...' tenglik ishlatmang! Har doim:
      SELECT * FROM fn_ai_mijoz_qidirish('Bobojon') YOKI SELECT * FROM mijozlar WHERE nom ILIKE '%Bobojon%' ishlating!
    - Jadval: mijozlar (id, nom, nom_norm, telefon, manzil, qarz_uzs, qarz_usd, faol)
@@ -1242,7 +1412,14 @@ Muhim Qidiruv va Mantiq Qoidalari:
 - TOVAR QIDIRGANDA: Model yoki tovar nomini fn_ai_tovar_qidirish('...') orqali qidiring.
 - STATISTIKA YOKI BUGUNGI KUN: "Bugun nima gap?", "Umumiy holat qanday?" deyilsa -> SELECT * FROM view_ai_xulosa yozing.
 - Faqat va faqat bitta SELECT so'rov yozing. So'rovni 1 qatorda, ikki qo'shtirnoq ichiga olib yozing.
-- Hozirgi vaqtni olish uchun now() yoki CURRENT_DATE ishlating.
+- SANA VA VAQT BILAN ISHLASH (O'TA MUHIM):
+  * Tizim Toshkent (UTC+5) vaqtida ishlaydi. Bazadagi barcha sana_vaqt ustunlari TIMESTAMPTZ (vaqt bilan saqlanadi).
+  * Shuning uchun sanani tekshirganda HAR DOIM: (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date ishlating!
+  * Misollar:
+    - "Kechagi xarajatlar" -> SELECT sana_vaqt, kategoriya, summa, valyuta, izoh, xodim FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = '${kechaStr}' AND holat = 'faol' ORDER BY sana_vaqt ASC
+    - "Bugungi xarajatlar" -> SELECT sana_vaqt, kategoriya, summa, valyuta, izoh FROM rasxodlar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = '${bugunStr}' AND holat = 'faol' ORDER BY sana_vaqt ASC
+    - "Kechagi savdolar" -> SELECT raqam, sana_vaqt, jami_summa, tolangan_summa, qarz_summa, valyuta, xodim FROM savdolar WHERE (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = '${kechaStr}' AND holat = 'yakunlandi'
+  * HECH QACHON sana_vaqt = CURRENT_DATE yoki sana_vaqt = '${kechaStr}' deb to'g'ridan to'g'ri taqqoslamang (chunki sana_vaqt da soat/daqiqa ham bor)!
 - Agar valyuta aytilmasa yoki "so'm", "ming", "mln" bo'lsa -> valyuta: "UZS".
 - Agar "dollar", "$", "yashil" aytilsa -> valyuta: "USD".
 - Agar savdoda qarzga berilgan bo'lsa, tolangan_summa = naqd berilgani, qolgani avtomatik qarz bo'ladi.
@@ -2659,12 +2836,22 @@ Iltimos, FAQAT to'g'rilangan toza SELECT SQL yozing (hech qanday izohsiz, markdo
 
         if (dbErr) throw dbErr;
 
+        const nowTashkentAns = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tashkent" }));
+        const bugunStrAns = nowTashkentAns.toISOString().slice(0, 10);
+        const kechaDateAns = new Date(nowTashkentAns);
+        kechaDateAns.setDate(kechaDateAns.getDate() - 1);
+        const kechaStrAns = kechaDateAns.toISOString().slice(0, 10);
+
         const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va buxgalter-tahlilchi AIsiz.
 Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
+Bugungi sana: ${bugunStrAns}, Kechagi sana: ${kechaStrAns}
 
 DIQQAT:
-- Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa), darhol "baza bo'sh" yoki "ma'lumot kelmadi" demang! Do'stona, samimiy Personal Assistant kabi: "Kechirasiz, so'ralgan mijoz/tovar nomi bo'yicha aniq moslik topilmadi. Ismni yoki tovar modelini biroz qisqartirib yozsangiz, darhol topib beraman!" deb tushuntiring.
+- Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa):
+  * Agar savol kechagi yoki ma'lum bir kundagi xarajatlar/savdolar haqida bo'lsa (masalan "kechagi xarajatlar"):
+    "Kecha (${kechaStrAns}) kuni do'konda hech qanday xarajat (chiqim) kiritilmagan ekan." deb aniq va samimiy tushuntiring. "Balki kecha rasxod bo'lmagandir yoki kiritish yoddan ko'tarilgandir. Agar xarajat bo'lgan bo'lsa, xohlasangiz hozir yozib yuboring, darhol bazaga kiritib qo'yaman!" deb yordam bering.
+  * Agar so'ralgan mijoz yoki tovar topilmagan bo'lsa: "Kechirasiz, so'ralgan mijoz/tovar nomi bo'yicha aniq moslik topilmadi. Ismni yoki tovar modelini biroz qisqartirib yozsangiz, darhol topib beraman!" deb tushuntiring.
 - Agar bir nechta o'xshash mijoz yoki tovar chiqqan bo'lsa, ularning ro'yxatini va qarz/qoldiqlarini ko'rsatib: "Siz aynan qaysi birini nazarda tutdingiz?" deb yordam bering.
 - Raqamlarni chiroyli va o'qishli formatda (so'm va dollarni ajratib) taqdim eting.
 - Har bir javobni "Assalomu alaykum..." deb boshlamang. To'g'ridan to'g'ri javobni bering, xuddiki muloqot davom etayotgandek.
@@ -2717,6 +2904,8 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
         const combinedQueryText = `${textLower} ${izohLower}`;
 
         const isMijozOrQarzQuery =
+          parsedData.pdf_soraldi === true ||
+          sqlLower.includes("fn_mijoz_qarz_tarixiy") ||
           sqlLower.includes("fn_ai_mijoz_qidirish") ||
           sqlLower.includes("mijozlar") ||
           sqlLower.includes("view_ai_qarzdorlar") ||
@@ -2741,15 +2930,25 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
           }
 
           if (!topilganMijozId) {
+            const fnHistMatch = cleanSql.match(/fn_mijoz_qarz_tarixiy(?:_nom)?\(\s*'([^']+)'/i);
             const fnMatch = cleanSql.match(/fn_ai_mijoz_qidirish\(\s*'([^']+)'\s*\)/i);
             const ilikeMatch = cleanSql.match(/nom\s+ILIKE\s+'%([^%']+)%'/i);
-            if (fnMatch && fnMatch[1]) topilganMijozId = fnMatch[1].trim();
+            if (fnHistMatch && fnHistMatch[1]) topilganMijozId = fnHistMatch[1].trim();
+            else if (fnMatch && fnMatch[1]) topilganMijozId = fnMatch[1].trim();
             else if (ilikeMatch && ilikeMatch[1]) topilganMijozId = ilikeMatch[1].trim();
+            else if (parsedData.mijoz_nomi) topilganMijozId = String(parsedData.mijoz_nomi).trim();
           }
 
           if (topilganMijozId) {
-            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
-            await sendMijozQarzPdf(chatId, topilganMijozId);
+            const pdfTalabQilindi =
+              parsedData.pdf_soraldi === true ||
+              /pdf|fayl|akt|sverka|hujjat/i.test(combinedQueryText);
+
+            // Agar aniq PDF so'ralgan bo'lsa yoki savol akt/sverka/fayl ko'rinishida bo'lsa
+            if (pdfTalabQilindi || /qarz.*(akt|sverka|fayl)/i.test(combinedQueryText)) {
+              await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+              await sendMijozQarzPdf(chatId, topilganMijozId, parsedData.sana_boshlanish, parsedData.sana_tugash);
+            }
           } else if (
             sqlLower.includes("view_ai_qarzdorlar") ||
             (/pdf|fayl|hisobot|ro'yxat|royxat/i.test(combinedQueryText) && /qarz|qarzdor/i.test(combinedQueryText))
@@ -2884,7 +3083,7 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
       if (parsedData.amal === "qarz_pdf") {
         await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
         if (parsedData.mijoz_nomi && String(parsedData.mijoz_nomi).trim()) {
-          await sendMijozQarzPdf(chatId, String(parsedData.mijoz_nomi).trim());
+          await sendMijozQarzPdf(chatId, String(parsedData.mijoz_nomi).trim(), parsedData.sana_boshlanish, parsedData.sana_tugash);
         } else {
           await sendQarzdorlarPdf(chatId);
         }
