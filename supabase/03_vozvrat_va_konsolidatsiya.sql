@@ -207,8 +207,7 @@ BEGIN
         -- 3. Qolgan boshqa rangli tovarlarni nofaol (arxiv) qilamiz va qoldiqlarini 0 qilamiz
         UPDATE tovarlar
         SET faol = false,
-            qoldiq = 0,
-            izoh = COALESCE(izoh, '') || ' [Modelga birlashtirildi: ' || r.m_nom || ']'
+            qoldiq = 0
         WHERE faol = true AND trim(model) = r.m_nom AND id != v_asosiy_id;
 
         model_nomi := r.m_nom;

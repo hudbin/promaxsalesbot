@@ -1760,7 +1760,6 @@ async function runTovarlarniOptimallashtirish(): Promise<{
         .update({
           faol: false,
           qoldiq: 0,
-          izoh: `[Modelga birlashtirildi: ${modelName}]`,
         })
         .in("id", otherIds);
 

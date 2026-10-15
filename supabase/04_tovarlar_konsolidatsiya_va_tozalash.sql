@@ -74,8 +74,7 @@ BEGIN
             UPDATE tovarlar
             SET 
                 faol = false,
-                qoldiq = 0,
-                izoh = COALESCE(izoh, '') || ' [Modelga birlashtirildi: ' || r.m_nom || ']'
+                qoldiq = 0
             WHERE id = ANY(v_duplicate_ids);
 
             v_birlashgan_modellar := v_birlashgan_modellar + 1;
