@@ -1672,6 +1672,149 @@ async function geminiTabiiyJavob(prompt: string): Promise<string> {
   return res.text;
 }
 
+// Yordamchi: Tovarlarni modellar bo'yicha optimallashtirish va ranglarni birlashtirish
+async function runTovarlarniOptimallashtirish(): Promise<{
+  ok: boolean;
+  rpcUsed: boolean;
+  summary: Array<{ model: string; count: number; totalStock: number }>;
+  error?: string;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    return { ok: false, rpcUsed: false, summary: [], error: "Supabase bilan aloqa o'rnatilmadi" };
+  }
+
+  // 1. Agar DB da fn_tovarlarni_model_boyicha_birlashtirish RPC funksiyasi bo'lsa, avval shuni chaqiramiz
+  try {
+    const { data: rpcData, error: rpcErr } = await client.rpc("fn_tovarlarni_model_boyicha_birlashtirish");
+    if (!rpcErr && Array.isArray(rpcData)) {
+      return {
+        ok: true,
+        rpcUsed: true,
+        summary: rpcData.map((r: any) => ({
+          model: r.model_nomi,
+          count: Number(r.birlashgan_ranglar_soni) || 0,
+          totalStock: Number(r.jami_yangi_qoldiq) || 0,
+        })),
+      };
+    }
+  } catch (e) {
+    // RPC xato bersa yoki hali o'rnatilmagan bo'lsa, to'g'ridan-to'g'ri TypeScript fallback ga o'tamiz
+  }
+
+  // 2. TypeScript to'g'ridan-to'g'ri xavfsiz konsolidatsiya
+  try {
+    const { data: allTovarlar, error: fetchErr } = await client
+      .from("tovarlar")
+      .select("id, nom, model, qoldiq, narx_optom, tannarx, narx_chakana, valyuta, birlik, yaratilgan")
+      .eq("faol", true);
+
+    if (fetchErr) {
+      return { ok: false, rpcUsed: false, summary: [], error: fetchErr.message };
+    }
+
+    const modelGroups = new Map<string, any[]>();
+    for (const t of (allTovarlar || [])) {
+      const m = (t.model || "").trim();
+      if (!m) continue;
+      const key = m.toLowerCase();
+      if (!modelGroups.has(key)) {
+        modelGroups.set(key, []);
+      }
+      modelGroups.get(key)!.push(t);
+    }
+
+    const summary: Array<{ model: string; count: number; totalStock: number }> = [];
+
+    for (const [, items] of modelGroups.entries()) {
+      if (items.length <= 1) continue;
+
+      // Eng ko'p qoldiqqa ega tovarni asosiy tovar qilib olamiz
+      items.sort((a, b) => (Number(b.qoldiq) || 0) - (Number(a.qoldiq) || 0));
+      const mainItem = items[0];
+      const otherItems = items.slice(1);
+
+      const totalStock = items.reduce((sum, it) => sum + (Number(it.qoldiq) || 0), 0);
+      const modelName = mainItem.model.trim();
+
+      // Asosiy tovar nomini toza model nomiga o'tkazib, umumiy qoldiqni beramiz
+      const { error: updMainErr } = await client
+        .from("tovarlar")
+        .update({
+          nom: modelName,
+          model: modelName,
+          qoldiq: totalStock,
+          faol: true,
+        })
+        .eq("id", mainItem.id);
+
+      if (updMainErr) {
+        console.error(`Xato: ${modelName} asosiy tovarini yangilashda:`, updMainErr);
+        continue;
+      }
+
+      // Boshqa rangli dublikatlarni arxivlaymiz (faol = false, qoldiq = 0)
+      const otherIds = otherItems.map((it) => it.id);
+      await client
+        .from("tovarlar")
+        .update({
+          faol: false,
+          qoldiq: 0,
+          izoh: `[Modelga birlashtirildi: ${modelName}]`,
+        })
+        .in("id", otherIds);
+
+      summary.push({
+        model: modelName,
+        count: items.length,
+        totalStock,
+      });
+    }
+
+    return { ok: true, rpcUsed: false, summary };
+  } catch (err: any) {
+    return { ok: false, rpcUsed: false, summary: [], error: err?.message || String(err) };
+  }
+}
+
+// Yordamchi: Optimallashtirish natijasi matnini shakllantirish
+function buildOptimizationReport(res: { ok: boolean; summary: Array<{ model: string; count: number; totalStock: number }>; error?: string }): string {
+  if (!res.ok) {
+    return `❌ <b>Optimallashtirishda xatolik yuz berdi:</b>\n<code>${res.error || "Noma'lum xatolik"}</code>`;
+  }
+
+  if (res.summary.length === 0) {
+    return (
+      `✅ <b>Tovarlar bazasi allaqachon toza!</b>\n\n` +
+      `Birlashtirilishi kerak bo'lgan dublikat ranglar topilmadi. Har bir model yagona mahsulot sifatida saqlanmoqda.`
+    );
+  }
+
+  const jamiModellar = res.summary.length;
+  const jamiRanglar = res.summary.reduce((s, it) => s + it.count, 0);
+
+  let list = res.summary
+    .slice(0, 25)
+    .map(
+      (it, idx) =>
+        `${idx + 1}. <b>${it.model}</b>: ${it.count} ta rang birlashtirildi (jami qoldiq: <b>${pul(it.totalStock)} dona</b>)`
+    )
+    .join("\n");
+
+  if (res.summary.length > 25) {
+    list += `\n<i>...va yana ${res.summary.length - 25} ta model birlashtirildi.</i>`;
+  }
+
+  return (
+    `🎉 <b>TOVARLAR BAZASI OPTIMALLASHTIRILDI!</b>\n\n` +
+    `📊 <b>Natijalar:</b>\n` +
+    `• Birlashtirilgan modellar: <b>${jamiModellar} ta</b>\n` +
+    `• Jamlangan ranglar soni: <b>${jamiRanglar} ta</b>\n\n` +
+    `📋 <b>Birlashtirilgan modellar ro'yxati:</b>\n${list}\n\n` +
+    `✨ <i>Endi do'kon va botda faqat bitta umumiy mahsulot ko'rinadi, ortiqcha ranglar so'ralmaydi va umumiy qoldiq ko'rsatiladi!</i>`
+  );
+}
+
 // -----------------------------------------------------------------------------
 // WEBHOOK ASOSIY HANDLER
 // -----------------------------------------------------------------------------
@@ -2452,6 +2595,36 @@ export default async function handler(req: any, res: any) {
       return res.status(200).send("OK");
     }
 
+    // 1.1.1 TOVARLARNI OPTIMALLASHTIRISHNI TASDIQLASH (opt:run)
+    if (data === "opt:run") {
+      const senderId = String(cq.from?.id || "");
+      const perm = await checkUserPermission(senderId);
+      if (perm.role !== "admin") {
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Faqat admin uchun!", show_alert: true });
+        return res.status(200).send("OK");
+      }
+
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: "⏳ <b>Tovarlar bazasi tahlil qilinmoqda va birlashtirilmoqda...</b>\n\n<i>Har bir model bo'yicha ranglar qoldig'i hisoblanmoqda, iltimos kuting...</i>",
+        parse_mode: "HTML",
+      });
+
+      const optResult = await runTovarlarniOptimallashtirish();
+      const reportText = buildOptimizationReport(optResult);
+
+      await tgPost("editMessageText", {
+        chat_id: chatId,
+        message_id: msgId,
+        text: reportText,
+        parse_mode: "HTML",
+      });
+
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Optimallashtirish yakunlandi!" });
+      return res.status(200).send("OK");
+    }
+
     // 1.2 XODIM RUXSATINI TASDIQLASH (xod:appr:draftId:role)
     if (data.startsWith("xod:appr:")) {
       const parts = data.split(":");
@@ -2831,7 +3004,7 @@ export default async function handler(req: any, res: any) {
   if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
@@ -2864,6 +3037,67 @@ export default async function handler(req: any, res: any) {
       chat_id: chatId,
       text: statusMsg,
       parse_mode: "HTML",
+    });
+    return res.status(200).send("OK");
+  }
+
+  // 2.4.1 TOVARLARNI BIRLASHTIRISH VA OPTIMALLASHTIRISH (ADMIN)
+  const normText = text.trim().toLowerCase();
+  const isOptCmd =
+    text === "/optimallashtirish" ||
+    text === "/birlashtirish" ||
+    text.startsWith("/optimallashtirish ") ||
+    text.startsWith("/birlashtirish ") ||
+    text === "/optimize" ||
+    normText === "tovarlarni optimallashtir" ||
+    normText === "tovarlarni birlashtir";
+
+  if (isOptCmd) {
+    if (perm.role !== "admin") {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "⛔️ <i>Kechirasiz, tovarlarni birlashtirish va optimallashtirish faqat administrator uchun ruxsat etilgan.</i>",
+        parse_mode: "HTML",
+      });
+      return res.status(200).send("OK");
+    }
+
+    if (text.includes("confirm") || text.includes("tasdiq") || text.includes("hozir")) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "⏳ <b>Tovarlar bazasi tahlil qilinmoqda va birlashtirilmoqda...</b>\n\n<i>Har bir model bo'yicha ranglar qoldig'i hisoblanmoqda, iltimos kuting...</i>",
+        parse_mode: "HTML",
+      });
+
+      const optResult = await runTovarlarniOptimallashtirish();
+      const reportText = buildOptimizationReport(optResult);
+
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: reportText,
+        parse_mode: "HTML",
+      });
+      return res.status(200).send("OK");
+    }
+
+    const optConfirmMsg =
+      `📦 <b>TOVARLAR BAZASINI OPTIMALLASHTIRISH</b>\n\n` +
+      `Ushbu amal bazadagi bir xil modelga tegishli barcha turli rangdagi mahsulotlarni bitta asosiy modelga birlashtiradi:\n` +
+      `• Har bir model bo'yicha jami ombor qoldig'i yig'iladi va asosiy mahsulot nomiga o'tkaziladi.\n` +
+      `• Rangli dublikatlar arxivlanadi (<code>faol = false</code>).\n` +
+      `• Tarixiy savdo cheklariga ziyon yetmaydi.\n\n` +
+      `<i>Birlashtirishni boshlaymizmi?</i>`;
+
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: optConfirmMsg,
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🚀 Ha, birlashtirilsin", callback_data: "opt:run" }],
+          [{ text: "❌ Bekor qilish", callback_data: "cn:opt" }],
+        ],
+      },
     });
     return res.status(200).send("OK");
   }
