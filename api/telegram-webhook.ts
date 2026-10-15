@@ -214,7 +214,39 @@ async function resolveSavdoEntities(data: any): Promise<any> {
           const topT = Number(tList[0].oxshashlik) || 0;
           const secondT = Number(tList[1]?.oxshashlik) || 0;
 
-          if (topT >= 0.75 && (tList.length === 1 || (topT - secondT) >= 0.25)) {
+          // 1. Maxsus: Agar topilgan tovarlar bitta modelga (artikulga) tegishli bo'lsa (RANGLAR)
+          // Masalan: "3035 SELANIK QORA", "3035 SELANIK BEJ" -> model: "3035 SELANIK"
+          const itNomLower = String(it.nom).trim().toLowerCase();
+          const firstModel = (tList[0].model || "").trim();
+          const sameModelList = firstModel
+            ? tList.filter((t: any) => (t.model || "").trim().toLowerCase() === firstModel.toLowerCase())
+            : [];
+
+          const isColorVariation = firstModel && (
+            sameModelList.length === tList.length || 
+            sameModelList.length >= 2 || 
+            firstModel.toLowerCase() === itNomLower ||
+            itNomLower.includes(firstModel.toLowerCase()) ||
+            firstModel.toLowerCase().includes(itNomLower)
+          );
+
+          if (isColorVariation) {
+            // Sotuvchidan rang so'rab o'tirmaymiz! Model nomi bilan avtomatik tasdiqlaymiz
+            const modelTovarlar = sameModelList.length > 0 ? sameModelList : tList;
+            const jamiModelQoldiq = modelTovarlar.reduce((sum: number, t: any) => sum + (Number(t.qoldiq) || 0), 0);
+            
+            // Asosiy tovar qilib eng ko'p qoldig'i bor tovar tanlanadi
+            const bestT = [...modelTovarlar].sort((a: any, b: any) => (Number(b.qoldiq) || 0) - (Number(a.qoldiq) || 0))[0] || tList[0];
+            
+            it.tovar_id = bestT.id;
+            it.aniq_nom = firstModel || bestT.nom;
+            it.qoldiq = jamiModelQoldiq;
+            it.birlik = bestT.birlik || "dona";
+            if (!it.narx && Number(bestT.narx_optom) > 0) {
+              it.narx = Number(bestT.narx_optom);
+            }
+            it.status = "resolved";
+          } else if (topT >= 0.75 && (tList.length === 1 || (topT - secondT) >= 0.25)) {
             it.tovar_id = tList[0].id;
             it.aniq_nom = tList[0].nom;
             it.qoldiq = Number(tList[0].qoldiq) || 0;
@@ -502,6 +534,63 @@ function buildQarzTolovCard(draftId: string, p: any, hisoblar: any[] = []): { te
   const buttons = [
     [
       { text: "✅ To'lovni qabul qilish", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
+function buildVozvratCard(draftId: string, p: any): { text: string; keyboard: any } {
+  // 1. Agar mijoz bir nechta bo'lib noaniq bo'lsa
+  if (p.mijozStatus === "ambiguous") {
+    const text = `🔍 <b>VOZVRAT: MIJOZNI ANIQLASHTIRISH</b>\n\n` +
+      `Siz kiritgan <i>"${p.mijoz_nomi}"</i> bo'yicha bazada bir nechta mijoz topildi. Qaysi biri tovar qaytardi?`;
+    const buttons: any[] = (p.mijozCandidates || []).map((c: any) => [
+      { text: `👤 ${c.nom}${c.manzil ? ` (${c.manzil})` : ""}`, callback_data: `pk:m:${draftId}:${c.id}` },
+    ]);
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  const valyuta = p.valyuta || "UZS";
+  const jami = (p.qatorlar || []).reduce(
+    (sum: number, it: any) => sum + (Number(it.soni) || 0) * (Number(it.narx) || 0),
+    0
+  ) || Number(p.jami_summa) || 0;
+
+  const m = p.selectedMijoz;
+  const joriyQarz = m ? Number(valyuta === "USD" ? m.qarz_usd : m.qarz_uzs) || 0 : 0;
+  const qolganQarz = Math.max(0, joriyQarz - jami);
+
+  let itemsText = "";
+  (p.qatorlar || []).forEach((it: any, i: number) => {
+    const s = (Number(it.soni) || 0) * (Number(it.narx) || 0);
+    const birlik = it.birlik || "dona";
+    itemsText += `  ${i + 1}️⃣ <b>${it.aniq_nom || it.nom}</b>: <code>${it.soni} ${birlik}</code> × <code>${pul(it.narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
+    if (it.qoldiq !== undefined && it.qoldiq !== null) {
+      itemsText += `      <i>📈 Omborda: ${it.qoldiq} ${birlik} ➔ qoladi: ${it.qoldiq + it.soni} ${birlik} (+qaytariladi)</i>\n`;
+    }
+  });
+
+  let text = `↩️ <b>TOVAR QAYTARISH (VOZVRAT) TASDIQLASH</b>\n\n` +
+    `👤 <b>Mijoz:</b> <b>${m?.nom || p.mijoz_nomi || "Chakana"}</b>\n` +
+    (itemsText ? `📋 <b>Qaytarilgan mahsulotlar:</b>\n${itemsText}\n` : "") +
+    `💰 <b>Jami qaytarilgan summa:</b> <b>${pul(jami)} ${valyuta}</b>\n`;
+
+  if (m) {
+    text += `📂 <b>Mijozning eski umumiy qarzi:</b> ${pul(joriyQarz)} ${valyuta}\n` +
+      `📉 <b>Vozvratdan keyingi qarzi:</b> <b>${pul(qolganQarz)} ${valyuta}</b>\n`;
+  }
+
+  if (p.izoh) text += `💬 <b>Izoh:</b> <i>${p.izoh}</i>\n`;
+  text += `\n❓ <i>Ushbu qaytarish tasdiqlansinmi? (Mijoz qarzi kamayadi, tovar omborga qaytadi)</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Vozvratni tasdiqlash", callback_data: `cf:${draftId}` },
       { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
     ],
   ];
@@ -1300,25 +1389,26 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 8 ta amal turidan birini aniqlang:
+Quyidagi 9 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
-2. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
-3. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi.
-4. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
-5. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish (masalan: "Asosiy hisobdan Qahramonning hisobiga 100 ming olindi/o'tkazildi", "Naqddan plastikga 50 dollar tashladim").
-6. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
-7. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini, mijozning qarz hisobotini (akt-sverka, savdo va qarzlar tarixi) yoki mijozlar qarzini PDF fayl / hujjat / hisobot ko'rinishida so'raganda.
-8. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi", "Akrom aka 30 ta tovar qaytarib berdi").
+3. "rasxod": Xarajat qilindi (ovqatlanish/tushlik/obed, taksi, elektr, ijara, ro'zg'or, oylik va h.k.).
+4. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
+5. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
+6. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish (masalan: "Asosiy hisobdan Qahramonning hisobiga 100 ming olindi/o'tkazildi", "Naqddan plastikga 50 dollar tashladim").
+7. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
+8. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini, mijozning qarz hisobotini (akt-sverka, savdo va qarzlar tarixi) yoki mijozlar qarzini PDF fayl / hujjat / hisobot ko'rinishida so'raganda.
+9. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
-JSON strukturasi 1-4 amallar uchun:
+JSON strukturasi 1-5 amallar uchun:
 {
-  "amal": "savdo" | "rasxod" | "qarz_tolov" | "tovar_kirim",
+  "amal": "savdo" | "tovar_vozvrat" | "rasxod" | "qarz_tolov" | "tovar_kirim",
   "valyuta": "UZS" | "USD",
   "jami_summa": 0.0,
   "tolangan_summa": 0.0,
   "tolov_turi": "naqd" | "plastik" | "perechisleniya",
   "hisob_id": "eng mos hisob UUID raqami yoki null",
-  "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo yoki qarz to'lovi bo'lsa, aks holda null),
+  "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo, vozvrat yoki qarz to'lovi bo'lsa, aks holda null),
   "kategoriya": "Xarajat kategoriyasi nomi (string: mavjudlardan biri yoki yangi aniq kategoriya)" (agar rasxod bo'lsa),
   "tovar_nomi": "Tovar nomi" (agar tovar_kirim bo'lsa),
   "soni": 0.0 (agar tovar_kirim bo'lsa),
@@ -2170,6 +2260,84 @@ export default async function handler(req: any, res: any) {
               `📊 Mijozning yangi umumiy qarzi: <b>${pul(yangiQarz)} ${valyuta}</b>\n`
             : "") +
           `✍️ Sotuvchi: <b>${fromName}</b>`;
+      } else if (p.amal === "tovar_vozvrat") {
+        // Tovar Qaytarish (Vozvrat)
+        const mijozId = p.selectedMijoz?.id || null;
+        const valyuta = p.valyuta || "UZS";
+        const jami = (p.qatorlar || []).reduce(
+          (sum: number, it: any) => sum + (Number(it.soni) || 0) * (Number(it.narx) || 0),
+          0
+        ) || Number(p.jami_summa) || 0;
+        const naqdQaytarildi = Number(p.naqd_qaytarildi) || 0;
+        const qarzdanAyirildi = p.qarzdan_ayirish !== false ? Math.max(0, jami - naqdQaytarildi) : 0;
+
+        const mappedQatorlar = (p.qatorlar || []).map((it: any) => ({
+          tovar_id: it.tovar_id || null,
+          tovar_nomi: it.aniq_nom || it.nom || "Qaytarilgan tovar",
+          soni: Number(it.soni) || 1,
+          narx: Number(it.narx) || 0,
+          summa: (Number(it.soni) || 1) * (Number(it.narx) || 0),
+        }));
+
+        const { error: vozvratErr } = await getSupabase().rpc("fn_tovar_vozvrat_yaratish", {
+          p_mijoz_id: mijozId,
+          p_valyuta: valyuta,
+          p_jami_summa: jami,
+          p_qarzdan_ayirildi: qarzdanAyirildi,
+          p_naqd_qaytarildi: naqdQaytarildi,
+          p_hisob_id: p.hisob_id || null,
+          p_izoh: p.izoh || "Tovar qaytarildi",
+          p_xodim: fromName,
+          p_telegram_user_id: cq.from?.id,
+          p_qatorlar: mappedQatorlar,
+        });
+
+        // Agar RPC hali kiritilmagan bo'lsa xavfsiz fallback:
+        if (vozvratErr) {
+          console.warn("fn_tovar_vozvrat_yaratish RPC xatosi, fallback:", vozvratErr.message);
+          // 1. Mijoz qarzini kamaytirish
+          if (mijozId && qarzdanAyirildi > 0) {
+            const client = getSupabase();
+            const { data: curM } = await client.from("mijozlar").select("qarz_uzs, qarz_usd").eq("id", mijozId).maybeSingle();
+            if (curM) {
+              if (valyuta === "USD") {
+                await client.from("mijozlar").update({ qarz_usd: Math.max(0, Number(curM.qarz_usd || 0) - qarzdanAyirildi) }).eq("id", mijozId);
+              } else {
+                await client.from("mijozlar").update({ qarz_uzs: Math.max(0, Number(curM.qarz_uzs || 0) - qarzdanAyirildi) }).eq("id", mijozId);
+              }
+            }
+          }
+          // 2. Omborda tovar qoldig'ini oshirish
+          for (const it of mappedQatorlar) {
+            if (it.tovar_id && it.soni > 0) {
+              const client = getSupabase();
+              const { data: curT } = await client.from("tovarlar").select("qoldiq").eq("id", it.tovar_id).maybeSingle();
+              if (curT) {
+                await client.from("tovarlar").update({ qoldiq: Number(curT.qoldiq || 0) + it.soni }).eq("id", it.tovar_id);
+              }
+            }
+          }
+        }
+
+        const eskiQarz = p.selectedMijoz
+          ? Number(valyuta === "USD" ? p.selectedMijoz.qarz_usd : p.selectedMijoz.qarz_uzs) || 0
+          : 0;
+        const yangiQarz = Math.max(0, eskiQarz - qarzdanAyirildi);
+
+        let tovarlarRoyxatiMatn = mappedQatorlar
+          .map((it: any) => `  📦 <b>${it.tovar_nomi}</b>: <code>${it.soni} dona</code> × <code>${pul(it.narx)}</code> = <b>${pul(it.summa)} ${valyuta}</b>`)
+          .join("\n");
+
+        javobMatn = `↩️ <b>TOVAR VOZVRAT (QAYTARISH) QABUL QILINDI</b>\n\n` +
+          `👤 Mijoz: <b>${p.selectedMijoz?.nom || p.mijoz_nomi || "Chakana"}</b>\n` +
+          `${tovarlarRoyxatiMatn}\n\n` +
+          `💰 Jami vozvrat: <b>${pul(jami)} ${valyuta}</b>\n` +
+          (qarzdanAyirildi > 0 ? `📉 Mijoz qarzidan chegirildi: <b>-${pul(qarzdanAyirildi)} ${valyuta}</b>\n` : "") +
+          (p.selectedMijoz
+            ? `📂 Eski qarz: ${pul(eskiQarz)} ${valyuta} ➔ <b>Yangi qarz: ${pul(yangiQarz)} ${valyuta}</b>\n`
+            : "") +
+          `📈 Omborda tovar qoldig'i tiklandi (+${mappedQatorlar.reduce((s: number, i: any) => s + i.soni, 0)} dona)\n` +
+          `✍️ Qabul qildi: <b>${fromName}</b>`;
       } else if (p.amal === "tovar_kirim") {
         // Omborga tovar kirimi / yangi tovar qo'shish
         const tovarNomi = (p.tovar_nomi || "").trim();
@@ -2984,6 +3152,32 @@ JAVOBNI TELEGRAM CHATI UCHUN JUDA CHIROYLI, ESTETIK VA TARTIBLI FORMATLANG:
 
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         const card = buildSavdoCard(draftId, parsedData, hisoblarDB || []);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // 1.5. TOVAR VOZVRAT (QAYTARISH) AMALI: AQLLI MIJOZ VA TOVAR QAYTARISH
+      if (parsedData.amal === "tovar_vozvrat") {
+        await resolveSavdoEntities(parsedData);
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const card = buildVozvratCard(draftId, parsedData);
 
         await getSupabase().from("ai_chat_history").insert({
           chat_id: chatId,
