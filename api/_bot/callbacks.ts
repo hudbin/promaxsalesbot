@@ -917,7 +917,7 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         : 0;
       const yangiQarz = eskiQarz + qarz;
 
-      javobMatn = `✅ <b>SAVDO SAQLANDI VA OMBORDAN AYIRILDI</b>\n\n` +
+      javobMatn = `✅ <b>SAVDO SAQLANDI VA DO'KONDAN AYIRILDI</b>\n\n` +
         `👤 Mijoz: <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
         (itemsSummary ? `📦 Mahsulotlar:\n${itemsSummary}\n` : "") +
         `💰 Jami: <b>${pul(jami)} ${valyuta}</b>\n` +
@@ -1004,7 +1004,7 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         (p.selectedMijoz
           ? `📂 Eski qarz: ${pul(eskiQarz)} ${valyuta} ➔ <b>Yangi qarz: ${pul(yangiQarz)} ${valyuta}</b>\n`
           : "") +
-        `📈 Omborda tovar qoldig'i tiklandi (+${mappedQatorlar.reduce((s: number, i: any) => s + i.soni, 0)} dona)\n` +
+        `📈 Do'konda tovar qoldig'i tiklandi (+${mappedQatorlar.reduce((s: number, i: any) => s + i.soni, 0)} dona)\n` +
         `✍️ Qabul qildi: <b>${fromName}</b>`;
     }
 
@@ -1036,10 +1036,10 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
             })
             .eq("id", mavjud.id);
 
-          javobMatn = `✅ <b>OMBORGA TOVAR QO'SHILDI</b>\n\n` +
+          javobMatn = `✅ <b>DO'KONGA TOVAR QO'SHILDI</b>\n\n` +
             `📦 Tovar: <b>${mavjud.nom}</b>\n` +
             `➕ Kirim soni: <b>+${p.soni} ${p.birlik || mavjud.birlik || "dona"}</b>\n` +
-            `📊 Ombordagi yangi qoldiq: <b>${yangiQoldiq} ${mavjud.birlik || "dona"}</b>\n` +
+            `📊 Do'kondagi yangi qoldiq: <b>${yangiQoldiq} ${mavjud.birlik || "dona"}</b>\n` +
             (p.tannarx > 0 ? `💲 Yangi tannarx: <b>${pul(p.tannarx)} ${p.valyuta || mavjud.valyuta}</b>\n` : "") +
             (p.narx_optom > 0 ? `💰 Yangi sotish narxi: <b>${pul(p.narx_optom)} ${p.valyuta || mavjud.valyuta}</b>\n` : "") +
             `✍️ Kiritdi: <b>${fromName}</b>`;
@@ -1055,7 +1055,7 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
             faol: true,
           });
 
-          javobMatn = `✅ <b>YANGI TOVAR OMBORGA KIRITILDI</b>\n\n` +
+          javobMatn = `✅ <b>YANGI TOVAR DO'KONGA KIRITILDI</b>\n\n` +
             `📦 Tovar: <b>${tovarNomi}</b>\n` +
             `🔢 Soni: <b>${p.soni} ${p.birlik || "dona"}</b>\n` +
             (p.tannarx > 0 ? `💲 Tannarx: <b>${pul(p.tannarx)} ${p.valyuta}</b>\n` : "") +

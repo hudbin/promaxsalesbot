@@ -41,7 +41,7 @@ export function buildSavdoCard(draftId: string, p: any, hisoblar: any[] = []): {
       `👤 <b>Mijoz:</b> <b>${p.selectedMijoz?.nom || "Chakana"}</b>\n` +
       `Siz aytgan <i>"${it.nom}"</i> (${it.soni} dona × ${pul(it.narx)}) bo'yicha quyidagi modellar mavjud:`;
     const buttons: any[] = (it.candidates || []).map((c: any) => [
-      { text: `🏷 ${c.nom} (Omborda: ${c.qoldiq} ${c.birlik || "dona"})`, callback_data: `pk:t:${draftId}:${ambIndex}:${c.id}` },
+      { text: `🏷 ${c.nom} (Do'konda: ${c.qoldiq} ${c.birlik || "dona"})`, callback_data: `pk:t:${draftId}:${ambIndex}:${c.id}` },
     ]);
     buttons.push([
       { text: `✍️ O'z nomi bilan qoldirish ("${it.nom}")`, callback_data: `pk:t:${draftId}:${ambIndex}:free` },
@@ -89,7 +89,7 @@ export function buildSavdoCard(draftId: string, p: any, hisoblar: any[] = []): {
     const birlik = it.birlik || "dona";
     itemsText += `  ${i + 1}️⃣ <b>${it.aniq_nom || it.nom}</b>: <code>${it.soni} ${birlik}</code> × <code>${pul(it.narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
     if (it.qoldiq !== undefined && it.qoldiq !== null) {
-      itemsText += `      <i>📉 Omborda: ${it.qoldiq} ${birlik} ➔ qoladi: ${Math.max(0, it.qoldiq - it.soni)} ${birlik}</i>\n`;
+      itemsText += `      <i>📉 Do'konda: ${it.qoldiq} ${birlik} ➔ qoladi: ${Math.max(0, it.qoldiq - it.soni)} ${birlik}</i>\n`;
     }
   });
 
@@ -374,7 +374,7 @@ export function buildVozvratCard(draftId: string, p: any): { text: string; keybo
     const birlik = it.birlik || "dona";
     itemsText += `  ${i + 1}️⃣ <b>${it.aniq_nom || it.nom}</b>: <code>${it.soni} ${birlik}</code> × <code>${pul(it.narx)}</code> = <code>${pul(s)} ${valyuta}</code>\n`;
     if (it.qoldiq !== undefined && it.qoldiq !== null) {
-      itemsText += `      <i>📈 Omborda: ${it.qoldiq} ${birlik} ➔ qoladi: ${it.qoldiq + it.soni} ${birlik} (+qaytariladi)</i>\n`;
+      itemsText += `      <i>📈 Do'konda: ${it.qoldiq} ${birlik} ➔ qoladi: ${it.qoldiq + it.soni} ${birlik} (+qaytariladi)</i>\n`;
     }
   });
 
@@ -389,7 +389,7 @@ export function buildVozvratCard(draftId: string, p: any): { text: string; keybo
   }
 
   if (p.izoh) text += `💬 <b>Izoh:</b> <i>${p.izoh}</i>\n`;
-  text += `\n❓ <i>Ushbu qaytarish tasdiqlansinmi? (Mijoz qarzi kamayadi, tovar omborga qaytadi)</i>`;
+  text += `\n❓ <i>Ushbu qaytarish tasdiqlansinmi? (Mijoz qarzi kamayadi, tovar do'konga qaytadi)</i>`;
 
   const buttons = [
     [

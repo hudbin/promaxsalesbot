@@ -74,7 +74,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
 
       await tgPost("sendMessage", {
         chat_id: chatId,
-        text: `👑 <b>Tabriklaymiz, ${senderName}!</b>\n\nAdmin paroli to'g'ri tasdiqlandi. Siz PROMAX tizimida <b>Bosh Administrator</b> sifatida ro'yxatdan o'tdingiz!\n\nEndi bot orqali va Mini App'da barcha funksiyalar (kassa, ombor, xodimlarni tasdiqlash) siz uchun ochiq.\n🆔 Sizning Telegram ID: <code>${senderId}</code>`,
+        text: `👑 <b>Tabriklaymiz, ${senderName}!</b>\n\nAdmin paroli to'g'ri tasdiqlandi. Siz PROMAX tizimida <b>Bosh Administrator</b> sifatida ro'yxatdan o'tdingiz!\n\nEndi bot orqali va Mini App'da barcha funksiyalar (kassa, do'kon, xodimlarni tasdiqlash) siz uchun ochiq.\n🆔 Sizning Telegram ID: <code>${senderId}</code>`,
         parse_mode: "HTML",
         reply_markup: { remove_keyboard: true },
       });
@@ -301,7 +301,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
   if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
@@ -380,7 +380,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
     const optConfirmMsg =
       `📦 <b>TOVARLAR BAZASINI OPTIMALLASHTIRISH</b>\n\n` +
       `Ushbu amal bazadagi bir xil modelga tegishli barcha turli rangdagi mahsulotlarni bitta asosiy modelga birlashtiradi:\n` +
-      `• Har bir model bo'yicha jami ombor qoldig'i yig'iladi va asosiy mahsulot nomiga o'tkaziladi.\n` +
+      `• Har bir model bo'yicha jami do'kon qoldig'i yig'iladi va asosiy mahsulot nomiga o'tkaziladi.\n` +
       `• Rangli dublikatlar arxivlanadi (<code>faol = false</code>).\n` +
       `• Tarixiy savdo cheklariga ziyon yetmaydi.\n\n` +
       `<i>Birlashtirishni boshlaymizmi?</i>`;
@@ -971,7 +971,7 @@ DIQQAT:
       let preview = "";
       if (parsedData.amal === "tovar_kirim") {
         const jamiTannarx = (parsedData.soni || 0) * (parsedData.tannarx || 0);
-        preview = `📦 <b>TOVAR KIRIMI (OMBOR) ANIQLANDI</b>\n\n` +
+        preview = `📦 <b>TOVAR KIRIMI (DO'KON) ANIQLANDI</b>\n\n` +
           `🏷 Tovar: <b>${parsedData.tovar_nomi || "Yangi tovar"}</b>\n` +
           `🔢 Kirim soni: <b>+${parsedData.soni || 0} ${parsedData.birlik || "dona"}</b>\n` +
           (parsedData.tannarx ? `💲 Tannarxi: <b>${pul(parsedData.tannarx)} ${parsedData.valyuta}</b>\n` : "") +
@@ -1011,7 +1011,7 @@ DIQQAT:
     } else {
       await tgPost("sendMessage", {
         chat_id: chatId,
-        text: `🤖 <b>Xabardan moliyaviy yoki ombor amali aniqlanmadi.</b>\n\nIltimos, aniqroq yozing yoki gapiring.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, internetga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan 100$ ga berdim, 40$ naqd berdi"</i> (Savdo)\n• <i>"Murod aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)`,
+        text: `🤖 <b>Xabardan moliyaviy yoki savdo/do'kon amali aniqlanmadi.</b>\n\nIltimos, aniqroq yozing yoki gapiring.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, internetga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan 100$ ga berdim, 40$ naqd berdi"</i> (Savdo)\n• <i>"Murod aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)`,
         parse_mode: "HTML",
       });
       return res.status(200).send("OK");

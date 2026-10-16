@@ -327,7 +327,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
         let tovarlarText = "";
         if (Array.isArray(item.qatorlar) && item.qatorlar.length > 0) {
           tovarlarText =
-            `📦 Omborga qaytarilgan tovarlar:\n` +
+            `📦 Do'konga qaytarilgan tovarlar:\n` +
             item.qatorlar
               .map((q: any) => `  • <b>${q.tovar_nomi}</b>: ${q.soni} × ${pul(q.narx)} = ${pul(q.summa)} ${item.valyuta}`)
               .join("\n") +
@@ -1119,7 +1119,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                             <div className="pt-1.5 border-t border-rose-200/70 dark:border-rose-900/50 flex items-center justify-between gap-2 animate-fade-in">
                               <span className="text-[11px] font-bold text-rose-700 dark:text-rose-300">
                                 {item.tur === "savdo"
-                                  ? "Savdoni bekor qilib o'chirasizmi? (Tovar omborga qaytadi, qarz kamayadi)"
+                                  ? "Savdoni bekor qilib o'chirasizmi? (Tovar do'konga qaytadi, qarz kamayadi)"
                                   : "To'lovni bekor qilib o'chirasizmi? (Qarz qayta tiklanadi)"}
                               </span>
                               <div className="flex items-center gap-1.5 flex-shrink-0">

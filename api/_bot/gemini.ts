@@ -157,7 +157,7 @@ Quyidagi 11 ta amal turidan birini aniqlang:
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
 4. "kop_rasxod": Bitta so'rovda BIR NECHTA xarajat aytilganda (masalan: "Obedga 50 ming, taksiga 30 ming, internetga 100 ming" yoki "Kassadan obedga 50 ming, plastikdan internetga 100 ming").
 5. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
-6. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
+6. "tovar_kirim": Do'konga (omborga) yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
 7. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish.
 8. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
 9. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
@@ -257,7 +257,7 @@ Jadvallar va Maxsus Aqlli Funksiyalar:
    - Jadval: mijozlar (id, nom, nom_norm, telefon, manzil, qarz_uzs, qarz_usd, faol)
    - Tayyor ko'rinish: view_ai_qarzdorlar (barcha qarzdorlar ro'yxati)
 
-2. OMBOR VA TOVARLAR:
+2. DO'KON (OMBOR) VA TOVARLAR (QOLDIQLAR):
    - AQLLI TOVAR QIDIRUV: fn_ai_tovar_qidirish('model yoki nom')
    - Jadval: tovarlar (id, nom, model, shtrixkod, birlik, tannarx, narx_optom, narx_chakana, valyuta, qoldiq, ogohlantirish_qoldiq, faol)
 

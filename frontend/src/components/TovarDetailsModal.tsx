@@ -203,7 +203,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
       if (yangilash.tannarx) tovar.tannarx = yangilash.tannarx;
 
       haptic("success");
-      toast.success(`Omborga +${son} ${birlik} qo'shildi!`, {
+      toast.success(`Do'konga +${son} ${birlik} qo'shildi!`, {
         description: `Yangi qoldiq: ${yangiJamiQoldiq} ${birlik}`,
       });
       setKirimModalOchiq(false);
@@ -270,7 +270,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900 dark:text-white leading-tight">Tovar Tafsilotlari</h3>
-              <p className="text-[10px] text-slate-400 font-medium">Ombor kartochkasi</p>
+              <p className="text-[10px] text-slate-400 font-medium">Do'kon mahsulot kartochkasi</p>
             </div>
           </div>
           
@@ -536,10 +536,10 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
               </div>
             </div>
 
-            {/* Ombordagi Jami Partiya Qiymati */}
+            {/* Do'kondagi Jami Partiya Qiymati */}
             <div className="bg-slate-900 dark:bg-slate-800 text-white p-3 rounded-2xl space-y-1">
               <div className="flex justify-between items-center text-[11px] opacity-80">
-                <span>Ombordagi jami tovar tannarxi:</span>
+                <span>Do'kondagi jami tovar tannarxi:</span>
                 <span className="font-bold tabular-nums">
                   {pul(jamiTannarxQiymat)} {valyuta}
                 </span>
@@ -563,7 +563,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
                   }}
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
                 >
-                  <Plus className="w-4 h-4" /> Omborga Kirim Qilish
+                  <Plus className="w-4 h-4" /> Do'konga Kirim Qilish
                 </button>
               </div>
             ) : (
@@ -646,7 +646,7 @@ export function TovarDetailsModal({ tovar, onClose, onUpdate }: TovarDetailsModa
               ) : (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl space-y-2 animate-fade-in">
                   <p className="text-xs font-bold text-rose-900 dark:text-rose-200 text-center leading-snug">
-                    Haqiqatan ham ushbu tovarni ombordan o'chirmoqchimisiz?
+                    Haqiqatan ham ushbu tovarni do'kondan o'chirmoqchimisiz?
                   </p>
                   <p className="text-[10px] text-rose-600 dark:text-rose-400 text-center">
                     Agar bu tovar bo'yicha savdo qilingan bo'lsa, u hisobotlar buzilmasligi uchun arxivlanadi.

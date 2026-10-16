@@ -84,7 +84,7 @@ export function OmborTab() {
       if (error) throw error;
 
       haptic("success");
-      toast.success("Mahsulot omborga qo'shildi!", {
+      toast.success("Mahsulot do'konga qo'shildi!", {
         description: `${nom.trim()} (${Number(qoldiq) || 0} dona)`,
       });
       setModalOchiq(false);
@@ -118,7 +118,7 @@ export function OmborTab() {
 
   return (
     <div className="space-y-3">
-      {/* Ombor Umumiy Xulosasi */}
+      {/* Do'kon Umumiy Xulosasi */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Jami Mahsulotlar</span>
@@ -126,7 +126,7 @@ export function OmborTab() {
           <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">turli xil tovar</p>
         </div>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ombor Qoldig'i</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Do'kon Qoldig'i</span>
           <p className="text-base font-black text-emerald-800 dark:text-emerald-400 tabular-nums mt-0.5">{pul(jamiDona)} dona</p>
           <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">jami fizik miqdor</p>
         </div>
@@ -412,7 +412,7 @@ export function OmborTab() {
               disabled={yuklanmoqda}
               className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-sm rounded-xl shadow-md active:scale-98 transition-all disabled:opacity-50"
             >
-              {yuklanmoqda ? "Saqlanmoqda..." : "✅ Omborda Saqlash"}
+              {yuklanmoqda ? "Saqlanmoqda..." : "✅ Do'konda Saqlash"}
             </button>
           </div>
         </div>

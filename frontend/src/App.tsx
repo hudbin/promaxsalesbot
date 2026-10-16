@@ -538,7 +538,7 @@ export default function App() {
             <span className="text-[10px] mt-0.5 tracking-tight">Kassa</span>
           </button>
 
-          {/* 5. Ombor */}
+          {/* 5. Do'kon */}
           <button
             onClick={() => tabOzgarti("ombor")}
             className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
@@ -548,7 +548,7 @@ export default function App() {
             }`}
           >
             <Package className={`w-5 h-5 ${faolTab === "ombor" ? "stroke-[2.5]" : "stroke-[1.8]"}`} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Ombor</span>
+            <span className="text-[10px] mt-0.5 tracking-tight">Do'kon</span>
           </button>
 
           {/* 6. Hisobotlar (Faqat Admin) */}
