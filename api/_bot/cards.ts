@@ -491,3 +491,75 @@ export function buildQarzEslatmaCard(draftId: string, p: any): { text: string; k
 
   return { text, keyboard: { inline_keyboard: buttons } };
 }
+
+// -----------------------------------------------------------------------------
+// BALANS SOZLASH (KORREKTIROVKA) KARTASI
+// -----------------------------------------------------------------------------
+export function buildBalansSozlashCard(
+  draftId: string,
+  p: any,
+  hisoblar: any[] = []
+): { text: string; keyboard: any } {
+  const valyuta = p.valyuta || "UZS";
+  const yangiBalans = Number(p.yangi_balans) || 0;
+
+  // 1. Agar hisob tanlanmagan bo'lsa -> Admin hisobni tanlaydi
+  if (!p.hisob_id) {
+    const mosHisoblar = (hisoblar || []).filter(
+      (h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI"
+    );
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+
+    const text =
+      `⚖️ <b>HISOBNI TANLANG (Balansni to'g'irlash)</b>\n\n` +
+      `🎯 Yangi kiritilgan balans: <b>${pul(yangiBalans)} ${valyuta}</b>\n` +
+      (p.izoh ? `📝 Izoh: <i>${formatTelegramHtml(p.izoh)}</i>\n\n` : "\n") +
+      `❓ Qaysi hisobning qoldig'ini ushbu summaga to'g'irlamoqchisiz?`;
+
+    const buttons: any[] = list.map((h: any) => {
+      let icon = "💵";
+      if (h.valyuta === "USD") icon = "💲";
+      if (h.turi === "plastik") icon = "💳";
+      if (h.turi === "bank") icon = "🏦";
+      return [{ text: `${icon} ${h.nom}`, callback_data: `bs:sh:${draftId}:${h.id}` }];
+    });
+    buttons.push([{ text: "❌ Bekor qilish", callback_data: `cn:${draftId}` }]);
+
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 2. Hisob tanlangan -> Yakuniy tasdiqlash kartasi
+  const tanlanganHisob = hisoblar.find((h: any) => h.id === p.hisob_id);
+  const hisobNomi = tanlanganHisob?.nom || p.hisob_nomi || "Kassa";
+  const joriyBalans = Number(p.joriy_balans) || 0;
+  const farq = yangiBalans - joriyBalans;
+
+  let farqMatn = "";
+  if (farq > 0) {
+    farqMatn = `📈 <b>Farq (Kirim):</b> <code>+${pul(farq)} ${valyuta}</code>`;
+  } else if (farq < 0) {
+    farqMatn = `📉 <b>Farq (Chiqim):</b> <code>-${pul(Math.abs(farq))} ${valyuta}</code>`;
+  } else {
+    farqMatn = `⚖️ <b>Farq:</b> <code>0 ${valyuta} (Balans allaqachon teng)</code>`;
+  }
+
+  const text =
+    `⚖️ <b>KASSA BALANSINI TO'G'IRLASH (KORREKTIROVKA)</b>\n\n` +
+    `🏦 <b>Hisob:</b> <b>${hisobNomi}</b>\n` +
+    `📊 <b>Tizimdagi joriy balans:</b> <code>${pul(joriyBalans)} ${valyuta}</code>\n` +
+    `🎯 <b>Yangi real balans:</b> <b>${pul(yangiBalans)} ${valyuta}</b>\n` +
+    `${farqMatn}\n` +
+    (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n\n` : "\n") +
+    `<i>Ushbu amal hisob qoldig'ini haqiqiy holatga moslaydi va buxgalteriya audit-trail tarixini yaratadi. Tasdiqlaysizmi?</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Tasdiqlash", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+    [{ text: "🔄 Boshqa hisobni tanlash", callback_data: `bs:ch:${draftId}` }],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+

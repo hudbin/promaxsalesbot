@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { supabase, pul, haptic } from "../lib/supabase";
 import { 
   ArrowDownLeft, ArrowUpRight, Wallet, CreditCard, Building2, 
-  DollarSign, History, ChevronRight, ArrowRightLeft, Settings
+  DollarSign, History, ChevronRight, ArrowRightLeft, Settings, SlidersHorizontal
 } from "lucide-react";
 import { KassaDetailsModal } from "./KassaDetailsModal";
 import { TransferModal } from "./TransferModal";
 import { HisoblarModal } from "./HisoblarModal";
+import { BalansSozlashModal } from "./BalansSozlashModal";
 
 type AmalFilter = "hammasi" | "kirim" | "chiqim";
 
@@ -22,6 +23,8 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
   const [tanlanganHarakat, setTanlanganHarakat] = useState<any>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showHisoblar, setShowHisoblar] = useState(false);
+  const [showBalansSozlash, setShowBalansSozlash] = useState(false);
+  const [sozlashHisobId, setSozlashHisobId] = useState<string | null>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
       case "kassalar_aro": return "Kassalar aro";
       case "transfer": return "O'tkazma";
       case "boshlangich": return "Boshlang'ich";
+      case "korrektirovka": return "Balans to'g'rilash (Korrektirovka)";
       default: return manba || "Boshqa";
     }
   }
@@ -276,10 +280,26 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
                       if (isBank) { bgSolid = "bg-purple-700"; textSolid = "text-purple-100"; }
 
                       return (
-                        <div key={b.hisob_id} className={`${bgSolid} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5`}>
-                          <div className="flex items-center gap-1.5 opacity-85">
-                            <Icon className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">{turNomi}</span>
+                        <div
+                          key={b.hisob_id}
+                          onClick={() => {
+                            if (userRole === "admin") {
+                              haptic("light");
+                              setSozlashHisobId(b.hisob_id);
+                              setShowBalansSozlash(true);
+                            }
+                          }}
+                          className={`${bgSolid} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5 ${userRole === "admin" ? "cursor-pointer hover:opacity-95 transition-opacity" : ""}`}
+                          title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
+                        >
+                          <div className="flex items-center justify-between opacity-85">
+                            <div className="flex items-center gap-1.5">
+                              <Icon className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider">{turNomi}</span>
+                            </div>
+                            {userRole === "admin" && (
+                              <SlidersHorizontal className="w-3 h-3 opacity-80" />
+                            )}
                           </div>
                           <p className="text-base font-black tabular-nums leading-tight">
                             {isUSD ? "$" : ""}{pul(b.joriy_balans)}
@@ -292,7 +312,15 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
                     return (
                       <div
                         key={b.hisob_id}
-                        className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01]`}
+                        onClick={() => {
+                          if (userRole === "admin") {
+                            haptic("light");
+                            setSozlashHisobId(b.hisob_id);
+                            setShowBalansSozlash(true);
+                          }
+                        }}
+                        className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01] ${userRole === "admin" ? "cursor-pointer" : ""}`}
+                        title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
                           <div className="flex items-center gap-1 min-w-0">
@@ -301,9 +329,14 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
                               {turNomi}
                             </span>
                           </div>
-                          <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${badgeColor} flex-shrink-0 uppercase`}>
-                            {b.valyuta}
-                          </span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {userRole === "admin" && (
+                              <SlidersHorizontal className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 opacity-60 hover:opacity-100" />
+                            )}
+                            <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${badgeColor} uppercase`}>
+                              {b.valyuta}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-baseline justify-between mt-0.5">
                           <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
@@ -331,12 +364,20 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
           <ArrowRightLeft className="w-4 h-4" /> Pul O'tkazish
         </button>
         {userRole === "admin" && (
-          <button
-            onClick={() => { haptic("light"); setShowHisoblar(true); }}
-            className="flex-none px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-md active:scale-95"
-          >
-            <Settings className="w-4 h-4" /> Hisoblar
-          </button>
+          <>
+            <button
+              onClick={() => { haptic("light"); setSozlashHisobId(null); setShowBalansSozlash(true); }}
+              className="flex-none px-3 py-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-amber-100 transition-all shadow-2xs active:scale-95"
+            >
+              <SlidersHorizontal className="w-4 h-4" /> Balansni Sozlash
+            </button>
+            <button
+              onClick={() => { haptic("light"); setShowHisoblar(true); }}
+              className="flex-none px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-2xs active:scale-95"
+            >
+              <Settings className="w-4 h-4" /> Hisoblar
+            </button>
+          </>
         )}
       </div>
 
@@ -436,6 +477,14 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
           hisoblar={hisoblar}
           onClose={() => setShowHisoblar(false)}
           onSuccess={() => { yuklaKassa(); }}
+        />
+      )}
+      {showBalansSozlash && (
+        <BalansSozlashModal
+          hisoblar={hisoblar}
+          boshlangichHisobId={sozlashHisobId || undefined}
+          onClose={() => { setShowBalansSozlash(false); setSozlashHisobId(null); }}
+          onSuccess={() => { setShowBalansSozlash(false); setSozlashHisobId(null); yuklaKassa(); }}
         />
       )}
     </div>

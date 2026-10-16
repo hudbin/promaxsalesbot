@@ -23,6 +23,7 @@ import {
   buildQarzTolovCard,
   buildVozvratCard,
   buildQarzEslatmaCard,
+  buildBalansSozlashCard,
 } from "./cards";
 import {
   checkUserPermission,
@@ -300,7 +301,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
   if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Omborga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
@@ -394,6 +395,94 @@ export async function handleMessage(message: any, res: any): Promise<any> {
           [{ text: "❌ Bekor qilish", callback_data: "cn:opt" }],
         ],
       },
+    });
+    return res.status(200).send("OK");
+  }
+
+  // 5.1 KASSA BALANSINI TO'G'IRLASH (ADMIN)
+  const isBalansCmd =
+    text === "/balans_sozlash" ||
+    text === "/balans_togirla" ||
+    text === "/kassa_sozlash" ||
+    text.startsWith("/balans_sozlash ") ||
+    text.startsWith("/balans_togirla ") ||
+    text.startsWith("/kassa_sozlash ") ||
+    text.startsWith("/balans_sozlash@") ||
+    text.startsWith("/balans_togirla@");
+
+  if (isBalansCmd) {
+    if (perm.role !== "admin") {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "⛔️ <i>Kassa balansini to'g'irlash faqat administratorlar uchun ruxsat etilgan.</i>",
+        parse_mode: "HTML",
+      });
+      return res.status(200).send("OK");
+    }
+
+    const { data: hisoblarDB } = await getSupabase()
+      .from("hisoblar")
+      .select("id, nom, turi, valyuta")
+      .eq("faol", true);
+
+    const { data: balanslarDB } = await getSupabase()
+      .from("view_kassa_balans")
+      .select("*");
+
+    const cmdArgs = text.replace(/^\/(balans_sozlash|balans_togirla|kassa_sozlash)(@\w+)?/i, "").trim();
+    let yangiBalans = 0;
+    if (cmdArgs) {
+      const parsedNum = parseFloat(cmdArgs.replace(/[^\d.]/g, ""));
+      if (!isNaN(parsedNum) && parsedNum >= 0) {
+        yangiBalans = parsedNum;
+      }
+    }
+
+    if (yangiBalans > 0) {
+      const draftId = `bs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const pData = {
+        amal: "balans_sozlash",
+        yangi_balans: yangiBalans,
+        valyuta: "UZS",
+        hisob_id: null,
+        izoh: "Balans to'g'rilandi (korrektirovka)",
+      };
+      await getSupabase().from("tranzaksiya_qoralama").insert({
+        id: draftId,
+        malumot: pData,
+        yaratildi: new Date().toISOString(),
+      });
+
+      const card = buildBalansSozlashCard(draftId, pData, hisoblarDB || []);
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: card.text,
+        parse_mode: "HTML",
+        reply_markup: card.keyboard,
+      });
+      return res.status(200).send("OK");
+    }
+
+    let hisoblarRoyxati = "";
+    if (balanslarDB && balanslarDB.length > 0) {
+      hisoblarRoyxati = balanslarDB
+        .map((b: any) => `• <b>${b.kassa_nomi}</b>: <code>${pul(b.joriy_balans)} ${b.valyuta}</code>`)
+        .join("\n");
+    } else {
+      hisoblarRoyxati = "<i>Hisoblar topilmadi.</i>";
+    }
+
+    const msg =
+      `⚖️ <b>KASSA HISOB BALANSINI SOZLASH</b>\n\n` +
+      `<b>Joriy kassa balanslari:</b>\n${hisoblarRoyxati}\n\n` +
+      `<i>Balansni to'g'irlash usullari:</i>\n` +
+      `1️⃣ <b>Ovozli yoki matnli xabar:</b> Masalan: <i>"Asosiy kassa naqd pulini 50 mln ga to'g'irla"</i> yoki <i>"Plastikda 12 mln so'm qoldi"</i>\n` +
+      `2️⃣ <b>Buyruq orqali:</b> <code>/balans_sozlash 50000000</code>`;
+
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: msg,
+      parse_mode: "HTML",
     });
     return res.status(200).send("OK");
   }
@@ -815,6 +904,57 @@ DIQQAT:
         } else {
           await sendQarzdorlarPdf(chatId);
         }
+        return res.status(200).send("OK");
+      }
+
+      // BALANS SOZLASH (KORREKTIROVKA)
+      if (parsedData.amal === "balans_sozlash") {
+        if (perm.role !== "admin") {
+          await tgPost("sendMessage", {
+            chat_id: chatId,
+            text: "⛔️ <i>Kassa balansini to'g'irlash faqat administratorlar uchun ruxsat etilgan.</i>",
+            parse_mode: "HTML",
+          });
+          return res.status(200).send("OK");
+        }
+
+        const { data: hisoblarDB } = await getSupabase()
+          .from("hisoblar")
+          .select("id, nom, turi, valyuta")
+          .eq("faol", true);
+
+        if (parsedData.hisob_id) {
+          const { data: vb } = await getSupabase()
+            .from("view_kassa_balans")
+            .select("joriy_balans, valyuta, kassa_nomi")
+            .eq("hisob_id", parsedData.hisob_id)
+            .maybeSingle();
+
+          parsedData.joriy_balans = Number(vb?.joriy_balans || 0);
+          if (vb?.valyuta) parsedData.valyuta = vb.valyuta;
+          if (vb?.kassa_nomi) parsedData.hisob_nomi = vb.kassa_nomi;
+        }
+
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const card = buildBalansSozlashCard(draftId, parsedData, hisoblarDB || []);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
         return res.status(200).send("OK");
       }
 

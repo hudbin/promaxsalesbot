@@ -12,6 +12,7 @@ import {
   buildMultiRasxodCard,
   buildQarzTolovCard,
   buildQarzEslatmaCard,
+  buildBalansSozlashCard,
 } from "./cards";
 import { checkUserPermission, runTovarlarniOptimallashtirish, buildOptimizationReport } from "./entities";
 import { sendMijozQarzPdf } from "./pdf";
@@ -182,6 +183,100 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     });
 
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Kassa hisobi tanlandi!" });
+    return res.status(200).send("OK");
+  }
+
+  // 1.2.B BALANS SOZLASH UCHUN HISOB TANLASH (bs:sh:draftId:hisobId)
+  if (data.startsWith("bs:sh:")) {
+    const parts = data.split(":");
+    const draftId = parts[2];
+    const hId = parts[3];
+
+    const { data: draft } = await supabase
+      .from("tranzaksiya_qoralama")
+      .select("*")
+      .eq("id", draftId)
+      .maybeSingle();
+
+    if (!draft || !draft.malumot) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+      return res.status(200).send("OK");
+    }
+
+    const p = draft.malumot;
+    p.hisob_id = hId;
+
+    const { data: vb } = await getSupabase()
+      .from("view_kassa_balans")
+      .select("joriy_balans, valyuta, kassa_nomi")
+      .eq("hisob_id", hId)
+      .maybeSingle();
+
+    p.joriy_balans = Number(vb?.joriy_balans || 0);
+    if (vb?.valyuta) p.valyuta = vb.valyuta;
+    if (vb?.kassa_nomi) p.hisob_nomi = vb.kassa_nomi;
+
+    await getSupabase()
+      .from("tranzaksiya_qoralama")
+      .update({ malumot: p })
+      .eq("id", draftId);
+
+    const { data: hisoblarDB } = await getSupabase()
+      .from("hisoblar")
+      .select("id, nom, turi, valyuta")
+      .eq("faol", true);
+
+    const nextCard = buildBalansSozlashCard(draftId, p, hisoblarDB || []);
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text: nextCard.text,
+      parse_mode: "HTML",
+      reply_markup: nextCard.keyboard,
+    });
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Hisob tanlandi!" });
+    return res.status(200).send("OK");
+  }
+
+  // 1.2.C BALANS SOZLASH: HISOBNI QAYTA TANLASH (bs:ch:draftId)
+  if (data.startsWith("bs:ch:")) {
+    const draftId = data.replace("bs:ch:", "");
+
+    const { data: draft } = await supabase
+      .from("tranzaksiya_qoralama")
+      .select("*")
+      .eq("id", draftId)
+      .maybeSingle();
+
+    if (!draft || !draft.malumot) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+      return res.status(200).send("OK");
+    }
+
+    const p = draft.malumot;
+    p.hisob_id = null;
+
+    await getSupabase()
+      .from("tranzaksiya_qoralama")
+      .update({ malumot: p })
+      .eq("id", draftId);
+
+    const { data: hisoblarDB } = await getSupabase()
+      .from("hisoblar")
+      .select("id, nom, turi, valyuta")
+      .eq("faol", true);
+
+    const nextCard = buildBalansSozlashCard(draftId, p, hisoblarDB || []);
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text: nextCard.text,
+      parse_mode: "HTML",
+      reply_markup: nextCard.keyboard,
+    });
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Hisobni qayta tanlang" });
     return res.status(200).send("OK");
   }
 
@@ -996,6 +1091,89 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         `📤 Qayerdan: <b>${getHNom(p.chiqim_hisob_id)}</b>\n` +
         `📥 Qayerga: <b>${getHNom(p.kirim_hisob_id)}</b>\n` +
         `✍️ Bajardi: <b>${fromName}</b>`;
+    }
+
+    // 1.8.H KASSA BALANSINI TO'G'IRLASH (KORREKTIROVKA)
+    else if (p.amal === "balans_sozlash") {
+      const { data: hisoblarDB } = await getSupabase()
+        .from("hisoblar")
+        .select("id, nom, turi, valyuta")
+        .eq("faol", true);
+
+      if (!p.hisob_id) {
+        const nextCard = buildBalansSozlashCard(draftId, p, hisoblarDB || []);
+        await tgPost("editMessageText", {
+          chat_id: chatId,
+          message_id: msgId,
+          text: nextCard.text,
+          parse_mode: "HTML",
+          reply_markup: nextCard.keyboard,
+        });
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Iltimos, avval to'g'irlanadigan hisobni tanlang!" });
+        return res.status(200).send("OK");
+      }
+
+      const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+      const hisobNomi = tanlanganHisob?.nom || p.hisob_nomi || "Kassa";
+      const yangiBalans = Number(p.yangi_balans) || 0;
+      const valyuta = p.valyuta || tanlanganHisob?.valyuta || "UZS";
+      const izoh = p.izoh || "Balans to'g'rilandi (korrektirovka)";
+
+      // RPC chaqirib balansni to'g'irlaymiz
+      const { data: rpcRes, error: rpcErr } = await getSupabase().rpc("fn_kassa_balans_sozlash", {
+        p_hisob_id: p.hisob_id,
+        p_yangi_balans: yangiBalans,
+        p_izoh: izoh,
+        p_xodim: fromName,
+        p_telegram_user_id: cq.from?.id,
+      });
+
+      let eskiBalans = Number(p.joriy_balans || 0);
+
+      if (rpcErr) {
+        console.warn("fn_kassa_balans_sozlash RPC xatosi, to'g'ridan-to'g'ri yozish fallback:", rpcErr.message);
+        const { data: curBal } = await getSupabase()
+          .from("view_kassa_balans")
+          .select("joriy_balans")
+          .eq("hisob_id", p.hisob_id)
+          .maybeSingle();
+
+        if (curBal) eskiBalans = Number(curBal.joriy_balans || 0);
+        const farq = yangiBalans - eskiBalans;
+
+        if (farq !== 0) {
+          const amalTur = farq > 0 ? "kirim" : "chiqim";
+          await getSupabase().from("kassa_harakatlari").insert({
+            amal: amalTur,
+            summa: Math.abs(farq),
+            valyuta: valyuta,
+            manba_turi: "korrektirovka",
+            manba_id: p.hisob_id,
+            hisob_id: p.hisob_id,
+            izoh: `${izoh} (${eskiBalans} ➔ ${yangiBalans})`,
+          });
+        }
+      } else if (rpcRes && rpcRes.eski_balans !== undefined) {
+        eskiBalans = Number(rpcRes.eski_balans);
+      }
+
+      const farq = yangiBalans - eskiBalans;
+      let farqMatn = "";
+      if (farq > 0) {
+        farqMatn = `📈 Farq (Kirim): <b>+${pul(farq)} ${valyuta}</b>`;
+      } else if (farq < 0) {
+        farqMatn = `📉 Farq (Chiqim): <b>-${pul(Math.abs(farq))} ${valyuta}</b>`;
+      } else {
+        farqMatn = `⚖️ Farq: <b>0 ${valyuta} (O'zgarishsiz)</b>`;
+      }
+
+      javobMatn = `⚖️ <b>KASSA BALANSI MUVAFFAQIYATLI TO'G'IRLANDI</b>\n\n` +
+        `🏦 Hisob: <b>${hisobNomi}</b>\n` +
+        `📊 Eski balans: <code>${pul(eskiBalans)} ${valyuta}</code>\n` +
+        `🎯 Yangi real balans: <b>${pul(yangiBalans)} ${valyuta}</b>\n` +
+        `${farqMatn}\n` +
+        `📝 Izoh: <i>${izoh}</i>\n` +
+        `✍️ Sozladi: <b>${fromName} (Admin)</b>`;
     }
 
     await tgPost("editMessageText", {

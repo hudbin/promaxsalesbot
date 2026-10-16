@@ -151,7 +151,7 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 10 ta amal turidan birini aniqlang:
+Quyidagi 11 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
@@ -159,9 +159,10 @@ Quyidagi 10 ta amal turidan birini aniqlang:
 5. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
 6. "tovar_kirim": Omborga yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
 7. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish.
-8. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
-9. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozning qarz hisobotini (akt-sverka) PDF ko'rinishida so'raganda.
-10. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+8. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
+9. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
+10. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozning qarz hisobotini (akt-sverka) PDF ko'rinishida so'raganda.
+11. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
@@ -211,6 +212,15 @@ JSON strukturasi "pul_otkazma" amali uchun:
   "chiqim_hisob_id": "Pul chiqib ketayotgan hisob UUID",
   "kirim_hisob_id": "Pul tushayotgan hisob UUID",
   "izoh": "Qisqa izoh"
+}
+
+JSON strukturasi "balans_sozlash" amali uchun:
+{
+  "amal": "balans_sozlash",
+  "hisob_id": "aniq aytilgan bo'lsa hisob UUID, aks holda null",
+  "yangi_balans": 0.0,
+  "valyuta": "UZS" | "USD",
+  "izoh": "Qisqa izoh yoki null"
 }
 
 JSON strukturasi "qarz_eslatma" amali uchun:
