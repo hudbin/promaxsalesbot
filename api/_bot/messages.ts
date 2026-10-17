@@ -24,6 +24,7 @@ import {
   buildVozvratCard,
   buildQarzEslatmaCard,
   buildBalansSozlashCard,
+  buildTashqiQarzCard,
 } from "./cards";
 import {
   checkUserPermission,
@@ -942,6 +943,36 @@ DIQQAT:
         });
 
         const card = buildBalansSozlashCard(draftId, parsedData, hisoblarDB || []);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // TANISHLAR QARZI (TASHQI QARZ) AMALI
+      if (parsedData.amal === "tashqi_qarz") {
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const { data: hisoblarDB } = await getSupabase()
+          .from("hisoblar")
+          .select("id, nom, turi, valyuta")
+          .eq("faol", true);
+
+        const card = buildTashqiQarzCard(draftId, parsedData, hisoblarDB || []);
 
         await getSupabase().from("ai_chat_history").insert({
           chat_id: chatId,

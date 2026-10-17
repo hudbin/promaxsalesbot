@@ -563,3 +563,186 @@ export function buildBalansSozlashCard(
   return { text, keyboard: { inline_keyboard: buttons } };
 }
 
+// -----------------------------------------------------------------------------
+// TANISHLAR QARZI (TASHQI QARZ) KARTASI
+// -----------------------------------------------------------------------------
+export function buildTashqiQarzCard(
+  draftId: string,
+  p: any,
+  hisoblar: any[] = []
+): { text: string; keyboard: any } {
+  const valyuta = p.valyuta || "UZS";
+  const summa = Number(p.summa) || 0;
+  const shaxsNomi = p.shaxs_nomi || "Noma'lum";
+  const amal = p.qarz_amali || "oldim";
+
+  const hasDestination =
+    p.kassaTanlandi === true ||
+    !!p.hisob_id ||
+    !!p.bevosita_oylik ||
+    !!p.kassasiz;
+
+  // 1-BOSQICH: Agar hisob / yo'nalish hali tanlanmagan bo'lsa
+  if (!hasDestination) {
+    const mosHisoblar = (hisoblar || []).filter(
+      (h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI"
+    );
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+
+    let text = "";
+    const buttons: any[] = [];
+
+    if (amal === "oldim") {
+      text =
+        `📥 <b>QARZ OLINDI: MABLAG'NI YO'NALTIRISH</b>\n\n` +
+        `👤 <b>Kimdan:</b> <b>${shaxsNomi}</b>\n` +
+        `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+        (p.maqsad ? `💬 <b>Maqsad:</b> <i>${formatTelegramHtml(p.maqsad)}</i>\n` : "") +
+        (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+        `\n❓ <b>Ushbu qarz mablag'i qanday tasarruf etildi?</b>`;
+
+      // 1. To'g'ridan-to'g'ri oylikka berilgan bo'lsa
+      buttons.push([
+        { text: "💼 To'g'ridan-to'g'ri ishchiga (Oylik)", callback_data: `tq:oylik:${draftId}` },
+      ]);
+
+      // 2. Kassalarga kirim
+      list.forEach((h: any) => {
+        let icon = "💵";
+        if (h.valyuta === "USD") icon = "💲";
+        if (h.turi === "plastik") icon = "💳";
+        if (h.turi === "bank") icon = "🏦";
+        buttons.push([
+          { text: `${icon} Kirim: ${h.nom}`, callback_data: `tq:h:${draftId}:${h.id}` },
+        ]);
+      });
+
+      // 3. Kassasiz
+      buttons.push([
+        { text: "📝 Kassasiz (Faqat qarz daftari)", callback_data: `tq:none:${draftId}` },
+      ]);
+    } else if (amal === "qaytardim") {
+      text =
+        `📤 <b>QARZ QAYTARILDI: CHIQIM MANBASI</b>\n\n` +
+        `👤 <b>Kimga:</b> <b>${shaxsNomi}</b>\n` +
+        `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+        (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+        `\n❓ <b>Mablag' qaysi kassa/hisobdan to'landi?</b>`;
+
+      list.forEach((h: any) => {
+        let icon = "💵";
+        if (h.valyuta === "USD") icon = "💲";
+        if (h.turi === "plastik") icon = "💳";
+        if (h.turi === "bank") icon = "🏦";
+        buttons.push([
+          { text: `${icon} Chiqim: ${h.nom}`, callback_data: `tq:h:${draftId}:${h.id}` },
+        ]);
+      });
+
+      buttons.push([
+        { text: "📝 Kassasiz (Shaxsiy cho'ntakdan)", callback_data: `tq:none:${draftId}` },
+      ]);
+    } else if (amal === "berdim") {
+      text =
+        `💸 <b>QARZ BERILDI: CHIQIM MANBASI</b>\n\n` +
+        `👤 <b>Kimga berildi:</b> <b>${shaxsNomi}</b>\n` +
+        `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+        (p.maqsad ? `💬 <b>Maqsad:</b> <i>${formatTelegramHtml(p.maqsad)}</i>\n` : "") +
+        (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+        `\n❓ <b>Qaysi hisobdan qarz berildi?</b>`;
+
+      list.forEach((h: any) => {
+        let icon = "💵";
+        if (h.valyuta === "USD") icon = "💲";
+        if (h.turi === "plastik") icon = "💳";
+        if (h.turi === "bank") icon = "🏦";
+        buttons.push([
+          { text: `${icon} Chiqim: ${h.nom}`, callback_data: `tq:h:${draftId}:${h.id}` },
+        ]);
+      });
+
+      buttons.push([
+        { text: "📝 Kassasiz (Shaxsiy mablag'dan)", callback_data: `tq:none:${draftId}` },
+      ]);
+    } else if (amal === "qaytdi") {
+      text =
+        `📥 <b>BERILGAN QARZ QAYTDI: KIRIM HISOBI</b>\n\n` +
+        `👤 <b>Kimdan qaytdi:</b> <b>${shaxsNomi}</b>\n` +
+        `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+        (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+        `\n❓ <b>Qaysi kassa/hisobga kirim qilinsin?</b>`;
+
+      list.forEach((h: any) => {
+        let icon = "💵";
+        if (h.valyuta === "USD") icon = "💲";
+        if (h.turi === "plastik") icon = "💳";
+        if (h.turi === "bank") icon = "🏦";
+        buttons.push([
+          { text: `${icon} Kirim: ${h.nom}`, callback_data: `tq:h:${draftId}:${h.id}` },
+        ]);
+      });
+
+      buttons.push([
+        { text: "📝 Kassasiz (Shaxsan olindi)", callback_data: `tq:none:${draftId}` },
+      ]);
+    }
+
+    buttons.push([{ text: "❌ Bekor qilish", callback_data: `cn:${draftId}` }]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 2-BOSQICH: Yo'nalish aniqlangan -> Yakuniy tasdiqlash
+  let sarlavha = "";
+  let shaxsSatr = "";
+  let summaSatr = "";
+
+  if (amal === "oldim") {
+    sarlavha = "🤝 <b>QARZ OLINDI (TASDIQLASH)</b>";
+    shaxsSatr = `👤 <b>Qarz beruvchi:</b> <b>${shaxsNomi}</b>\n`;
+    summaSatr = `➕ <b>Olingan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+  } else if (amal === "qaytardim") {
+    sarlavha = "🤝 <b>QARZ QAYTARILDI (TASDIQLASH)</b>";
+    shaxsSatr = `👤 <b>Qarz berilgan shaxs:</b> <b>${shaxsNomi}</b>\n`;
+    summaSatr = `➖ <b>Qaytarilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+  } else if (amal === "berdim") {
+    sarlavha = "🤝 <b>QARZ BERILDI (TASDIQLASH)</b>";
+    shaxsSatr = `👤 <b>Qarz olgan shaxs:</b> <b>${shaxsNomi}</b>\n`;
+    summaSatr = `💸 <b>Berilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+  } else if (amal === "qaytdi") {
+    sarlavha = "🤝 <b>BERILGAN QARZ QAYTDI (TASDIQLASH)</b>";
+    shaxsSatr = `👤 <b>Qarzni qaytargan shaxs:</b> <b>${shaxsNomi}</b>\n`;
+    summaSatr = `📥 <b>Qaytarilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+  }
+
+  let yonalishMatni = "";
+  if (p.bevosita_oylik) {
+    yonalishMatni = `💼 <b>Yo'nalish:</b> <b>To'g'ridan-to'g'ri ishchiga (Oylik rasxodi yoziladi, kassa o'zgarmaydi)</b>\n`;
+  } else if (p.hisob_id) {
+    const hNom = hisoblar.find((h: any) => h.id === p.hisob_id)?.nom || p.hisob_nomi || "Kassa";
+    const harakat = amal === "oldim" || amal === "qaytdi" ? "Kirim" : "Chiqim";
+    yonalishMatni = `🏦 <b>Kassa/Hisob:</b> <b>${hNom} (${harakat})</b>\n`;
+  } else {
+    yonalishMatni = `📝 <b>Kassa ta'siri:</b> <i>Kassaga aloqasiz (Faqat qarz daftari)</i>\n`;
+  }
+
+  const text =
+    `${sarlavha}\n\n` +
+    `${shaxsSatr}` +
+    `${summaSatr}` +
+    `${yonalishMatni}` +
+    (p.maqsad ? `💬 <b>Maqsad:</b> <i>${formatTelegramHtml(p.maqsad)}</i>\n` : "") +
+    (p.izoh ? `📝 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+    `\n<i>Ma'lumotlar to'g'ri bo'lsa, tasdiqlang:</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Tasdiqlash", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+    [{ text: "🔄 Yo'nalishni o'zgartirish", callback_data: `tq:reset:${draftId}` }],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
+

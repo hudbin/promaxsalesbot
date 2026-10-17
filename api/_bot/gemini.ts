@@ -151,7 +151,7 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 11 ta amal turidan birini aniqlang:
+Quyidagi 12 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
@@ -162,7 +162,8 @@ Quyidagi 11 ta amal turidan birini aniqlang:
 8. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
 9. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
 10. "qarz_pdf": Foydalanuvchi qarzdorlar ro'yxatini yoki mijozning qarz hisobotini (akt-sverka) PDF ko'rinishida so'raganda.
-11. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+11. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
+12. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
@@ -187,6 +188,19 @@ JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
       "narx": 0.0
     }
   ]
+}
+
+JSON strukturasi "tashqi_qarz" amali uchun:
+{
+  "amal": "tashqi_qarz",
+  "qarz_amali": "oldim" | "qaytardim" | "berdim" | "qaytdi",
+  "shaxs_nomi": "Shaxs ismi (masalan: Ali aka, Akmal, Bobur)",
+  "summa": 0.0,
+  "valyuta": "UZS" | "USD",
+  "maqsad": "Oylik uchun" | "Tovar uchun" | "Shaxsiy" | null,
+  "bevosita_oylik": true | false,
+  "hisob_id": "agar kassa/hisob aytilgan bo'lsa hisob UUID, aks holda null",
+  "izoh": "Qisqa izoh yoki null"
 }
 
 JSON strukturasi "kop_rasxod" amali uchun (Bir nechta xarajat bo'lsa):
@@ -266,6 +280,14 @@ Jadvallar va Maxsus Aqlli Funksiyalar:
    - Savdolar: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, hisob_id, holat, xodim)
    - Rasxodlar: rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, hisob_id, izoh, xodim)
    - Qarz to'lovlari: qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, hisob_id, xodim)
+
+4. TANISHLAR QARZLARI (TASHQI QARZ VA SHAXSIY OLD-BERDILAR):
+   - Jadval: tashqi_qarzlar (id, sana_vaqt, shaxs_nomi, shaxs_nomi_norm, amal, summa, valyuta, maqsad, hisob_id, holat)
+   - Tayyor ko'rinish: view_tashqi_qarzlar_balans (shaxs_nomi, valyuta, jami_olingan, jami_qaytarilgan, jami_berilgan, jami_qaytgan, biz_berishimiz_kerak, biz_olishimiz_kerak)
+     * "Kimlardan qancha qarzimiz bor?" -> SELECT shaxs_nomi, biz_berishimiz_kerak, valyuta FROM view_tashqi_qarzlar_balans WHERE biz_berishimiz_kerak > 0
+     * "Kimlar bizdan qarzdor?" / "Biz bergan qarzlar" -> SELECT shaxs_nomi, biz_olishimiz_kerak, valyuta FROM view_tashqi_qarzlar_balans WHERE biz_olishimiz_kerak > 0
+     * Bitta aniq tanish qoldig'i -> SELECT * FROM view_tashqi_qarzlar_balans WHERE shaxs_nomi_norm ILIKE '%akmal%'
+
 
 BAZADAGI MAVJUD CHIQIM (RASXOD) KATEGORIYALARI:
 [${mavjudKategoriyalarText}]

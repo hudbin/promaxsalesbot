@@ -6,6 +6,7 @@ import {
   MessageCircle, Send
 } from "lucide-react";
 import { MijozDetailsModal, yuborTelegramEslatma, standartEslatmaMatni } from "./MijozDetailsModal";
+import { TashqiQarzlarView } from "./TashqiQarzlarView";
 import { Combobox } from "./ui/Combobox";
 import { toast } from "sonner";
 
@@ -15,7 +16,7 @@ interface QarzlarTabProps {
   userRole?: string;
 }
 
-type SubTab = "qarzlar" | "mijozlar";
+type SubTab = "qarzlar" | "tanishlar" | "mijozlar";
 
 export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }: QarzlarTabProps = {}) {
   const [subTab, setSubTab] = useState<SubTab>("qarzlar");
@@ -202,7 +203,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }:
 
   return (
     <div className="space-y-3 pb-8">
-      {/* 2 TA ASOSIY TAB (QARZLAR & MIJOZLAR BAZASI) */}
+      {/* 3 TA ASOSIY TAB (MIJOZLAR QARZI & BIZNING QARZLAR & MIJOZLAR BAZASI) */}
       <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
         <button
           onClick={() => {
@@ -216,12 +217,27 @@ export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }:
           }`}
         >
           <Wallet className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-          <span>Qarzlar</span>
+          <span>Mijozlar qarzi</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
             subTab === "qarzlar" ? "bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
           }`}>
             {qarzdorMijozlar.length}
           </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSubTab("tanishlar");
+            haptic("light");
+          }}
+          className={`flex-1 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            subTab === "tanishlar"
+              ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+          }`}
+        >
+          <span className="text-xs">🤝</span>
+          <span>Bizning qarzlar</span>
         </button>
 
         <button
@@ -236,7 +252,7 @@ export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }:
           }`}
         >
           <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Mijozlar bazasi</span>
+          <span>Mijozlar</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
             subTab === "mijozlar" ? "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-300" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
           }`}>
@@ -352,7 +368,16 @@ export function QarzlarTab({ xodimNomi, telegramUserId, userRole = "sotuvchi" }:
         </div>
       )}
 
-      {/* 2-TAB: MIJOZLAR BAZASI */}
+      {/* 2-TAB: BIZNING QARZLARIMIZ (TANISHLAR BILAN OLDI-BERDI) */}
+      {subTab === "tanishlar" && (
+        <TashqiQarzlarView
+          xodimNomi={xodimNomi}
+          telegramUserId={telegramUserId}
+          userRole={userRole}
+        />
+      )}
+
+      {/* 3-TAB: MIJOZLAR BAZASI */}
       {subTab === "mijozlar" && (
         <div className="space-y-3 animate-fade-in">
           {/* Header & Qidiruv & Yangi mijoz tugmasi */}

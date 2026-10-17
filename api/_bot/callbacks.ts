@@ -13,6 +13,7 @@ import {
   buildQarzTolovCard,
   buildQarzEslatmaCard,
   buildBalansSozlashCard,
+  buildTashqiQarzCard,
 } from "./cards";
 import { checkUserPermission, runTovarlarniOptimallashtirish, buildOptimizationReport } from "./entities";
 import { sendMijozQarzPdf } from "./pdf";
@@ -277,6 +278,71 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     });
 
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Hisobni qayta tanlang" });
+    return res.status(200).send("OK");
+  }
+
+  // 1.2.D TANISHLAR QARZI: YO'NALISH TANLASH (tq:oylik / tq:h / tq:none / tq:reset)
+  if (data.startsWith("tq:")) {
+    const parts = data.split(":");
+    const subAction = parts[1];
+    const draftId = parts[2];
+
+    const { data: draft } = await supabase
+      .from("tranzaksiya_qoralama")
+      .select("*")
+      .eq("id", draftId)
+      .maybeSingle();
+
+    if (!draft || !draft.malumot) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+      return res.status(200).send("OK");
+    }
+
+    const p = draft.malumot;
+
+    if (subAction === "oylik") {
+      p.bevosita_oylik = true;
+      p.hisob_id = null;
+      p.kassaTanlandi = true;
+      p.kassasiz = false;
+    } else if (subAction === "h") {
+      const hId = parts[3];
+      p.hisob_id = hId;
+      p.bevosita_oylik = false;
+      p.kassaTanlandi = true;
+      p.kassasiz = false;
+    } else if (subAction === "none") {
+      p.hisob_id = null;
+      p.bevosita_oylik = false;
+      p.kassasiz = true;
+      p.kassaTanlandi = true;
+    } else if (subAction === "reset") {
+      p.hisob_id = null;
+      p.bevosita_oylik = false;
+      p.kassasiz = false;
+      p.kassaTanlandi = false;
+    }
+
+    await getSupabase()
+      .from("tranzaksiya_qoralama")
+      .update({ malumot: p })
+      .eq("id", draftId);
+
+    const { data: hisoblarDB } = await getSupabase()
+      .from("hisoblar")
+      .select("id, nom, turi, valyuta")
+      .eq("faol", true);
+
+    const nextCard = buildTashqiQarzCard(draftId, p, hisoblarDB || []);
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text: nextCard.text,
+      parse_mode: "HTML",
+      reply_markup: nextCard.keyboard,
+    });
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Tanlandi!" });
     return res.status(200).send("OK");
   }
 
@@ -1174,6 +1240,109 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         `${farqMatn}\n` +
         `📝 Izoh: <i>${izoh}</i>\n` +
         `✍️ Sozladi: <b>${fromName} (Admin)</b>`;
+    }
+
+    // 1.8.G TANISHLAR QARZI (TASHQI QARZ) TASDIQLASH
+    else if (p.amal === "tashqi_qarz") {
+      const { data: hisoblarDB } = await getSupabase()
+        .from("hisoblar")
+        .select("id, nom, turi, valyuta")
+        .eq("faol", true);
+
+      // Agar yo'nalish belgilanmagan bo'lsa
+      if (!p.kassaTanlandi && !p.hisob_id && !p.bevosita_oylik && !p.kassasiz) {
+        const nextCard = buildTashqiQarzCard(draftId, p, hisoblarDB || []);
+        await tgPost("editMessageText", {
+          chat_id: chatId,
+          message_id: msgId,
+          text: nextCard.text,
+          parse_mode: "HTML",
+          reply_markup: nextCard.keyboard,
+        });
+        await tgPost("answerCallbackQuery", {
+          callback_query_id: cq.id,
+          text: "Iltimos, avval mablag' yo'nalishini tanlang!",
+        });
+        return res.status(200).send("OK");
+      }
+
+      const valyuta = p.valyuta || "UZS";
+      const { data: rpcRes, error: rpcErr } = await getSupabase().rpc("fn_tashqi_qarz_yaratish", {
+        p_shaxs_nomi: p.shaxs_nomi,
+        p_amal: p.qarz_amali || "oldim",
+        p_summa: Number(p.summa),
+        p_valyuta: valyuta,
+        p_hisob_id: p.hisob_id || null,
+        p_bevosita_oylik: !!p.bevosita_oylik,
+        p_maqsad: p.maqsad || null,
+        p_izoh: p.izoh || null,
+        p_xodim: fromName,
+        p_telegram_user_id: cq.from?.id,
+      });
+
+      if (rpcErr) {
+        console.error("fn_tashqi_qarz_yaratish xatosi:", rpcErr);
+        await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Xatolik: " + rpcErr.message });
+        await tgPost("editMessageText", {
+          chat_id: chatId,
+          message_id: msgId,
+          text: `❌ <b>Qarz yozuvini saqlashda xatolik:</b>\n<code>${rpcErr.message}</code>`,
+          parse_mode: "HTML",
+        });
+        return res.status(200).send("OK");
+      }
+
+      const qarzAmali = p.qarz_amali || "oldim";
+      const shaxsNomi = p.shaxs_nomi;
+      const summa = Number(p.summa);
+
+      let sarlavha = "";
+      let tafsilot = "";
+      let qoldiqSatr = "";
+
+      const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+      const hisobNomi = tanlanganHisob?.nom || "Kassa";
+
+      let joylashuvMatn = "";
+      if (p.bevosita_oylik) {
+        joylashuvMatn = `💼 <b>Yo'nalish:</b> To'g'ridan-to'g'ri ishchiga (Oylik rasxodi yozildi)\n`;
+      } else if (p.hisob_id) {
+        const harakat = qarzAmali === "oldim" || qarzAmali === "qaytdi" ? "Kirim qilindi" : "Chiqim qilindi";
+        joylashuvMatn = `🏦 <b>Kassa:</b> ${hisobNomi} (${harakat})\n`;
+      } else {
+        joylashuvMatn = `📝 <b>Hisob:</b> Kassaga aloqasiz (Qarz daftari)\n`;
+      }
+
+      if (qarzAmali === "oldim") {
+        sarlavha = "✅ <b>QARZ OLINDI</b>";
+        tafsilot = `👤 <b>Qarz beruvchi:</b> <b>${shaxsNomi}</b>\n➕ <b>Olingan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+        const qoldiq = rpcRes?.biz_berishimiz_kerak ?? summa;
+        qoldiqSatr = `📊 <b>${shaxsNomi} oldidagi joriy qarzimiz:</b> <code>${pul(qoldiq)} ${valyuta}</code>\n`;
+      } else if (qarzAmali === "qaytardim") {
+        sarlavha = "✅ <b>QARZ QAYTARILDI</b>";
+        tafsilot = `👤 <b>Qarz qaytarilgan shaxs:</b> <b>${shaxsNomi}</b>\n➖ <b>Qaytarilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+        const qoldiq = rpcRes?.biz_berishimiz_kerak ?? 0;
+        qoldiqSatr = `📊 <b>${shaxsNomi} oldidagi qoldiq qarzimiz:</b> <code>${pul(qoldiq)} ${valyuta}</code>\n`;
+      } else if (qarzAmali === "berdim") {
+        sarlavha = "✅ <b>QARZ BERILDI</b>";
+        tafsilot = `👤 <b>Qarz olgan shaxs:</b> <b>${shaxsNomi}</b>\n💸 <b>Berilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+        const qoldiq = rpcRes?.biz_olishimiz_kerak ?? summa;
+        qoldiqSatr = `📊 <b>${shaxsNomi} bizga qaytarishi kerak:</b> <code>${pul(qoldiq)} ${valyuta}</code>\n`;
+      } else if (qarzAmali === "qaytdi") {
+        sarlavha = "✅ <b>BERILGAN QARZ QAYTDI</b>";
+        tafsilot = `👤 <b>Qarzni qaytargan shaxs:</b> <b>${shaxsNomi}</b>\n📥 <b>Qaytarilgan summa:</b> <b>${pul(summa)} ${valyuta}</b>\n`;
+        const qoldiq = rpcRes?.biz_olishimiz_kerak ?? 0;
+        qoldiqSatr = `📊 <b>${shaxsNomi}ning qoldiq qarzi:</b> <code>${pul(qoldiq)} ${valyuta}</code>\n`;
+      }
+
+      javobMatn =
+        `${sarlavha}\n\n` +
+        `${tafsilot}` +
+        `${joylashuvMatn}` +
+        `${qoldiqSatr}` +
+        (p.maqsad ? `💬 <b>Maqsad:</b> <i>${p.maqsad}</i>\n` : "") +
+        (p.izoh ? `📝 <b>Izoh:</b> <i>${p.izoh}</i>\n` : "") +
+        `✍️ Kiritdi: <b>${fromName}</b>`;
     }
 
     await tgPost("editMessageText", {
