@@ -15,8 +15,18 @@ import {
   buildBalansSozlashCard,
   buildTashqiQarzCard,
 } from "./cards";
-import { checkUserPermission, runTovarlarniOptimallashtirish, buildOptimizationReport } from "./entities";
-import { sendMijozQarzPdf } from "./pdf";
+import {
+  checkUserPermission,
+  runTovarlarniOptimallashtirish,
+  buildOptimizationReport,
+} from "./entities";
+import {
+  sendMijozQarzPdf,
+  sendQarzdorlarPdf,
+  sendKunlikHisobotPdf,
+  sendTashqiQarzlarPdf,
+  sendTashqiQarzAktSverkaPdf,
+} from "./pdf";
 
 export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
   const data = cq.data || "";
@@ -720,6 +730,32 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "PDF tayyorlanmoqda..." });
     await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
     await sendMijozQarzPdf(chatId, mId);
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.1 KUNLIK YAKUNIY HISOBOT PDF YUKLASH CALLBACK: dl_daily_pdf:YYYY-MM-DD
+  if (data.startsWith("dl_daily_pdf:")) {
+    const targetDate = data.replace("dl_daily_pdf:", "");
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Kunlik hisobot PDF tayyorlanmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendKunlikHisobotPdf(chatId, targetDate);
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.2 TASHQI QARZLAR UMUMIY BALANSI PDF: dl_tashqi_pdf
+  if (data === "dl_tashqi_pdf") {
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Tashqi qarzlar PDF tayyorlanmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendTashqiQarzlarPdf(chatId);
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.3 HAMKOR BILAN AKT-SVERKA PDF: dl_tashqi_akt:shaxsNomi
+  if (data.startsWith("dl_tashqi_akt:")) {
+    const shaxsNomi = data.replace("dl_tashqi_akt:", "");
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Akt-sverka PDF tayyorlanmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendTashqiQarzAktSverkaPdf(chatId, shaxsNomi);
     return res.status(200).send("OK");
   }
 

@@ -632,3 +632,671 @@ export async function sendMijozQarzPdf(
     return { ok: false, error: err?.message };
   }
 }
+
+// -----------------------------------------------------------------------------
+// TASHQI QARZLAR (BIZNING QARZLARIMIZ VA BIZGA QARZLAR) UMUMIY PDF RO'YXATI
+// -----------------------------------------------------------------------------
+export async function sendTashqiQarzlarPdf(chatId: number | string): Promise<{ ok: boolean; count?: number; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    const { data: qarzlar, error } = await client
+      .from("view_tashqi_qarzlar_balans")
+      .select("*")
+      .or("biz_berishimiz_kerak.gt.0,biz_olishimiz_kerak.gt.0")
+      .order("biz_berishimiz_kerak", { ascending: false });
+
+    if (error) throw error;
+    if (!qarzlar || qarzlar.length === 0) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "✅ <b>Tashqi qarzlar mavjud emas!</b> Barcha hisob-kitoblar nolga teng.",
+        parse_mode: "HTML",
+      });
+      return { ok: true, count: 0 };
+    }
+
+    const { jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    // Sarlavha
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.text("PROMAX STORE - TASHQI QARZLAR BALANSI", 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    const sanaStr = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    doc.text(`Holat: ${sanaStr} | Hamkorlar soni: ${qarzlar.length} ta`, 14, 25);
+
+    let nextY = 32;
+
+    // 1. Biz berishimiz kerak bo'lganlar (Bizning qarzlarimiz)
+    const bizBerishimiz = qarzlar.filter((q: any) => Number(q.biz_berishimiz_kerak || 0) > 0);
+    let jamiBerishimizUzs = 0;
+    let jamiBerishimizUsd = 0;
+
+    if (bizBerishimiz.length > 0) {
+      doc.setFontSize(11);
+      doc.setTextColor(225, 29, 72); // rose-600
+      doc.text(`1. BIZNING QARZLARIMIZ (Biz berishimiz kerak bo'lgan summa): ${bizBerishimiz.length} ta`, 14, nextY);
+
+      const rows1 = bizBerishimiz.map((q: any, idx: number) => {
+        const val = q.valyuta || "UZS";
+        const olingan = Number(q.jami_olingan || 0);
+        const qaytarilgan = Number(q.jami_qaytarilgan || 0);
+        const qoldiq = Number(q.biz_berishimiz_kerak || 0);
+        if (val === "USD") jamiBerishimizUsd += qoldiq;
+        else jamiBerishimizUzs += qoldiq;
+
+        return [
+          String(idx + 1),
+          q.shaxs_nomi || "-",
+          `${pul(olingan)} ${val}`,
+          `${pul(qaytarilgan)} ${val}`,
+          `${pul(qoldiq)} ${val}`,
+          q.oxirgi_harakat ? new Date(q.oxirgi_harakat).toLocaleDateString("ru-RU") : "-",
+        ];
+      });
+
+      rows1.push([
+        "",
+        "JAMI BIZNING QARZIMIZ:",
+        "",
+        "",
+        `${pul(jamiBerishimizUzs)} so'm${jamiBerishimizUsd > 0 ? ` | $${pul(jamiBerishimizUsd)}` : ""}`,
+        "",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["No", "Hamkor / Tanish", "Jami olingan", "Qaytarilgan", "Bizning qarzimiz", "Oxirgi sana"]],
+        body: rows1,
+        theme: "striped",
+        headStyles: { fillColor: [225, 29, 72], textColor: 255, fontStyle: "bold", fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 8, halign: "center" },
+          1: { cellWidth: 46, fontStyle: "bold" },
+          2: { cellWidth: 32, halign: "right" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 38, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 26, halign: "center" },
+        },
+        didParseCell: (data: any) => {
+          if (data.row.index === rows1.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [254, 242, 242];
+          }
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 12 : nextY + 50;
+    }
+
+    // 2. Biz olishimiz kerak bo'lganlar (Biz bergan qarzlar)
+    const bizOlishimiz = qarzlar.filter((q: any) => Number(q.biz_olishimiz_kerak || 0) > 0);
+    let jamiOlishimizUzs = 0;
+    let jamiOlishimizUsd = 0;
+
+    if (bizOlishimiz.length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setTextColor(16, 185, 129); // emerald-600
+      doc.text(`2. BIZGA QAYTARILISHI KERAK BO'LGANLAR (Biz bergan qarzlar): ${bizOlishimiz.length} ta`, 14, nextY);
+
+      const rows2 = bizOlishimiz.map((q: any, idx: number) => {
+        const val = q.valyuta || "UZS";
+        const berilgan = Number(q.jami_berilgan || 0);
+        const qaytgan = Number(q.jami_qaytgan || 0);
+        const qoldiq = Number(q.biz_olishimiz_kerak || 0);
+        if (val === "USD") jamiOlishimizUsd += qoldiq;
+        else jamiOlishimizUzs += qoldiq;
+
+        return [
+          String(idx + 1),
+          q.shaxs_nomi || "-",
+          `${pul(berilgan)} ${val}`,
+          `${pul(qaytgan)} ${val}`,
+          `${pul(qoldiq)} ${val}`,
+          q.oxirgi_harakat ? new Date(q.oxirgi_harakat).toLocaleDateString("ru-RU") : "-",
+        ];
+      });
+
+      rows2.push([
+        "",
+        "JAMI BIZ OLISHIMIZ KERAK:",
+        "",
+        "",
+        `${pul(jamiOlishimizUzs)} so'm${jamiOlishimizUsd > 0 ? ` | $${pul(jamiOlishimizUsd)}` : ""}`,
+        "",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["No", "Hamkor / Tanish", "Jami berilgan", "Qaytarilgan", "Biz olishimiz kerak", "Oxirgi sana"]],
+        body: rows2,
+        theme: "striped",
+        headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: "bold", fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 8, halign: "center" },
+          1: { cellWidth: 46, fontStyle: "bold" },
+          2: { cellWidth: 32, halign: "right" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 38, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 26, halign: "center" },
+        },
+        didParseCell: (data: any) => {
+          if (data.row.index === rows2.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [240, 253, 244];
+          }
+        },
+      });
+    }
+
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const filename = `PROMAX_Tashqi_Qarzlar_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📄 <b>PROMAX STORE — TASHQI QARZLAR BALANSI (PDF)</b>\n\n` +
+      `🔴 <b>Bizning qarzimiz:</b> <b>${pul(jamiBerishimizUzs)} so'm</b>${jamiBerishimizUsd > 0 ? ` | <b>$${pul(jamiBerishimizUsd)}</b>` : ""}\n` +
+      `🟢 <b>Biz olishimiz kerak:</b> <b>${pul(jamiOlishimizUzs)} so'm</b>${jamiOlishimizUsd > 0 ? ` | <b>$${pul(jamiOlishimizUsd)}</b>` : ""}\n\n` +
+      `📅 <i>${sanaStr} holatiga</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    return { ok: resData.ok, count: qarzlar.length, error: resData.description };
+  } catch (err: any) {
+    console.error("sendTashqiQarzlarPdf xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>Tashqi qarzlar PDF yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// BITTA HAMKOR / TANISH BILAN AKT-SVERKA (SOLISHTIRMA DALOLATNOMA) PDF
+// -----------------------------------------------------------------------------
+export async function sendTashqiQarzAktSverkaPdf(
+  chatId: number | string,
+  shaxsNomi: string,
+  boshSana?: string | null,
+  tugashSana?: string | null
+): Promise<{ ok: boolean; shaxs?: any; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    const norm = (shaxsNomi || "").toLowerCase().trim();
+    if (!norm) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>Shaxs nomi ko'rsatilmadi.</b>`,
+        parse_mode: "HTML",
+      });
+      return { ok: false, error: "Shaxs nomi ko'rsatilmadi" };
+    }
+
+    // 1. Shaxs bo'yicha operatsiyalarni olish
+    let q = client
+      .from("tashqi_qarzlar")
+      .select("*, hisob:hisoblar(nom)")
+      .ilike("shaxs_nomi_norm", `%${norm}%`)
+      .eq("holat", "faol")
+      .order("sana_vaqt", { ascending: true });
+
+    if (boshSana) q = q.gte("sana_vaqt", `${boshSana}T00:00:00+05:00`);
+    if (tugashSana) q = q.lte("sana_vaqt", `${tugashSana}T23:59:59.999+05:00`);
+
+    const { data: amallar, error: amallarErr } = await q;
+    if (amallarErr) throw amallarErr;
+
+    if (!amallar || amallar.length === 0) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>"${shaxsNomi}" bo'yicha hech qanday tashqi qarz amali topilmadi.</b>`,
+        parse_mode: "HTML",
+      });
+      return { ok: false, error: "Amallar topilmadi" };
+    }
+
+    // Shaxsning aniq nomi
+    const haqiqiyNom = amallar[0].shaxs_nomi;
+
+    // Balans
+    const { data: balansRow } = await client
+      .from("view_tashqi_qarzlar_balans")
+      .select("*")
+      .ilike("shaxs_nomi_norm", `%${norm}%`);
+
+    let bizBerishimiz = 0;
+    let bizOlishimiz = 0;
+    let valyuta = amallar[0].valyuta || "UZS";
+
+    (balansRow || []).forEach((b: any) => {
+      bizBerishimiz += Number(b.biz_berishimiz_kerak || 0);
+      bizOlishimiz += Number(b.biz_olishimiz_kerak || 0);
+    });
+
+    const { jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    // Sarlavha
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.text("PROMAX STORE - HAMKOR BILAN AKT-SVERKA", 14, 18);
+
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Hamkor / Tanish: ${haqiqiyNom}`, 14, 25);
+
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    const sanaStr = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    const davrStr = boshSana && tugashSana ? `Davr: ${boshSana} — ${tugashSana}` : `Barcha davr uchun`;
+    doc.text(`${davrStr} | Shakllantirildi: ${sanaStr}`, 14, 30);
+
+    // Qisqacha xulosa blok
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 33, 182, 14, 2, 2, "F");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 41, 59);
+
+    if (bizBerishimiz > 0) {
+      doc.text(`Joriy holat: BIZNING QARZIMIZ: ${pul(bizBerishimiz)} ${valyuta} (Biz ${haqiqiyNom}ga berishimiz kerak)`, 18, 42);
+    } else if (bizOlishimiz > 0) {
+      doc.text(`Joriy holat: BIZGA QARZ: ${pul(bizOlishimiz)} ${valyuta} (${haqiqiyNom} bizga qaytarishi kerak)`, 18, 42);
+    } else {
+      doc.text(`Joriy holat: O'zaro hisob-kitoblar to'liq yopilgan (0 ${valyuta})`, 18, 42);
+    }
+
+    const rows = amallar.map((a: any, idx: number) => {
+      let amalNomi = a.amal;
+      if (a.amal === "oldim") amalNomi = "Qarz oldik (+)";
+      else if (a.amal === "qaytardim") amalNomi = "Qarz qaytardik (-)";
+      else if (a.amal === "berdim") amalNomi = "Qarz berdik (-)";
+      else if (a.amal === "qaytdi") amalNomi = "Qarz qaytdi (+)";
+
+      const sana = a.sana_vaqt ? new Date(a.sana_vaqt).toLocaleDateString("ru-RU") : "-";
+      return [
+        String(idx + 1),
+        sana,
+        amalNomi,
+        `${pul(a.summa)} ${a.valyuta}`,
+        a.maqsad || "-",
+        a.hisob?.nom || "Kassaga ta'sirsiz",
+        a.izoh || "-",
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 50,
+      head: [["No", "Sana", "Amal turi", "Summa", "Maqsad", "Hisob / Kassa", "Izoh"]],
+      body: rows,
+      theme: "striped",
+      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 8, halign: "center" },
+        1: { cellWidth: 20, halign: "center" },
+        2: { cellWidth: 28, fontStyle: "bold" },
+        3: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+        4: { cellWidth: 28 },
+        5: { cellWidth: 32 },
+        6: { cellWidth: 38 },
+      },
+    });
+
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const safeNom = haqiqiyNom.replace(/[^a-zA-Z0-9а-яА-ЯёЁ_]/g, "_");
+    const filename = `PROMAX_AktSverka_${safeNom}_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📄 <b>PROMAX STORE — HAMKOR BILAN AKT-SVERKA (PDF)</b>\n\n` +
+      `👤 <b>Hamkor:</b> ${haqiqiyNom}\n` +
+      (bizBerishimiz > 0 ? `🔴 <b>Bizning qarzimiz:</b> <b>${pul(bizBerishimiz)} ${valyuta}</b>\n` : "") +
+      (bizOlishimiz > 0 ? `🟢 <b>Biz olishimiz kerak:</b> <b>${pul(bizOlishimiz)} ${valyuta}</b>\n` : "") +
+      (bizBerishimiz === 0 && bizOlishimiz === 0 ? `✅ <b>Hisob-kitoblar to'liq nolga tenglashgan!</b>\n` : "") +
+      `📊 <i>Amallar soni: ${amallar.length} ta</i>\n` +
+      `📅 <i>${sanaStr} holatiga</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    return { ok: resData.ok, shaxs: haqiqiyNom, error: resData.description };
+  } catch (err: any) {
+    console.error("sendTashqiQarzAktSverkaPdf xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>Akt-sverka PDF yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// KUNLIK YAKUNIY MOLIYAVIY HISOBOT PDF (A4 JADVAL VA XULOSA)
+// -----------------------------------------------------------------------------
+export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    // Sanani aniqlash (Toshkent vaqti bo'yicha)
+    let targetDateStr = dateStr?.trim();
+    if (!targetDateStr || targetDateStr === "today" || targetDateStr === "bugun") {
+      targetDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+    } else if (targetDateStr.includes(".")) {
+      const parts = targetDateStr.split(".");
+      if (parts.length === 3) targetDateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    const startIso = `${targetDateStr}T00:00:00+05:00`;
+    const endIso = `${targetDateStr}T23:59:59.999+05:00`;
+
+    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: hisoblar }] = await Promise.all([
+      client
+        .from("savdolar")
+        .select("*, mijoz:mijozlar(nom)")
+        .eq("holat", "yakunlandi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("rasxodlar")
+        .select("*, hisob:hisoblar(nom)")
+        .neq("holat", "bekor_qilindi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("qarz_tolovlari")
+        .select("*, mijoz:mijozlar(nom), hisob:hisoblar(nom)")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("hisoblar")
+        .select("id, nom, turi, valyuta, balans, faol, masul_xodim")
+        .eq("faol", true)
+        .order("tartib", { ascending: true }),
+    ]);
+
+    // Hisob-kitoblar
+    let savdoUzs = 0, savdoUsd = 0;
+    let naqdUzs = 0, naqdUsd = 0;
+    let qarzBerildiUzs = 0, qarzBerildiUsd = 0;
+    (savdolar || []).forEach((s: any) => {
+      const jami = Number(s.jami_summa || 0);
+      const tolandi = Number(s.tolangan_summa || 0);
+      const qarz = Number(s.qarz_summa || 0);
+      if (s.valyuta === "USD") {
+        savdoUsd += jami;
+        naqdUsd += tolandi;
+        qarzBerildiUsd += qarz;
+      } else {
+        savdoUzs += jami;
+        naqdUzs += tolandi;
+        qarzBerildiUzs += qarz;
+      }
+    });
+
+    let eskiQarzTushdiUzs = 0, eskiQarzTushdiUsd = 0;
+    (qarzTolovlari || []).forEach((q: any) => {
+      const sum = Number(q.summa || 0);
+      if (q.valyuta === "USD") eskiQarzTushdiUsd += sum;
+      else eskiQarzTushdiUzs += sum;
+    });
+
+    let rasxodUzs = 0, rasxodUsd = 0;
+    const katMap: Record<string, number> = {};
+    (rasxodlar || []).forEach((r: any) => {
+      const sum = Number(r.summa || 0);
+      if (r.valyuta === "USD") rasxodUsd += sum;
+      else {
+        rasxodUzs += sum;
+        const kat = r.kategoriya || "Boshqa";
+        katMap[kat] = (katMap[kat] || 0) + sum;
+      }
+    });
+
+    const { jsPDF } = await import("jspdf");
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as any;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    const [yyyy, mm, dd] = targetDateStr.split("-");
+    const kun = `${dd}.${mm}.${yyyy}`;
+    const hozirgiVaqt = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+    // Sarlavha
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.text("PROMAX B2B STORE - KUNLIK YAKUNIY HISOBOT", 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Sana: ${kun} | Yaratildi: ${kun} ${hozirgiVaqt}`, 14, 25);
+
+    // KPI Kartochkalari (A4 yuqorisida 3 ta blok)
+    // Blok 1: Savdo
+    doc.setFillColor(240, 253, 244);
+    doc.roundedRect(14, 30, 58, 26, 2, 2, "F");
+    doc.setFontSize(8);
+    doc.setTextColor(22, 101, 52);
+    doc.text("SAVDO TUSHUMI", 18, 36);
+    doc.setFontSize(11);
+    doc.text(`${pul(savdoUzs)} so'm`, 18, 42);
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Kassaga: ${pul(naqdUzs)} | Qarz: ${pul(qarzBerildiUzs)}`, 18, 48);
+    if (savdoUsd > 0) doc.text(`Dollar: $${pul(savdoUsd)}`, 18, 53);
+
+    // Blok 2: Chiqimlar (Rasxod)
+    doc.setFillColor(254, 242, 242);
+    doc.roundedRect(76, 30, 58, 26, 2, 2, "F");
+    doc.setFontSize(8);
+    doc.setTextColor(159, 18, 57);
+    doc.text("XARAJATLAR (RASXOD)", 80, 36);
+    doc.setFontSize(11);
+    doc.text(`${pul(rasxodUzs)} so'm`, 80, 42);
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    const topKats = Object.entries(katMap).slice(0, 2).map(([k, v]) => `${k}: ${pul(v)}`).join(", ");
+    doc.text(topKats || "Xarajat yo'q", 80, 48);
+    if (rasxodUsd > 0) doc.text(`Dollar: $${pul(rasxodUsd)}`, 80, 53);
+
+    // Blok 3: Qarzdan tushum
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(138, 30, 58, 26, 2, 2, "F");
+    doc.setFontSize(8);
+    doc.setTextColor(146, 64, 14);
+    doc.text("ESKI QARZDAN TUSHUM", 142, 36);
+    doc.setFontSize(11);
+    doc.text(`${pul(eskiQarzTushdiUzs)} so'm`, 142, 42);
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Qaytarilgan qarzlar: ${(qarzTolovlari || []).length} ta`, 142, 48);
+    if (eskiQarzTushdiUsd > 0) doc.text(`Dollar: $${pul(eskiQarzTushdiUsd)}`, 142, 53);
+
+    let nextY = 62;
+
+    // 1. Savdolar jadvali
+    if ((savdolar || []).length > 0) {
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Savdolar (${savdolar.length} ta)`, 14, nextY);
+
+      const sRows = savdolar.map((s: any) => [
+        s.raqam ? `#${s.raqam}` : "-",
+        s.sana_vaqt ? new Date(s.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        s.mijoz?.nom || "Chakana xaridor",
+        `${pul(s.jami_summa)} ${s.valyuta}`,
+        `${pul(s.tolangan_summa)} ${s.valyuta}`,
+        Number(s.qarz_summa) > 0 ? `${pul(s.qarz_summa)} ${s.valyuta}` : "-",
+        s.tolov_turi || "naqd",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["Chek", "Vaqt", "Mijoz", "Jami", "To'landi", "Qarz", "To'lov"]],
+        body: sRows,
+        theme: "striped",
+        headStyles: { fillColor: [16, 185, 129], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 16, halign: "center" },
+          1: { cellWidth: 14, halign: "center" },
+          2: { cellWidth: 46, fontStyle: "bold" },
+          3: { cellWidth: 28, halign: "right" },
+          4: { cellWidth: 28, halign: "right" },
+          5: { cellWidth: 26, halign: "right" },
+          6: { cellWidth: 24, halign: "center" },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 2. Chiqimlar jadvali
+    if ((rasxodlar || []).length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Xarajatlar (${rasxodlar.length} ta)`, 14, nextY);
+
+      const rRows = rasxodlar.map((r: any) => [
+        r.sana_vaqt ? new Date(r.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        r.kategoriya || "Chiqim",
+        r.izoh || "-",
+        `${pul(r.summa)} ${r.valyuta}`,
+        r.hisob?.nom || r.tolov_turi || "naqd",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["Vaqt", "Kategoriya", "Izoh", "Summa", "Hisob / Kassa"]],
+        body: rRows,
+        theme: "striped",
+        headStyles: { fillColor: [244, 63, 94], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 16, halign: "center" },
+          1: { cellWidth: 34, fontStyle: "bold" },
+          2: { cellWidth: 64 },
+          3: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 36 },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 3. Kassalar balansi jadvali
+    if ((hisoblar || []).length > 0) {
+      if (nextY > 220) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text("Kassalar va xodimlar hisoblari joriy balansi", 14, nextY);
+
+      const hRows = hisoblar.map((h: any, idx: number) => [
+        String(idx + 1),
+        h.nom || "-",
+        h.masul_xodim || "Asosiy Do'kon",
+        h.turi || "kassa",
+        `${pul(h.balans)} ${h.valyuta || "UZS"}`,
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["No", "Hisob nomi", "Mas'ul", "Turi", "Joriy balans"]],
+        body: hRows,
+        theme: "grid",
+        headStyles: { fillColor: [79, 70, 229], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 54, fontStyle: "bold" },
+          2: { cellWidth: 44 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 44, halign: "right", fontStyle: "bold" },
+        },
+      });
+    }
+
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const filename = `PROMAX_Kunlik_Hisobot_${targetDateStr}.pdf`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📊 <b>PROMAX STORE — KUNLIK YAKUNIY HISOBOT (PDF)</b>\n\n` +
+      `📅 <b>Sana:</b> ${kun}\n` +
+      `🛒 <b>Jami savdo:</b> <b>${pul(savdoUzs)} so'm</b>${savdoUsd > 0 ? ` | <b>$${pul(savdoUsd)}</b>` : ""}\n` +
+      `💵 <b>Kassaga tushdi:</b> <b>${pul(naqdUzs)} so'm</b>\n` +
+      `🧾 <b>Jami chiqim:</b> <b>${pul(rasxodUzs)} so'm</b>\n` +
+      `💳 <b>Qarzdan tushum:</b> <b>${pul(eskiQarzTushdiUzs)} so'm</b>\n\n` +
+      `<i>PDF hujjat orqali to'liq tafsilotlarni ko'rishingiz mumkin.</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append("document", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    return { ok: resData.ok, error: resData.description };
+  } catch (err: any) {
+    console.error("sendKunlikHisobotPdf xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>Kunlik hisobot PDF yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
+

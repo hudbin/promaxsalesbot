@@ -6,6 +6,7 @@ import {
   normalizePhone,
   normalizeTolovTuri,
   formatTelegramHtml,
+  stripHtml,
   ADMIN_SECRET_KEY,
   ADMIN_TELEGRAM_ID,
   GROUP_CHAT_ID,
@@ -34,7 +35,13 @@ import {
   runTovarlarniOptimallashtirish,
   buildOptimizationReport,
 } from "./entities";
-import { sendQarzdorlarPdf, sendMijozQarzPdf } from "./pdf";
+import {
+  sendQarzdorlarPdf,
+  sendMijozQarzPdf,
+  sendKunlikHisobotPdf,
+  sendTashqiQarzlarPdf,
+  sendTashqiQarzAktSverkaPdf,
+} from "./pdf";
 import { geminiTahlil, geminiTabiiyJavob } from "./gemini";
 
 export async function handleMessage(message: any, res: any): Promise<any> {
@@ -597,10 +604,13 @@ Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
 Noto'g'ri SQL: "${cleanSql}"
 
 DIQQAT TIZIM QOIDALARI:
-- savdolar jadvali ustunlari: (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, kassa_turi, holat, xodim)
-- Ustun nomi: tolov_turi ('naqd', 'plastik', 'perechisleniya')
-- Do'konning bugungi savdo oboroti: "view_bugungi_hisobot" yoki "view_ai_xulosa"
-- Kassa sandig'idagi naqd pul balansi: "view_kassa_balans"
+- O'TGAN SANALARNI TAHLIL QILISHDA:
+  * "view_kassa_balans" va "view_ai_xulosa" da "sana_vaqt" ustuni YO'Q! Ularga "WHERE sana_vaqt" deb so'rov yozmang!
+  * Savdolar uchun: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, holat, xodim) WHERE holat != 'bekor_qilindi'
+  * Kirim/tushum uchun: kassa_harakatlari (sana_vaqt, amal, summa, valyuta, manba_turi, izoh) WHERE amal = 'kirim'
+  * Chiqim/rasxod uchun: rasxodlar (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, izoh, xodim) WHERE holat != 'bekor_qilindi'
+  * Qarz to'lovlari uchun: qarz_tolovlari (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, xodim)
+  * Sana filtri: (sana_vaqt AT TIME ZONE 'Asia/Tashkent')::date = 'YYYY-MM-DD'
 Iltimos, FAQAT to'g'rilangan toza SELECT SQL yozing (hech qanday izohsiz, markdown'siz):`;
 
           const correctedSqlRaw = await geminiTabiiyJavob(fixPrompt);
@@ -625,17 +635,22 @@ Iltimos, FAQAT to'g'rilangan toza SELECT SQL yozing (hech qanday izohsiz, markdo
         kechaDateAns.setDate(kechaDateAns.getDate() - 1);
         const kechaStrAns = kechaDateAns.toISOString().slice(0, 10);
 
-        const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va buxgalter-tahlilchi AIsiz.
+        const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va Bosh buxgalter-tahlilchi AIsiz.
 Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
 Bugungi sana: ${bugunStrAns}, Kechagi sana: ${kechaStrAns}
 
-DIQQAT:
-- Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa):
-  * Agar savol kechagi yoki ma'lum bir kundagi xarajatlar/savdolar haqida bo'lsa: "Kecha (${kechaStrAns}) kuni do'konda hech qanday xarajat (chiqim) kiritilmagan ekan." deb aniq tushuntiring.
-  * Agar so'ralgan mijoz yoki tovar topilmagan bo'lsa: "Kechirasiz, so'ralgan mijoz/tovar nomi bo'yicha aniq moslik topilmadi." deb tushuntiring.
-- Raqamlarni chiroyli va o'qishli formatda taqdim eting.
-- Toza Telegram HTML (<b>, <i>, <code>, <blockquote>) ishlating.`;
+MUHIM QOIDALAR:
+1. Agar bazadan ma'lumot bo'sh kelsa ([] yoki null bo'lsa):
+   - So'ralgan sana bo'yicha do'konda hech qanday ma'lumot (savdo, kirim yoki chiqim) kiritilmagan bo'lsa, buni aniq va muloyim tushuntiring.
+   - Masalan: "Siz so'ragan sana bo'yicha do'konda hech qanday savdo / kirim / chiqim amali kiritilmagan ekan."
+2. Agar ma'lumotlar topilgan bo'lsa:
+   - Avval qisqacha umumiy xulosa (Jami savdo/kirim/chiqim summasi, to'langan, qarz va h.k.) bering.
+   - So'ngra har bir operatsiyani ro'yxat qilib (chek raqami, vaqti, mijoz/kategoriya, summa) tartibli ko'rsating.
+   - Pul summasini chiroyli formatlang (masalan: 8 700 000 UZS yoki $200).
+3. Formatlash (Telegram HTML):
+   - Faqat toza va yopiq Telegram HTML teglari (<b>...</b>, <code>...</code>, <i>...</i>, <blockquote>...</blockquote>) ishlating.
+   - Matnda bare '&' belgisini ishlatmang (doimo 'va' deb yozing). Barcha ochilgan teglarni albatta yoping.`;
 
         const finalAns = await geminiTabiiyJavob(answerPrompt);
         
@@ -646,16 +661,18 @@ DIQQAT:
         });
 
         const formattedHtml = formatTelegramHtml(finalAns);
-        const sendRes = await tgPost("sendMessage", {
+        let sendRes = await tgPost("sendMessage", {
           chat_id: chatId,
           text: formattedHtml,
           parse_mode: "HTML",
         });
 
         if (!sendRes?.ok) {
-          await tgPost("sendMessage", {
+          console.warn("HTML xabar yuborishda xatolik, tozalangan oddiy matn bilan qayta yuborilmoqda:", sendRes?.error);
+          const cleanText = stripHtml(finalAns);
+          sendRes = await tgPost("sendMessage", {
             chat_id: chatId,
-            text: finalAns,
+            text: cleanText,
           });
         }
 
@@ -711,8 +728,29 @@ DIQQAT:
               await sendMijozQarzPdf(chatId, topilganMijozId, parsedData.sana_boshlanish, parsedData.sana_tugash);
             }
           } else if (
-            sqlLower.includes("view_ai_qarzdorlar") ||
-            (/pdf|fayl|hisobot|ro'yxat|royxat/i.test(combinedQueryText) && /qarz|qarzdor/i.test(combinedQueryText))
+            (parsedData.pdf_soraldi === true || /pdf|fayl|hujjat|akt|sverka/i.test(combinedQueryText)) &&
+            (sqlLower.includes("tashqi_qarzlar") || /tashqi.*qarz|bizning.*qarz|biz.*berishimiz|sherik.*qarz/i.test(combinedQueryText))
+          ) {
+            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+            const shaxsMatch = cleanSql.match(/shaxs_nomi(?:_norm)?\s+(?:ILIKE|=)\s+'%?([^%']+)%?'/i);
+            const shaxsNomi = parsedData.shaxs_nomi || (shaxsMatch && shaxsMatch[1] ? shaxsMatch[1].trim() : null);
+            if (shaxsNomi) {
+              await sendTashqiQarzAktSverkaPdf(chatId, shaxsNomi, parsedData.sana_boshlanish, parsedData.sana_tugash);
+            } else {
+              await sendTashqiQarzlarPdf(chatId);
+            }
+          } else if (
+            (parsedData.pdf_soraldi === true || /pdf|fayl|hujjat/i.test(combinedQueryText)) &&
+            (/kunlik.*hisobot|bugungi.*hisobot|kechagi.*hisobot/i.test(combinedQueryText) || sqlLower.includes("view_bugungi_hisobot"))
+          ) {
+            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+            const dateMatch = cleanSql.match(/['"](\d{4}-\d{2}-\d{2})['"]/);
+            const targetDate = parsedData.sana || (dateMatch && dateMatch[1] ? dateMatch[1] : undefined);
+            await sendKunlikHisobotPdf(chatId, targetDate);
+          } else if (
+            !sqlLower.includes("tashqi_qarzlar") &&
+            (parsedData.pdf_soraldi === true || /pdf|fayl|hujjat/i.test(combinedQueryText)) &&
+            (sqlLower.includes("view_ai_qarzdorlar") || /qarz|qarzdor/i.test(combinedQueryText))
           ) {
             await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
             await sendQarzdorlarPdf(chatId);
@@ -720,9 +758,16 @@ DIQQAT:
         }
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
+        const errMsg = err?.message || String(err);
+        let tushunarliXabar = `Kechirasiz, so'ralgan ma'lumotni tahlil qilishda qiyinchilik yuz berdi.`;
+        if (errMsg.includes("column") || errMsg.includes("does not exist") || errMsg.includes("sana_vaqt")) {
+          tushunarliXabar = `Kechirasiz, ushbu sana bo'yicha ma'lumotlarni qidirishda noaniqlik yuz berdi. Iltimos, so'rovingizni aniqroq qilib (masalan: <i>"16.10.2026 savdolar"</i> yoki <i>"16.10.2026 kassa tushumi"</i> deb) yuborib ko'ring.`;
+        } else {
+          tushunarliXabar = `So'rovingiz bo'yicha tahlil yakunlanmadi (${errMsg}). Iltimos, birozdan so'ng qayta urinib ko'ring yoki boshqacharoq yozing.`;
+        }
         await tgPost("sendMessage", {
           chat_id: chatId,
-          text: `❌ <b>Tahlil qilishda xatolik:</b>\n<code>${err.message}</code>`,
+          text: `⚠️ <b>Tahlil qilishda noaniqlik:</b>\n${tushunarliXabar}`,
           parse_mode: "HTML",
         });
       }
@@ -905,6 +950,25 @@ DIQQAT:
         } else {
           await sendQarzdorlarPdf(chatId);
         }
+        return res.status(200).send("OK");
+      }
+
+      // TASHQI QARZ PDF (HAMKORLAR BILAN AKT-SVERKA YOKI UMUMIY BALANS)
+      if (parsedData.amal === "tashqi_qarz_pdf") {
+        await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+        if (parsedData.shaxs_nomi && String(parsedData.shaxs_nomi).trim()) {
+          await sendTashqiQarzAktSverkaPdf(chatId, String(parsedData.shaxs_nomi).trim(), parsedData.sana_boshlanish, parsedData.sana_tugash);
+        } else {
+          await sendTashqiQarzlarPdf(chatId);
+        }
+        return res.status(200).send("OK");
+      }
+
+      // KUNLIK YAKUNIY HISOBOT PDF
+      if (parsedData.amal === "kunlik_hisobot_pdf") {
+        await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+        const targetDate = parsedData.sana || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+        await sendKunlikHisobotPdf(chatId, targetDate);
         return res.status(200).send("OK");
       }
 

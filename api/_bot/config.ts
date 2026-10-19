@@ -84,26 +84,49 @@ export function pul(n: number): string {
   return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
 }
 
+// Yordamchi: HTML teglarni butunlay tozalab oddiy matnga aylantirish (Fallback uchun)
+export function stripHtml(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 // Yordamchi: Markdown formatdagi matnni Telegram HTML ga xavfsiz o'tkazish
 export function formatTelegramHtml(text: string): string {
   if (!text) return "";
   let out = text;
 
-  // 1. **qalin** yoki __qalin__ -> <b>qalin</b>
+  // 1. Markdown almashtirishlar
   out = out.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
   out = out.replace(/__(.*?)__/g, "<b>$1</b>");
-
-  // 2. ```kod``` -> <pre>kod</pre>
   out = out.replace(/```(?:html|sql|json)?\s*([\s\S]*?)```/gi, "<pre>$1</pre>");
-
-  // 3. `kod` -> <code>kod</code>
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
-
-  // 4. *qiya* -> <i>qiya</i> (so'z boshida yoki qator boshida)
   out = out.replace(/(?<=^|\s)\*([^*]+)\*(?=\s|$|[.,!?:])/g, "<i>$1</i>");
-
-  // 5. > Iqtibos (Quote) -> <blockquote>Iqtibos</blockquote>
   out = out.replace(/^>\s?(.*)$/gm, "<blockquote>$1</blockquote>");
+
+  // 2. Bare '&' ni &amp; ga o'girish (agar allaqachon &amp;, &lt;, &gt; kabi entity bo'lmasa)
+  out = out.replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, "&amp;");
+
+  // 3. Ruxsat etilmagan HTML teglarini tozalash / almashtirish
+  out = out.replace(/<br\s*\/?>/gi, "\n");
+  out = out.replace(/<\/?(?:span|div|p|ul|ol|li|h[1-6])[^>]*>/gi, "");
+
+  // 4. Faqat Telegram qo'llab-quvvatlaydigan teglarga ruxsat berish
+  const allowed = ["b", "i", "u", "s", "code", "pre", "blockquote", "a", "strong", "em", "del", "tg-spoiler"];
+  const tagRegex = new RegExp(`^<\\/?(${allowed.join("|")})(\\s+[^>]*)?>$`, "i");
+
+  // Matn ichidagi har qanday <...> ni tekshiramiz: agar ruxsat etilgan teg bo'lmasa, &lt;...&gt; qilamiz
+  out = out.replace(/<([^>]+)>/g, (match, inside) => {
+    if (tagRegex.test(match)) {
+      return match;
+    }
+    return `&lt;${inside}&gt;`;
+  });
 
   return out;
 }

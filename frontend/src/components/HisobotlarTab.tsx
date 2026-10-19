@@ -79,14 +79,14 @@ export function HisobotlarTab({ telegramUserId, xodimNomi }: HisobotlarTabProps)
     setYuklanmoqda(true);
 
     try {
-      const startIso = `${boshlanishSana}T00:00:00Z`;
-      const endIso = `${tugashSana}T23:59:59Z`;
+      const startIso = `${boshlanishSana}T00:00:00+05:00`;
+      const endIso = `${tugashSana}T23:59:59.999+05:00`;
 
       // 1. Savdolar
       const { data: sData, error: sErr } = await supabase
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom, telefon)")
-        .neq("holat", "bekor_qilindi")
+        .eq("holat", "yakunlandi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: false });

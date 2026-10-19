@@ -43,27 +43,37 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const today = new Date().toISOString().split("T")[0];
+    // 1. Sana aniqlash (Toshkent vaqti UTC+5 bo'yicha)
+    const nowTashkent = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tashkent" }));
+    const defaultDateStr = `${nowTashkent.getFullYear()}-${String(nowTashkent.getMonth() + 1).padStart(2, "0")}-${String(nowTashkent.getDate()).padStart(2, "0")}`;
+    const targetDateStr = (req.query?.date || req.body?.date || "").trim() || defaultDateStr;
 
-    // 1. Bugungi savdolar (bekor qilinganlardan tashqari)
+    // Toshkent vaqti bo'yicha kunning aniq boshi va oxiri
+    const startIso = `${targetDateStr}T00:00:00+05:00`;
+    const endIso = `${targetDateStr}T23:59:59.999+05:00`;
+
+    // 1. Savdolar (faqat yakunlangan va aynan shu kungi savdolar)
     const { data: savdolar } = await supabase
       .from("savdolar")
       .select("valyuta, jami_summa, tolangan_summa, qarz_summa")
-      .gte("sana_vaqt", `${today}T00:00:00Z`)
-      .neq("holat", "bekor_qilindi");
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso)
+      .eq("holat", "yakunlandi");
 
-    // 2. Bugungi rasxodlar (bekor qilinganlardan tashqari)
+    // 2. Rasxodlar (faqat shu kungi chiqimlar)
     const { data: rasxodlar } = await supabase
       .from("rasxodlar")
       .select("valyuta, summa, kategoriya")
-      .gte("sana_vaqt", `${today}T00:00:00Z`)
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso)
       .neq("holat", "bekor_qilindi");
 
-    // 3. Bugungi qarz to'lovlari
+    // 3. Qarz to'lovlari (faqat shu kungi tushumlar)
     const { data: qarzTolovlari } = await supabase
       .from("qarz_tolovlari")
       .select("valyuta, summa")
-      .gte("sana_vaqt", `${today}T00:00:00Z`);
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso);
 
     // 4. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
@@ -202,9 +212,9 @@ export default async function handler(req: any, res: any) {
     }
 
     // Telegram uchun xabar matnini tuzish
-    const now = new Date();
-    const kun = now.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" });
-    const soat = now.toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" });
+    const [yyyy, mm, dd] = targetDateStr.split("-");
+    const kun = `${dd}.${mm}.${yyyy}`;
+    const soat = nowTashkent.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
     const katMatn = Object.entries(katMap)
       .map(([k, v]) => `   • ${k}: ${pul(v)} so'm`)
       .join("\n");
@@ -244,11 +254,18 @@ export default async function handler(req: any, res: any) {
           chat_id: chatId,
           text: matn,
           parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "📄 PDF shaklida yuklash", callback_data: `dl_daily_pdf:${targetDateStr}` },
+              ],
+            ],
+          },
         }),
       });
     }
 
-    console.log("Kunlik hisobot yuborildi:", today);
+    console.log("Kunlik hisobot yuborildi:", targetDateStr);
     return res.status(200).json({ ok: true, message: "Report sent" });
   } catch (err: any) {
     console.error("Hisobot yuborishda xatolik:", err);
