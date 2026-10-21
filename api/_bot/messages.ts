@@ -604,6 +604,9 @@ Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
 Noto'g'ri SQL: "${cleanSql}"
 
 DIQQAT TIZIM QOIDALARI:
+- KASSA VA HISOBLAR BALANSI:
+  * "view_kassa_balans" ustunlari: (hisob_id, kassa_nomi, kassa_turi, valyuta, joriy_balans). Unda "sana_vaqt" ustuni YO'Q!
+  * Muayyan kassa yoki karta qoldig'i: SELECT kassa_nomi, kassa_turi, joriy_balans, valyuta FROM view_kassa_balans WHERE kassa_nomi ILIKE '%nom%'
 - O'TGAN SANALARNI TAHLIL QILISHDA:
   * "view_kassa_balans" va "view_ai_xulosa" da "sana_vaqt" ustuni YO'Q! Ularga "WHERE sana_vaqt" deb so'rov yozmang!
   * Savdolar uchun: savdolar (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, holat, xodim) WHERE holat != 'bekor_qilindi'
@@ -759,11 +762,16 @@ MUHIM QOIDALAR:
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
         const errMsg = err?.message || String(err);
+        const rawTextLower = (text || "").toLowerCase();
+        const isSanaQuery = /\b(\d{1,2}[-./]\d{1,2}(?:[-./]\d{2,4})?|kecha|o'tgan\s+hafta|o'tgan\s+oy|bugun)\b/i.test(rawTextLower);
         let tushunarliXabar = `Kechirasiz, so'ralgan ma'lumotni tahlil qilishda qiyinchilik yuz berdi.`;
-        if (errMsg.includes("column") || errMsg.includes("does not exist") || errMsg.includes("sana_vaqt")) {
+
+        if (isSanaQuery && (errMsg.includes("column") || errMsg.includes("sana_vaqt") || errMsg.includes("does not exist"))) {
           tushunarliXabar = `Kechirasiz, ushbu sana bo'yicha ma'lumotlarni qidirishda noaniqlik yuz berdi. Iltimos, so'rovingizni aniqroq qilib (masalan: <i>"16.10.2026 savdolar"</i> yoki <i>"16.10.2026 kassa tushumi"</i> deb) yuborib ko'ring.`;
+        } else if (/balans|qoldiq|kassa|karta|hisob/i.test(rawTextLower)) {
+          tushunarliXabar = `Kechirasiz, so'ralgan kassa yoki karta bo'yicha ma'lumotni aniqlashda qiyinchilik yuz berdi. Iltimos, hisob nomini to'liqroq yozib ko'ring yoki /kassa buyrug'i orqali joriy balanslarni ko'ring.`;
         } else {
-          tushunarliXabar = `So'rovingiz bo'yicha tahlil yakunlanmadi (${errMsg}). Iltimos, birozdan so'ng qayta urinib ko'ring yoki boshqacharoq yozing.`;
+          tushunarliXabar = `So'rovingiz bo'yicha tahlil yakunlanmadi. Iltimos, so'rovingizni biroz boshqacharoq yozib ko'ring.`;
         }
         await tgPost("sendMessage", {
           chat_id: chatId,

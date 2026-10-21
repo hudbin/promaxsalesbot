@@ -376,7 +376,17 @@ O'TA MUHIM SQL VA HISOBOT QOIDALARI:
         FROM view_tashqi_qarzlar_balans WHERE biz_olishimiz_kerak > 0
         ORDER BY biz_olishimiz_kerak DESC
 
+   G) "KASSA QOLDIG'I", "HISOB BALANSI", "KARTADAGI PUL", "JORIY BALANSLAR":
+      - Foydalanuvchi kassadagi, xodimdagi yoki kartadagi joriy qoldiqni so'raganda view_kassa_balans dan foydalaning!
+      - Barcha kassalar/hisoblar balansi:
+        SELECT kassa_nomi, kassa_turi, joriy_balans, valyuta FROM view_kassa_balans ORDER BY kassa_nomi
+      - Bitta aniq shaxs, karta yoki kassa qoldig'i (masalan: "Qahramon kartasidagi qoldiq", "Asosiy kassa qoldig'i", "Plastik balansi"):
+        SELECT kassa_nomi, kassa_turi, joriy_balans, valyuta FROM view_kassa_balans WHERE kassa_nomi ILIKE '%Qahramon%'
+      - DIQQAT: view_kassa_balans da (hisob_id, kassa_nomi, kassa_turi, valyuta, joriy_balans) ustunlari mavjud! Unda "sana_vaqt" ustuni YO'Q!
+
 4. JADVAL USTUNLARI ANIQ TAVSIFI:
+   - hisoblar: (id, nom, turi ['naqd'|'plastik'|'bank'|'boshqa'], valyuta ['UZS'|'USD'], joriy_balans, faol)
+   - view_kassa_balans: (hisob_id, kassa_nomi, kassa_turi, valyuta, joriy_balans) - barcha kassalar va kartalar jonli balansi!
    - savdolar: (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, hisob_id, holat, xodim, izoh)
    - rasxodlar: (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, hisob_id, izoh, xodim, holat)
    - qarz_tolovlari: (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, hisob_id, xodim, izoh)
