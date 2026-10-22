@@ -313,7 +313,8 @@ export async function sendMijozQarzPdf(
         hodisalar.push({
           sana: s.sana_vaqt,
           turi: "Savdo",
-          tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+          tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}`,
+          izoh: s.izoh || "-",
           valyuta: val,
           berilganQarz: qarz,
           tolanganQarz: tolandi,
@@ -333,7 +334,8 @@ export async function sendMijozQarzPdf(
         hodisalar.push({
           sana: t.sana_vaqt,
           turi: "Qarz to'lovi",
-          tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})${t.izoh ? ` - ${t.izoh}` : ""}`,
+          tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})`,
+          izoh: t.izoh || "-",
           valyuta: t.valyuta || "UZS",
           berilganQarz: 0,
           tolanganQarz: summa,
@@ -370,12 +372,12 @@ export async function sendMijozQarzPdf(
             : "";
 
         const naqdMatn = naqdQaytarildi > 0 ? ` (Naqd berildi: ${pul(naqdQaytarildi)} ${val})` : "";
-        const izohMatn = v.izoh ? ` [${v.izoh}]` : "";
 
         hodisalar.push({
           sana: v.sana_vaqt,
           turi: "Vozvrat",
-          tafsilot: `Vozvrat #${v.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${naqdMatn}${izohMatn}`,
+          tafsilot: `Vozvrat #${v.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${naqdMatn}`,
+          izoh: v.izoh || "-",
           valyuta: val,
           berilganQarz: 0,
           tolanganQarz: qarzdanAyirildi, // Qarzdan chegirilgan summa
@@ -484,6 +486,7 @@ export async function sendMijozQarzPdf(
         sanaBosh,
         "Boshlang'ich qoldiq",
         "Hisobot davri boshidagi qarz saldosi",
+        "-",
         "UZS",
         boshlangichQarzUzs > 0 ? pul(boshlangichQarzUzs) : "-",
         "-",
@@ -497,6 +500,7 @@ export async function sendMijozQarzPdf(
         sanaFormatted,
         h.turi,
         h.tafsilot,
+        h.izoh || "-",
         h.valyuta,
         h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
         h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
@@ -511,13 +515,14 @@ export async function sendMijozQarzPdf(
       `${hodisalar.length} ta amal`,
       `Savdolar: ${pul(jamiSavdoUzs)} | To'lov: ${pul(jamiTolandiUzs)}${vozvratXulosa} UZS`,
       "",
+      "",
       davrMatni ? "Davr oxiriga qarz:" : "Qolgan qarz:",
       `${pul(oxirgiQarzUzs)} UZS` + (oxirgiQarzUsd > 0 ? ` / $${pul(oxirgiQarzUsd)}` : ""),
     ]);
 
     autoTable(doc, {
       startY: 70,
-      head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Mahsulotlar", "Valyuta", "Qarzga berildi (+)", "Qaytarildi / Chegirildi (-)"]],
+      head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Mahsulotlar", "Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi / Chegirildi (-)"]],
       body: tableRows,
       theme: "grid",
       headStyles: {
@@ -528,18 +533,19 @@ export async function sendMijozQarzPdf(
         halign: "center",
       },
       styles: {
-        fontSize: 7.5,
-        cellPadding: 2,
+        fontSize: 7,
+        cellPadding: 1.8,
         textColor: [30, 41, 59],
       },
       columnStyles: {
-        0: { cellWidth: 8, halign: "center" },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 24, fontStyle: "bold" },
-        3: { cellWidth: 54 },
-        4: { cellWidth: 14, halign: "center" },
-        5: { cellWidth: 27, halign: "right", textColor: [185, 28, 28] },
-        6: { cellWidth: 27, halign: "right", textColor: [16, 149, 90] },
+        0: { cellWidth: 7, halign: "center" },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 18, fontStyle: "bold" },
+        3: { cellWidth: 46 },
+        4: { cellWidth: 32 },
+        5: { cellWidth: 12, halign: "center" },
+        6: { cellWidth: 21, halign: "right", textColor: [185, 28, 28] },
+        7: { cellWidth: 21, halign: "right", textColor: [16, 149, 90] },
       },
       didParseCell: (data: any) => {
         if (data.row.index === tableRows.length - 1 || (boshSanaIso && data.row.index === 0)) {
@@ -1028,7 +1034,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     const startIso = `${targetDateStr}T00:00:00+05:00`;
     const endIso = `${targetDateStr}T23:59:59.999+05:00`;
 
-    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: hisoblar }] = await Promise.all([
+    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: hisoblar }] = await Promise.all([
       client
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom)")
@@ -1046,6 +1052,13 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       client
         .from("qarz_tolovlari")
         .select("*, mijoz:mijozlar(nom), hisob:hisoblar(nom)")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("tovar_qaytarishlar")
+        .select("*, mijoz:mijozlar(nom), qatorlar:tovar_qaytarish_qatorlari(tovar_nomi, soni, narx, summa)")
+        .neq("holat", "bekor_qilindi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: true }),
@@ -1091,6 +1104,20 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         rasxodUzs += sum;
         const kat = r.kategoriya || "Boshqa";
         katMap[kat] = (katMap[kat] || 0) + sum;
+      }
+    });
+
+    let vozvratUzs = 0, vozvratUsd = 0;
+    let vozvratQarzdanUzs = 0, vozvratQarzdanUsd = 0;
+    (vozvratlar || []).forEach((v: any) => {
+      const sum = Number(v.jami_summa || 0);
+      const qarzdan = Number(v.qarzdan_ayirildi || 0);
+      if (v.valyuta === "USD") {
+        vozvratUsd += sum;
+        vozvratQarzdanUsd += qarzdan;
+      } else {
+        vozvratUzs += sum;
+        vozvratQarzdanUzs += qarzdan;
       }
     });
 
@@ -1230,7 +1257,53 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
-    // 3. Kassalar balansi jadvali
+    // 3. Tovar qaytarishlar / Korrektirovkalar jadvali
+    if ((vozvratlar || []).length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Tovar qaytarish / Vozvratlar (${vozvratlar.length} ta)`, 14, nextY);
+
+      const vRows = vozvratlar.map((v: any) => {
+        const qatorMatn = Array.isArray(v.qatorlar) && v.qatorlar.length > 0
+          ? v.qatorlar.map((q: any) => `${q.tovar_nomi} (${q.soni} dona)`).join("; ")
+          : "";
+        return [
+          v.raqam ? `#${v.raqam}` : "-",
+          v.sana_vaqt ? new Date(v.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+          v.mijoz?.nom || "Mijoz",
+          qatorMatn || v.izoh || "-",
+          `${pul(v.jami_summa)} ${v.valyuta}`,
+          Number(v.qarzdan_ayirildi) > 0 ? `${pul(v.qarzdan_ayirildi)} ${v.valyuta}` : "-",
+          Number(v.naqd_qaytarildi) > 0 ? `${pul(v.naqd_qaytarildi)} ${v.valyuta}` : "-",
+        ];
+      });
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["Hujjat", "Vaqt", "Mijoz", "Mahsulot / Izoh", "Jami", "Qarzdan chegirildi", "Kassadan"]],
+        body: vRows,
+        theme: "striped",
+        headStyles: { fillColor: [217, 119, 6], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 16, halign: "center" },
+          1: { cellWidth: 14, halign: "center" },
+          2: { cellWidth: 38, fontStyle: "bold" },
+          3: { cellWidth: 46 },
+          4: { cellWidth: 26, halign: "right" },
+          5: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          6: { cellWidth: 20, halign: "right" },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 4. Kassalar balansi jadvali
     if ((hisoblar || []).length > 0) {
       if (nextY > 220) {
         doc.addPage();

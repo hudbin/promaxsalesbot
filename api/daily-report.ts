@@ -75,7 +75,15 @@ export default async function handler(req: any, res: any) {
       .gte("sana_vaqt", startIso)
       .lte("sana_vaqt", endIso);
 
-    // 4. Kassa qoldiqlari va faol hisoblar
+    // 4. Tovar qaytarishlar / Korrektirovkalar (shu kungi vozvratlar)
+    const { data: vozvratlar } = await supabase
+      .from("tovar_qaytarishlar")
+      .select("valyuta, jami_summa, qarzdan_ayirildi, naqd_qaytarildi")
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso)
+      .neq("holat", "bekor_qilindi");
+
+    // 5. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
       supabase.from("view_kassa_balans").select("*"),
       supabase.from("hisoblar").select("*").eq("faol", true),
@@ -110,6 +118,24 @@ export default async function handler(req: any, res: any) {
     qarzTolovlari?.forEach((q) => {
       if (q.valyuta === "USD") eskiQarzTushdiUSD += Number(q.summa || 0);
       else eskiQarzTushdiUZS += Number(q.summa || 0);
+    });
+
+    let vozvratJamiUZS = 0, vozvratJamiUSD = 0;
+    let vozvratQarzdanUZS = 0, vozvratQarzdanUSD = 0;
+    let vozvratNaqdUZS = 0, vozvratNaqdUSD = 0;
+    vozvratlar?.forEach((v) => {
+      const jami = Number(v.jami_summa || 0);
+      const qarzdan = Number(v.qarzdan_ayirildi || 0);
+      const naqd = Number(v.naqd_qaytarildi || 0);
+      if (v.valyuta === "USD") {
+        vozvratJamiUSD += jami;
+        vozvratQarzdanUSD += qarzdan;
+        vozvratNaqdUSD += naqd;
+      } else {
+        vozvratJamiUZS += jami;
+        vozvratQarzdanUZS += qarzdan;
+        vozvratNaqdUZS += naqd;
+      }
     });
 
     // Faol hisoblar xaritasi
@@ -219,6 +245,15 @@ export default async function handler(req: any, res: any) {
       .map(([k, v]) => `   • ${k}: ${pul(v)} so'm`)
       .join("\n");
 
+    const hasVozvrat = (vozvratlar && vozvratlar.length > 0) || vozvratJamiUZS > 0 || vozvratJamiUSD > 0;
+    const vozvratMatn = hasVozvrat
+      ? `🔄 <b>TOVAR QAYTARISH / VOZVRAT:</b>\n` +
+        `   • Jami vozvrat: <b>${pul(vozvratJamiUZS)} so'm</b>${vozvratJamiUSD > 0 ? ` | <b>${formatUsd(vozvratJamiUSD)}</b>` : ""}\n` +
+        `   • Qarzdan chegirildi: <b>${pul(vozvratQarzdanUZS)} so'm</b>${vozvratQarzdanUSD > 0 ? ` | <b>${formatUsd(vozvratQarzdanUSD)}</b>` : ""}` +
+        (vozvratNaqdUZS > 0 || vozvratNaqdUSD > 0 ? `\n   • Kassadan qaytarildi: <b>${pul(vozvratNaqdUZS)} so'm</b>${vozvratNaqdUSD > 0 ? ` | <b>${formatUsd(vozvratNaqdUSD)}</b>` : ""}` : "") +
+        `\n\n`
+      : "";
+
     const matn =
       `📊 <b>PROMAX · KUNLIK YAKUNIY HISOBOT</b>\n` +
       `📅 <b>Sana: ${kun} (${soat})</b>\n` +
@@ -229,6 +264,7 @@ export default async function handler(req: any, res: any) {
       `   • Qarzga berildi: <b>${pul(qarzBerildiUZS)} so'm</b>${qarzBerildiUSD > 0 ? ` | <b>${formatUsd(qarzBerildiUSD)}</b>` : ""}\n\n` +
       `💳 <b>ESKI QARZDAN TUSHUM:</b>\n` +
       `   • Qaytarilgan qarz: <b>${pul(eskiQarzTushdiUZS)} so'm</b>${eskiQarzTushdiUSD > 0 ? ` | <b>${formatUsd(eskiQarzTushdiUSD)}</b>` : ""}\n\n` +
+      vozvratMatn +
       `🧾 <b>XARAJATLAR (RASXOD):</b>\n` +
       `   • Jami chiqim: <b>${pul(rasxodUZS)} so'm</b>${rasxodUSD > 0 ? ` | <b>${formatUsd(rasxodUSD)}</b>` : ""}\n` +
       (katMatn ? `${katMatn}\n` : ``) +

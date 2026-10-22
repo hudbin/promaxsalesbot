@@ -10,12 +10,14 @@ import { HisoblarModal } from "./HisoblarModal";
 import { BalansSozlashModal } from "./BalansSozlashModal";
 
 type AmalFilter = "hammasi" | "kirim" | "chiqim";
+type KassaSection = "balanslar" | "jurnal";
 
 interface Props {
   userRole?: string;
 }
 
 export function KassaTab({ userRole = "sotuvchi" }: Props) {
+  const [activeSection, setActiveSection] = useState<KassaSection>("balanslar");
   const [balanslar, setBalanslar] = useState<any[]>([]);
   const [hisoblar, setHisoblar] = useState<any[]>([]);
   const [harakatlar, setHarakatlar] = useState<any[]>([]);
@@ -158,305 +160,352 @@ export function KassaTab({ userRole = "sotuvchi" }: Props) {
 
   return (
     <div className="space-y-3 pb-8">
-      {/* Kassa Hisoblari: Umumiy Xulosa Bar */}
-      <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            <Wallet className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
-              Kassa Balansi
-            </h3>
-            <p className="text-[10px] text-slate-400 font-medium">
-              {saralanganGuruhlar.length} ta kassa guruhi • {faolBalanslar.length} ta hisob
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
-            UZS: {pul(jamiUZS)}
-          </span>
-          {jamiUSD !== 0 && (
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
-              USD: ${pul(jamiUSD)}
-            </span>
-          )}
-
-          <button
-            onClick={toggleKompakt}
-            title={kompaktRejim ? "Keng ko'rinishga o'tish" : "Kompakt ko'rinishga o'tish"}
-            className="ml-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 transition-all flex items-center gap-1 active:scale-95"
-          >
-            <span>{kompaktRejim ? "⚡ Kompakt" : "📑 Keng"}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* HAR BIR KASSA (GURUH) UCHUN BITTA KARTA ICHIDA SUB-HISOBLAR */}
-      <div className="space-y-2.5">
-        {saralanganGuruhlar.length === 0 ? (
-          <div className="text-center py-6 text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border p-4">
-            Hisoblar topilmadi.
-          </div>
-        ) : (
-          saralanganGuruhlar.map(([guruhNomi, subBalanslar]) => {
-            const guruhUZS = subBalanslar
-              .filter((s) => s.valyuta === "UZS")
-              .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
-            const guruhUSD = subBalanslar
-              .filter((s) => s.valyuta === "USD")
-              .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
-
-            return (
-              <div
-                key={guruhNomi}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xs space-y-2.5 transition-all"
-              >
-                {/* Karta sarlavhasi (Guruh nomi va jami balansi) */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                      <Building2 className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
-                        {guruhNomi}
-                      </h3>
-                      <p className="text-[10px] text-slate-400 font-medium">
-                        {subBalanslar.length} ta hisob (UZS / USD)
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Guruh jami summasi */}
-                  <div className="flex items-center gap-1.5 text-right">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
-                      {pul(guruhUZS)} UZS
-                    </span>
-                    {guruhUSD !== 0 && (
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
-                        ${pul(guruhUSD)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* BITTA KARTA ICHIDAGI SUB-HISOBLAR (KOMPAKT GRID) */}
-                <div className={`grid ${kompaktRejim ? "grid-cols-2 sm:grid-cols-3 gap-1.5" : "grid-cols-2 gap-2"}`}>
-                  {subBalanslar.map((b) => {
-                    const isUSD = b.valyuta === "USD";
-                    const isPlastik = b.kassa_turi === "plastik";
-                    const isBank = b.kassa_turi === "bank";
-
-                    let Icon = Wallet;
-                    let turNomi = "Naqd UZS";
-                    let borderTheme = "border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100";
-                    let badgeColor = "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60";
-
-                    if (isUSD) {
-                      Icon = DollarSign;
-                      turNomi = "Naqd USD";
-                      borderTheme = "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-amber-950 dark:text-amber-100";
-                      badgeColor = "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60";
-                    } else if (isPlastik) {
-                      Icon = CreditCard;
-                      turNomi = "Plastik UZS";
-                      borderTheme = "border-blue-200/80 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 text-blue-950 dark:text-blue-100";
-                      badgeColor = "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60";
-                    } else if (isBank) {
-                      Icon = Building2;
-                      turNomi = "Bank UZS";
-                      borderTheme = "border-purple-200/80 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 text-purple-950 dark:text-purple-100";
-                      badgeColor = "text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60";
-                    }
-
-                    if (!kompaktRejim) {
-                      let bgSolid = "bg-emerald-600";
-                      let textSolid = "text-emerald-100";
-                      if (isUSD) { bgSolid = "bg-amber-600"; textSolid = "text-amber-100"; }
-                      if (isPlastik) { bgSolid = "bg-blue-600"; textSolid = "text-blue-100"; }
-                      if (isBank) { bgSolid = "bg-purple-700"; textSolid = "text-purple-100"; }
-
-                      return (
-                        <div
-                          key={b.hisob_id}
-                          onClick={() => {
-                            if (userRole === "admin") {
-                              haptic("light");
-                              setSozlashHisobId(b.hisob_id);
-                              setShowBalansSozlash(true);
-                            }
-                          }}
-                          className={`${bgSolid} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5 ${userRole === "admin" ? "cursor-pointer hover:opacity-95 transition-opacity" : ""}`}
-                          title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
-                        >
-                          <div className="flex items-center justify-between opacity-85">
-                            <div className="flex items-center gap-1.5">
-                              <Icon className="w-3.5 h-3.5" />
-                              <span className="text-[10px] font-bold uppercase tracking-wider">{turNomi}</span>
-                            </div>
-                            {userRole === "admin" && (
-                              <SlidersHorizontal className="w-3 h-3 opacity-80" />
-                            )}
-                          </div>
-                          <p className="text-base font-black tabular-nums leading-tight">
-                            {isUSD ? "$" : ""}{pul(b.joriy_balans)}
-                          </p>
-                          <p className={`text-[10px] font-medium ${textSolid}`}>{b.valyuta}</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={b.hisob_id}
-                        onClick={() => {
-                          if (userRole === "admin") {
-                            haptic("light");
-                            setSozlashHisobId(b.hisob_id);
-                            setShowBalansSozlash(true);
-                          }
-                        }}
-                        className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01] ${userRole === "admin" ? "cursor-pointer" : ""}`}
-                        title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <div className="flex items-center gap-1 min-w-0">
-                            <Icon className="w-3 h-3 flex-shrink-0 opacity-80" />
-                            <span className="text-[10px] font-extrabold uppercase tracking-tight truncate">
-                              {turNomi}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {userRole === "admin" && (
-                              <SlidersHorizontal className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 opacity-60 hover:opacity-100" />
-                            )}
-                            <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${badgeColor} uppercase`}>
-                              {b.valyuta}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-baseline justify-between mt-0.5">
-                          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
-                            {isUSD ? "$" : ""}{pul(b.joriy_balans)}
-                          </span>
-                          <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase ml-1">
-                            {b.valyuta}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="flex gap-2">
+      {/* 2 TA ALOHIDA BO'LIM TABLARI (Hisoblar & Balans vs Pul Oqimi Jurnali) */}
+      <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-800">
         <button
-          onClick={() => { haptic("light"); setShowTransfer(true); }}
-          className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+          onClick={() => { haptic("light"); setActiveSection("balanslar"); }}
+          className={`py-2 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            activeSection === "balanslar"
+              ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          }`}
         >
-          <ArrowRightLeft className="w-4 h-4" /> Pul O'tkazish
+          <Wallet className="w-3.5 h-3.5" />
+          <span>Hisoblar & Balans</span>
         </button>
-        {userRole === "admin" && (
-          <>
-            <button
-              onClick={() => { haptic("light"); setSozlashHisobId(null); setShowBalansSozlash(true); }}
-              className="flex-none px-3 py-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-amber-100 transition-all shadow-2xs active:scale-95"
-            >
-              <SlidersHorizontal className="w-4 h-4" /> Balansni Sozlash
-            </button>
-            <button
-              onClick={() => { haptic("light"); setShowHisoblar(true); }}
-              className="flex-none px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-2xs active:scale-95"
-            >
-              <Settings className="w-4 h-4" /> Hisoblar
-            </button>
-          </>
-        )}
+        <button
+          onClick={() => { haptic("light"); setActiveSection("jurnal"); }}
+          className={`py-2 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            activeSection === "jurnal"
+              ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          <span>Pul Oqimi Jurnali</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            {harakatlar.length}
+          </span>
+        </button>
       </div>
 
-      {/* Pul Harakati Oqimi (Journal / Audit Trail) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-2xs space-y-3">
-        {/* Title va Yangilash */}
-        <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <h3 className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-              <History className="w-4 h-4 text-slate-500 dark:text-slate-400" /> Pul Oqimi Jurnali
-            </h3>
+      {/* 1-TAB: HISOBLAR VA BALANSLAR */}
+      {activeSection === "balanslar" && (
+        <div className="space-y-3 animate-fade-in">
+          {/* Kassa Hisoblari: Umumiy Xulosa Bar */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <Wallet className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
+                  Kassa Balansi
+                </h3>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {saralanganGuruhlar.length} ta kassa guruhi • {faolBalanslar.length} ta hisob
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
+                UZS: {pul(jamiUZS)}
+              </span>
+              {jamiUSD !== 0 && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
+                  USD: ${pul(jamiUSD)}
+                </span>
+              )}
+
+              <button
+                onClick={toggleKompakt}
+                title={kompaktRejim ? "Keng ko'rinishga o'tish" : "Kompakt ko'rinishga o'tish"}
+                className="ml-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 transition-all flex items-center gap-1 active:scale-95"
+              >
+                <span>{kompaktRejim ? "⚡ Kompakt" : "📑 Keng"}</span>
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              yuklaKassa();
-              haptic("light");
-            }}
-            disabled={yuklanmoqda}
-            className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg active:scale-95 transition-all flex-shrink-0"
-          >
-            {yuklanmoqda ? "..." : "Yangilash ⟳"}
-          </button>
-        </div>
 
-        {/* FILTR TUGMALARI */}
-        <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
-          <button
-            onClick={() => { setAmalFilter("hammasi"); haptic("light"); }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "hammasi" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
-          >Barchasi</button>
-          <button
-            onClick={() => { setAmalFilter("kirim"); haptic("light"); }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "kirim" ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700"}`}
-          ><ArrowDownLeft className="w-3 h-3" /> Kirim</button>
-          <button
-            onClick={() => { setAmalFilter("chiqim"); haptic("light"); }}
-            className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "chiqim" ? "bg-rose-600 text-white shadow-sm" : "text-rose-700"}`}
-          ><ArrowUpRight className="w-3 h-3" /> Chiqim</button>
-        </div>
+          {/* HAR BIR KASSA (GURUH) UCHUN BITTA KARTA ICHIDA SUB-HISOBLAR */}
+          <div className="space-y-2.5">
+            {saralanganGuruhlar.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs bg-white dark:bg-slate-900 rounded-2xl border p-4">
+                Hisoblar topilmadi.
+              </div>
+            ) : (
+              saralanganGuruhlar.map(([guruhNomi, subBalanslar]) => {
+                const guruhUZS = subBalanslar
+                  .filter((s) => s.valyuta === "UZS")
+                  .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
+                const guruhUSD = subBalanslar
+                  .filter((s) => s.valyuta === "USD")
+                  .reduce((sum, s) => sum + (Number(s.joriy_balans) || 0), 0);
 
-        {/* Harakatlar Ro'yxati */}
-        <div className="space-y-1.5">
-          {saralanganHarakatlar.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-xs font-medium">Harakatlar topilmadi.</div>
-          ) : (
-            saralanganHarakatlar.map((h) => {
-              const kirimmi = h.amal === "kirim";
-              return (
-                <div
-                  key={h.id}
-                  onClick={() => { setTanlanganHarakat(h); haptic("light"); }}
-                  className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border hover:border-slate-300 cursor-pointer active:bg-slate-100 transition-all group shadow-2xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 pr-1">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${kirimmi ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-                      {kirimmi ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs group-hover:text-indigo-600 truncate">{getManbaYozuv(h.manba_turi)}</span>
-                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[130px]">{h.hisob?.nom || h.kassa_turi}</span>
+                return (
+                  <div
+                    key={guruhNomi}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xs space-y-2.5 transition-all"
+                  >
+                    {/* Karta sarlavhasi (Guruh nomi va jami balansi) */}
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                          <Building2 className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">
+                            {guruhNomi}
+                          </h3>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            {subBalanslar.length} ta hisob (UZS / USD)
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-500 truncate max-w-[190px] mt-0.5">{h.izoh || (kirimmi ? "Tushum" : "Xarajat")}</p>
+
+                      {/* Guruh jami summasi */}
+                      <div className="flex items-center gap-1.5 text-right">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 tabular-nums">
+                          {pul(guruhUZS)} UZS
+                        </span>
+                        {guruhUSD !== 0 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 tabular-nums">
+                            ${pul(guruhUSD)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* BITTA KARTA ICHIDAGI SUB-HISOBLAR (KOMPAKT GRID) */}
+                    <div className={`grid ${kompaktRejim ? "grid-cols-2 sm:grid-cols-3 gap-1.5" : "grid-cols-2 gap-2"}`}>
+                      {subBalanslar.map((b) => {
+                        const isUSD = b.valyuta === "USD";
+                        const isPlastik = b.kassa_turi === "plastik";
+                        const isBank = b.kassa_turi === "bank";
+
+                        let Icon = Wallet;
+                        let turNomi = "Naqd UZS";
+                        let borderTheme = "border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100";
+                        let badgeColor = "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60";
+
+                        if (isUSD) {
+                          Icon = DollarSign;
+                          turNomi = "Naqd USD";
+                          borderTheme = "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-amber-950 dark:text-amber-100";
+                          badgeColor = "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60";
+                        } else if (isPlastik) {
+                          Icon = CreditCard;
+                          turNomi = "Plastik UZS";
+                          borderTheme = "border-blue-200/80 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 text-blue-950 dark:text-blue-100";
+                          badgeColor = "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60";
+                        } else if (isBank) {
+                          Icon = Building2;
+                          turNomi = "Bank UZS";
+                          borderTheme = "border-purple-200/80 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 text-purple-950 dark:text-purple-100";
+                          badgeColor = "text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60";
+                        }
+
+                        if (!kompaktRejim) {
+                          let bgSolid = "bg-emerald-600";
+                          let textSolid = "text-emerald-100";
+                          if (isUSD) { bgSolid = "bg-amber-600"; textSolid = "text-amber-100"; }
+                          if (isPlastik) { bgSolid = "bg-blue-600"; textSolid = "text-blue-100"; }
+                          if (isBank) { bgSolid = "bg-purple-700"; textSolid = "text-purple-100"; }
+
+                          return (
+                            <div
+                              key={b.hisob_id}
+                              onClick={() => {
+                                if (userRole === "admin") {
+                                  haptic("light");
+                                  setSozlashHisobId(b.hisob_id);
+                                  setShowBalansSozlash(true);
+                                }
+                              }}
+                              className={`${bgSolid} text-white p-2.5 rounded-xl shadow-2xs space-y-0.5 ${userRole === "admin" ? "cursor-pointer hover:opacity-95 transition-opacity" : ""}`}
+                              title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
+                            >
+                              <div className="flex items-center justify-between opacity-85">
+                                <div className="flex items-center gap-1.5">
+                                  <Icon className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">{turNomi}</span>
+                                </div>
+                                {userRole === "admin" && (
+                                  <SlidersHorizontal className="w-3 h-3 opacity-80" />
+                                )}
+                              </div>
+                              <p className="text-base font-black tabular-nums leading-tight">
+                                {isUSD ? "$" : ""}{pul(b.joriy_balans)}
+                              </p>
+                              <p className={`text-[10px] font-medium ${textSolid}`}>{b.valyuta}</p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={b.hisob_id}
+                            onClick={() => {
+                              if (userRole === "admin") {
+                                haptic("light");
+                                setSozlashHisobId(b.hisob_id);
+                                setShowBalansSozlash(true);
+                              }
+                            }}
+                            className={`p-2 rounded-xl border ${borderTheme} flex flex-col justify-between transition-all hover:scale-[1.01] ${userRole === "admin" ? "cursor-pointer" : ""}`}
+                            title={userRole === "admin" ? "Balansni to'g'irlash uchun bosing" : undefined}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <Icon className="w-3 h-3 flex-shrink-0 opacity-80" />
+                                <span className="text-[10px] font-extrabold uppercase tracking-tight truncate">
+                                  {turNomi}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {userRole === "admin" && (
+                                  <SlidersHorizontal className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 opacity-60 hover:opacity-100" />
+                                )}
+                                <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${badgeColor} uppercase`}>
+                                  {b.valyuta}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-baseline justify-between mt-0.5">
+                              <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
+                                {isUSD ? "$" : ""}{pul(b.joriy_balans)}
+                              </span>
+                              <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase ml-1">
+                                {b.valyuta}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="text-right flex items-center gap-2 flex-shrink-0">
-                    <div>
-                      <span className={`font-black text-xs tabular-nums block ${kirimmi ? "text-emerald-700" : "text-rose-700"}`}>
-                        {kirimmi ? "+" : "−"}{pul(h.summa)} {h.valyuta}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                  </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
+
+          {/* Harakatlar tugmalari */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => { haptic("light"); setShowTransfer(true); }}
+              className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+            >
+              <ArrowRightLeft className="w-4 h-4" /> Pul O'tkazish
+            </button>
+            {userRole === "admin" && (
+              <>
+                <button
+                  onClick={() => { haptic("light"); setSozlashHisobId(null); setShowBalansSozlash(true); }}
+                  className="flex-none px-3 py-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-amber-100 transition-all shadow-2xs active:scale-95"
+                >
+                  <SlidersHorizontal className="w-4 h-4" /> Balansni Sozlash
+                </button>
+                <button
+                  onClick={() => { haptic("light"); setShowHisoblar(true); }}
+                  className="flex-none px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs flex justify-center items-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-2xs active:scale-95"
+                >
+                  <Settings className="w-4 h-4" /> Hisoblar
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 2-TAB: PUL OQIMI JURNALI */}
+      {activeSection === "jurnal" && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xs space-y-3 animate-fade-in">
+          {/* Title va Yangilash */}
+          <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                <History className="w-4 h-4 text-slate-500 dark:text-slate-400" /> Pul Oqimi Jurnali
+              </h3>
+              <p className="text-[10px] text-slate-400 font-medium">Kassalardagi oxirgi tushum va chiqimlar</p>
+            </div>
+            <button
+              onClick={() => {
+                yuklaKassa();
+                haptic("light");
+              }}
+              disabled={yuklanmoqda}
+              className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg active:scale-95 transition-all flex-shrink-0"
+            >
+              {yuklanmoqda ? "..." : "Yangilash ⟳"}
+            </button>
+          </div>
+
+          {/* FILTR TUGMALARI */}
+          <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => { setAmalFilter("hammasi"); haptic("light"); }}
+              className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "hammasi" ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm" : "text-slate-600 dark:text-slate-400"}`}
+            >
+              Barchasi ({harakatlar.length})
+            </button>
+            <button
+              onClick={() => { setAmalFilter("kirim"); haptic("light"); }}
+              className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "kirim" ? "bg-emerald-600 text-white shadow-sm" : "text-emerald-700 dark:text-emerald-400"}`}
+            >
+              <ArrowDownLeft className="w-3 h-3" /> Kirim ({kirimlar.length})
+            </button>
+            <button
+              onClick={() => { setAmalFilter("chiqim"); haptic("light"); }}
+              className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-1 ${amalFilter === "chiqim" ? "bg-rose-600 text-white shadow-sm" : "text-rose-700 dark:text-rose-400"}`}
+            >
+              <ArrowUpRight className="w-3 h-3" /> Chiqim ({chiqimlar.length})
+            </button>
+          </div>
+
+          {/* Harakatlar Ro'yxati */}
+          <div className="space-y-1.5">
+            {saralanganHarakatlar.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs font-medium">Harakatlar topilmadi.</div>
+            ) : (
+              saralanganHarakatlar.map((h) => {
+                const kirimmi = h.amal === "kirim";
+                return (
+                  <div
+                    key={h.id}
+                    onClick={() => { setTanlanganHarakat(h); haptic("light"); }}
+                    className="flex justify-between items-center p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer active:bg-slate-100 transition-all group shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-1">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${kirimmi ? "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400" : "bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-400"}`}>
+                        {kirimmi ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">{getManbaYozuv(h.manba_turi)}</span>
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[130px]">{h.hisob?.nom || h.kassa_turi}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[190px] mt-0.5">{h.izoh || (kirimmi ? "Tushum" : "Xarajat")}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-2 flex-shrink-0">
+                      <div>
+                        <span className={`font-black text-xs tabular-nums block ${kirimmi ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+                          {kirimmi ? "+" : "−"}{pul(h.summa)} {h.valyuta}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(h.sana_vaqt).toLocaleDateString("ru-RU")} · {new Date(h.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {tanlanganHarakat && (
         <KassaDetailsModal

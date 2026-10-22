@@ -96,8 +96,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
   const [ochirilmoqda, setOchirilmoqda] = useState(false);
   const [ochirishXato, setOchirishXato] = useState("");
 
-  // Tarix filtri va alohida amalni (savdo / qarz to'lovi) o'chirish holati
-  const [tarixFilter, setTarixFilter] = useState<"barchasi" | "savdo" | "qarz_tolov">("barchasi");
+  // Tarix filtri va alohida amalni (savdo / qarz to'lovi / vozvrat) o'chirish holati
+  const [tarixFilter, setTarixFilter] = useState<"barchasi" | "savdo" | "qarz_tolov" | "vozvrat">("barchasi");
   const [amalOchirishId, setAmalOchirishId] = useState<string | null>(null);
   const [amalOchirilmoqda, setAmalOchirilmoqda] = useState(false);
 
@@ -145,6 +145,15 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
         .order("sana_vaqt", { ascending: false })
         .limit(30);
 
+      // 3. Oxirgi tovar qaytarishlar (vozvratlar)
+      const { data: vozvratlar } = await supabase
+        .from("tovar_qaytarishlar")
+        .select("id, raqam, sana_vaqt, valyuta, jami_summa, qarzdan_ayirildi, naqd_qaytarildi, izoh, holat, qatorlar:tovar_qaytarish_qatorlari(id, tovar_id, tovar_nomi, soni, narx, summa)")
+        .eq("mijoz_id", mijoz.id)
+        .neq("holat", "bekor_qilindi")
+        .order("sana_vaqt", { ascending: false })
+        .limit(30);
+
       const birlashgan: any[] = [];
       if (savdolar) {
         savdolar.forEach((s) => {
@@ -176,9 +185,25 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           });
         });
       }
+      if (vozvratlar) {
+        vozvratlar.forEach((v) => {
+          birlashgan.push({
+            id: v.id,
+            tur: "vozvrat",
+            raqam: v.raqam,
+            sana: v.sana_vaqt,
+            summa: Number(v.jami_summa || 0),
+            qarzdan_ayirildi: Number(v.qarzdan_ayirildi || 0),
+            naqd_qaytarildi: Number(v.naqd_qaytarildi || 0),
+            valyuta: v.valyuta || "UZS",
+            izoh: v.izoh,
+            qatorlar: v.qatorlar || [],
+          });
+        });
+      }
 
       birlashgan.sort((a, b) => new Date(b.sana).getTime() - new Date(a.sana).getTime());
-      setTarix(birlashgan.slice(0, 40));
+      setTarix(birlashgan.slice(0, 50));
     } catch (e) {
       console.error(e);
     } finally {
@@ -371,8 +396,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       const autoTableModule = await import("jspdf-autotable");
       const autoTable = (autoTableModule.default || autoTableModule) as any;
 
-      // Mijozning barcha savdo va to'lovlarini to'liq yuklash
-      const [{ data: barchaSavdolar }, { data: barchaTolovlar }] = await Promise.all([
+      // Mijozning barcha savdo, to'lov va vozvratlarini to'liq yuklash
+      const [{ data: barchaSavdolar }, { data: barchaTolovlar }, { data: barchaVozvratlar }] = await Promise.all([
         supabase
           .from("savdolar")
           .select("id, raqam, sana_vaqt, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, izoh, qatorlar:savdo_qatorlari(tovar_nomi, soni, narx, summa)")
@@ -384,11 +409,21 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           .select("id, sana_vaqt, valyuta, summa, tolov_turi, izoh")
           .eq("mijoz_id", mijoz.id)
           .order("sana_vaqt", { ascending: true }),
+        supabase
+          .from("tovar_qaytarishlar")
+          .select("id, raqam, sana_vaqt, valyuta, jami_summa, qarzdan_ayirildi, naqd_qaytarildi, izoh, qatorlar:tovar_qaytarish_qatorlari(tovar_nomi, soni, narx, summa)")
+          .eq("mijoz_id", mijoz.id)
+          .neq("holat", "bekor_qilindi")
+          .order("sana_vaqt", { ascending: true }),
       ]);
 
       const hodisalar: any[] = [];
       let jamiSavdoUzs = 0;
       let jamiSavdoUsd = 0;
+      let jamiTolandiUzs = 0;
+      let jamiTolandiUsd = 0;
+      let jamiVozvratUzs = 0;
+      let jamiVozvratUsd = 0;
 
       if (barchaSavdolar) {
         barchaSavdolar.forEach((s: any) => {
@@ -398,8 +433,10 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           const val = s.valyuta || "UZS";
           if (val === "USD") {
             jamiSavdoUsd += jami;
+            jamiTolandiUsd += tolandi;
           } else {
             jamiSavdoUzs += jami;
+            jamiTolandiUzs += tolandi;
           }
           const qatorMatn =
             Array.isArray(s.qatorlar) && s.qatorlar.length > 0
@@ -415,7 +452,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           hodisalar.push({
             sana: s.sana_vaqt,
             turi: "Savdo",
-            tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${s.izoh ? ` (${s.izoh})` : ""}`,
+            tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}`,
+            izoh: s.izoh || "-",
             valyuta: val,
             berilganQarz: qarz,
             tolanganQarz: tolandi,
@@ -426,13 +464,58 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       if (barchaTolovlar) {
         barchaTolovlar.forEach((t) => {
           const summa = Number(t.summa || 0);
+          const val = t.valyuta || "UZS";
+          if (val === "USD") {
+            jamiTolandiUsd += summa;
+          } else {
+            jamiTolandiUzs += summa;
+          }
           hodisalar.push({
             sana: t.sana_vaqt,
             turi: "Qarz to'lovi",
-            tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})${t.izoh ? ` - ${t.izoh}` : ""}`,
-            valyuta: t.valyuta || "UZS",
+            tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})`,
+            izoh: t.izoh || "-",
+            valyuta: val,
             berilganQarz: 0,
             tolanganQarz: summa,
+          });
+        });
+      }
+
+      if (barchaVozvratlar) {
+        barchaVozvratlar.forEach((v) => {
+          const jami = Number(v.jami_summa || 0);
+          const qarzdan = Number(v.qarzdan_ayirildi || 0);
+          const naqd = Number(v.naqd_qaytarildi || 0);
+          const val = v.valyuta || "UZS";
+          if (val === "USD") {
+            jamiVozvratUsd += jami;
+          } else {
+            jamiVozvratUzs += jami;
+          }
+
+          const qatorMatn =
+            Array.isArray(v.qatorlar) && v.qatorlar.length > 0
+              ? v.qatorlar
+                  .map((q: any) => {
+                    const qSoni = Number(q.soni || 1);
+                    const qNarx = Number(q.narx || 0);
+                    const qSum = Number(q.summa || qSoni * qNarx);
+                    return `${q.tovar_nomi}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
+                  })
+                  .join("; ")
+              : "";
+
+          const naqdQoshimcha = naqd > 0 ? ` (Kassadan naqd: ${pul(naqd)} ${val})` : "";
+
+          hodisalar.push({
+            sana: v.sana_vaqt,
+            turi: "Vozvrat",
+            tafsilot: `Vozvrat #${v.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${naqdQoshimcha}`,
+            izoh: v.izoh || "-",
+            valyuta: val,
+            berilganQarz: 0,
+            tolanganQarz: qarzdan,
           });
         });
       }
@@ -490,17 +573,21 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           sanaFormatted,
           h.turi,
           h.tafsilot,
+          h.izoh || "-",
           h.valyuta,
           h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
           h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
         ];
       });
 
+      const vozvratQator = jamiVozvratUzs > 0 ? ` | Vozvrat: ${pul(jamiVozvratUzs)}` : "";
+
       tableRows.push([
         "",
         "JAMI:",
         `${hodisalar.length} ta amal`,
-        `Jami savdolar: ${pul(jamiSavdoUzs)} UZS | $${pul(jamiSavdoUsd)}`,
+        `Savdolar: ${pul(jamiSavdoUzs)} | To'lov: ${pul(jamiTolandiUzs)}${vozvratQator} UZS`,
+        "",
         "",
         "Qolgan qarz:",
         `${pul(qarzUzs)} UZS / $${pul(qarzUsd)}`,
@@ -508,7 +595,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
 
       autoTable(doc, {
         startY: 68,
-        head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
+        head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Mahsulotlar", "Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
         body: tableRows,
         theme: "grid",
         headStyles: {
@@ -519,18 +606,19 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           halign: "center",
         },
         styles: {
-          fontSize: 7.5,
-          cellPadding: 2,
+          fontSize: 7,
+          cellPadding: 1.8,
           textColor: [30, 41, 59],
         },
         columnStyles: {
-          0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: 28 },
-          2: { cellWidth: 20, fontStyle: "bold" },
-          3: { cellWidth: 58 },
-          4: { cellWidth: 14, halign: "center" },
-          5: { cellWidth: 27, halign: "right", textColor: [185, 28, 28] },
-          6: { cellWidth: 27, halign: "right", textColor: [16, 149, 90] },
+          0: { cellWidth: 7, halign: "center" },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 18, fontStyle: "bold" },
+          3: { cellWidth: 46 },
+          4: { cellWidth: 32 },
+          5: { cellWidth: 12, halign: "center" },
+          6: { cellWidth: 21, halign: "right", textColor: [185, 28, 28] },
+          7: { cellWidth: 21, halign: "right", textColor: [16, 149, 90] },
         },
         didParseCell: (data: any) => {
           if (data.row.index === tableRows.length - 1) {
@@ -946,12 +1034,13 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                 </span>
               </div>
 
-              {/* Filtr tugmalari: Barchasi / Savdolar / To'lovlar */}
-              <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/70 dark:border-slate-800">
+              {/* Filtr tugmalari: Barchasi / Savdolar / To'lovlar / Vozvratlar */}
+              <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/70 dark:border-slate-800">
                 {[
                   { id: "barchasi", label: "Barchasi", count: tarix.length },
                   { id: "savdo", label: "Savdolar", count: tarix.filter((x) => x.tur === "savdo").length },
                   { id: "qarz_tolov", label: "To'lovlar", count: tarix.filter((x) => x.tur === "qarz_tolov").length },
+                  { id: "vozvrat", label: "Vozvrat", count: tarix.filter((x) => x.tur === "vozvrat").length },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -961,14 +1050,14 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                       setAmalOchirishId(null);
                       haptic("light");
                     }}
-                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition-all ${
+                    className={`py-1.5 px-1.5 rounded-lg font-bold text-[10px] sm:text-[11px] flex items-center justify-center gap-1 transition-all ${
                       tarixFilter === tab.id
                         ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
                         : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold">
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold">
                       {tab.count}
                     </span>
                   </button>
@@ -983,6 +1072,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                     ? "Bu mijoz bo'yicha savdolar topilmadi."
                     : tarixFilter === "qarz_tolov"
                     ? "Bu mijoz bo'yicha qarz to'lovlari topilmadi."
+                    : tarixFilter === "vozvrat"
+                    ? "Bu mijoz bo'yicha tovar qaytarishlar (vozvratlar) topilmadi."
                     : "Bu mijoz bo'yicha tarix mavjud emas."}
                 </p>
               ) : (
@@ -1004,11 +1095,15 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                                 className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
                                   item.tur === "savdo"
                                     ? "bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400"
+                                    : item.tur === "vozvrat"
+                                    ? "bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400"
                                     : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400"
                                 }`}
                               >
                                 {item.tur === "savdo" ? (
                                   <ShoppingBag className="w-3.5 h-3.5" />
+                                ) : item.tur === "vozvrat" ? (
+                                  <History className="w-3.5 h-3.5" />
                                 ) : (
                                   <ArrowDownLeft className="w-3.5 h-3.5" />
                                 )}
@@ -1018,6 +1113,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                                   <p className="font-bold text-slate-900 dark:text-white leading-tight">
                                     {item.tur === "savdo"
                                       ? `Savdo ${item.raqam ? `#${item.raqam}` : ""}`
+                                      : item.tur === "vozvrat"
+                                      ? `Vozvrat ${item.raqam ? `#${item.raqam}` : ""}`
                                       : "Qarz to'lovi"}
                                   </p>
                                   {item.tur === "savdo" && (
@@ -1035,6 +1132,11 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                                         : item.qarz > 0
                                         ? "Qarzga"
                                         : "To'langan"}
+                                    </span>
+                                  )}
+                                  {item.tur === "vozvrat" && (
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300">
+                                      Qaytarildi
                                     </span>
                                   )}
                                 </div>
@@ -1055,10 +1157,12 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                                   className={`font-black tabular-nums ${
                                     item.tur === "savdo"
                                       ? "text-slate-900 dark:text-white"
+                                      : item.tur === "vozvrat"
+                                      ? "text-purple-700 dark:text-purple-400"
                                       : "text-emerald-700 dark:text-emerald-400"
                                   }`}
                                 >
-                                  {item.tur === "qarz_tolov" ? "−" : ""}
+                                  {item.tur === "qarz_tolov" ? "−" : item.tur === "vozvrat" ? "−" : ""}
                                   {pul(item.summa)} {item.valyuta}
                                 </p>
                                 {item.tur === "savdo" && item.tolangan > 0 && item.qarz > 0 && (
@@ -1071,28 +1175,35 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                                     qarz: +{pul(item.qarz)}
                                   </p>
                                 )}
+                                {item.tur === "vozvrat" && item.qarzdan_ayirildi > 0 && (
+                                  <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tabular-nums">
+                                    qarzdan: −{pul(item.qarzdan_ayirildi)}
+                                  </p>
+                                )}
                               </div>
-                              <button
-                                type="button"
-                                title="Bekor qilish / O'chirish"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  haptic("light");
-                                  setAmalOchirishId(isConfirming ? null : itemKey);
-                                }}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isConfirming
-                                    ? "text-rose-600 bg-rose-100 dark:bg-rose-900/50"
-                                    : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"
-                                }`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {item.tur !== "vozvrat" && (
+                                <button
+                                  type="button"
+                                  title="Bekor qilish / O'chirish"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    haptic("light");
+                                    setAmalOchirishId(isConfirming ? null : itemKey);
+                                  }}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isConfirming
+                                      ? "text-rose-600 bg-rose-100 dark:bg-rose-900/50"
+                                      : "text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+                                  }`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          {/* Savdo ichidagi tovarlar ro'yxati */}
-                          {item.tur === "savdo" && Array.isArray(item.qatorlar) && item.qatorlar.length > 0 && (
+                          {/* Mahsulotlar ro'yxati (Savdo yoki Vozvrat) */}
+                          {(item.tur === "savdo" || item.tur === "vozvrat") && Array.isArray(item.qatorlar) && item.qatorlar.length > 0 && (
                             <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 rounded-lg px-2.5 py-1.5 space-y-1">
                               {item.qatorlar.map((q: any, idx: number) => (
                                 <div key={q.id || idx} className="flex justify-between items-center text-[11px]">

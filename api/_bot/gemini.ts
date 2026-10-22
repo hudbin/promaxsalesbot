@@ -153,7 +153,7 @@ Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qan
 
 Quyidagi 14 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
-2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi").
+2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi yoki kam berilgan tovar sabab qarzini kamaytirish/korrektirovka so'ralganda (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi", "Ali 10 ta tovar kam berilgan ekan qarzidan ayirib qo'y", "Vali 10 ta mahsulot qaytardi qarzidan ayirilsin").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
 4. "kop_rasxod": Bitta so'rovda BIR NECHTA xarajat aytilganda (masalan: "Obedga 50 ming, taksiga 30 ming, internetga 100 ming" yoki "Kassadan obedga 50 ming, plastikdan internetga 100 ming").
 5. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
