@@ -73,13 +73,39 @@ export default async function handler(req: any, res: any) {
     if (qarzErr) throw qarzErr;
 
     // 3.1 Boshqa kirimlar
-    const { data: boshqaKirimlar } = await supabase
-      .from("boshqa_kirimlar")
-      .select("*, hisob:hisoblar(nom)")
-      .neq("holat", "bekor_qilindi")
-      .gte("sana_vaqt", startIso)
-      .lte("sana_vaqt", endIso)
-      .order("sana_vaqt", { ascending: true });
+    const [{ data: rawBoshqaKirimlar }, { data: kassaBoshqaKirimlar }] = await Promise.all([
+      supabase
+        .from("boshqa_kirimlar")
+        .select("*, hisob:hisoblar(nom)")
+        .neq("holat", "bekor_qilindi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      supabase
+        .from("kassa_harakatlari")
+        .select("*, hisob:hisoblar(nom)")
+        .eq("manba_turi", "boshqa_kirim")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+    ]);
+
+    const boshqaKirimlar = [...(rawBoshqaKirimlar || [])];
+    const bkIds = new Set(boshqaKirimlar.map((b: any) => b.id));
+    (kassaBoshqaKirimlar || []).forEach((kh: any) => {
+      if (!bkIds.has(kh.manba_id) && !bkIds.has(kh.id)) {
+        boshqaKirimlar.push({
+          id: kh.id,
+          sana_vaqt: kh.sana_vaqt,
+          summa: kh.summa,
+          valyuta: kh.valyuta || "UZS",
+          kategoriya: "Boshqa daromad",
+          manba_nomi: kh.izoh || "Kassa kirimi",
+          izoh: kh.izoh || "",
+          hisob: kh.hisob,
+        });
+      }
+    });
 
     // 4. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([

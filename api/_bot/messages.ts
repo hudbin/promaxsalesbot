@@ -575,6 +575,22 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       return res.status(200).send("OK");
     }
 
+    const hisobotPdfDateMatch = directTextLower.match(/(\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4}|\d{2}\.\d{2})\s*(?:dagi\s*)?hisobot\s*pdf/);
+    if (hisobotPdfDateMatch) {
+      let rawDate = hisobotPdfDateMatch[1];
+      if (rawDate.length === 5) {
+        const year = new Date().getFullYear();
+        const [d, m] = rawDate.split(".");
+        rawDate = `${year}-${m}-${d}`;
+      } else if (rawDate.includes(".")) {
+        const [d, m, y] = rawDate.split(".");
+        rawDate = `${y}-${m}-${d}`;
+      }
+      await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+      await sendKunlikHisobotPdf(chatId, rawDate);
+      return res.status(200).send("OK");
+    }
+
     await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
     await getSupabase().from("ai_chat_history").insert({
       chat_id: chatId,

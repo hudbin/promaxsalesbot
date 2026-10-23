@@ -1476,7 +1476,7 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         console.warn("fn_boshqa_kirim_yaratish RPC xatosi, fallback to'g'ridan-to'g'ri yozish:", rpcErr.message);
 
         // Fallback: boshqa_kirimlar jadvaliga yozish
-        const { data: bData } = await getSupabase()
+        const { data: bData, error: bErr } = await getSupabase()
           .from("boshqa_kirimlar")
           .insert({
             summa: summa,
@@ -1491,13 +1491,23 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
           .select("id")
           .maybeSingle();
 
+        if (bErr) {
+          console.error("boshqa_kirimlar fallback xatosi:", bErr);
+          await tgPost("answerCallbackQuery", {
+            callback_query_id: cq.id,
+            text: `❌ Saqlashda xatolik: ${bErr.message}`,
+            show_alert: true,
+          });
+          return res.status(200).send("OK");
+        }
+
         const kirimId = bData?.id || p.hisob_id;
         let izohMatn = kategoriya;
         if (p.manba_nomi) izohMatn += ` (${p.manba_nomi})`;
         if (p.izoh) izohMatn += `: ${p.izoh}`;
 
         // kassa_harakatlariga kirim yozish
-        await getSupabase().from("kassa_harakatlari").insert({
+        const { error: khErr } = await getSupabase().from("kassa_harakatlari").insert({
           hisob_id: p.hisob_id,
           kassa_turi: tanlanganHisob?.turi || "naqd",
           amal: "kirim",
@@ -1507,6 +1517,10 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
           manba_id: kirimId,
           izoh: izohMatn,
         });
+
+        if (khErr) {
+          console.error("kassa_harakatlari fallback xatosi:", khErr);
+        }
       }
 
       javobMatn =

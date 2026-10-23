@@ -84,12 +84,35 @@ export default async function handler(req: any, res: any) {
       .neq("holat", "bekor_qilindi");
 
     // 4.1 Boshqa kirimlar (xizmatlar, tanishdan tushum, beg'araz va boshqa tushumlar)
-    const { data: boshqaKirimlar } = await supabase
-      .from("boshqa_kirimlar")
-      .select("valyuta, summa, kategoriya, manba_nomi, izoh")
-      .gte("sana_vaqt", startIso)
-      .lte("sana_vaqt", endIso)
-      .neq("holat", "bekor_qilindi");
+    const [{ data: boshqaKirimlar }, { data: kassaBoshqaKirimlar }] = await Promise.all([
+      supabase
+        .from("boshqa_kirimlar")
+        .select("id, valyuta, summa, kategoriya, manba_nomi, izoh")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .neq("holat", "bekor_qilindi"),
+      supabase
+        .from("kassa_harakatlari")
+        .select("id, manba_id, valyuta, summa, izoh")
+        .eq("manba_turi", "boshqa_kirim")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso),
+    ]);
+
+    const allBoshqaKirimlar = [...(boshqaKirimlar || [])];
+    const bkIds = new Set(allBoshqaKirimlar.map((b: any) => b.id));
+    (kassaBoshqaKirimlar || []).forEach((kh: any) => {
+      if (!bkIds.has(kh.manba_id) && !bkIds.has(kh.id)) {
+        allBoshqaKirimlar.push({
+          id: kh.id,
+          valyuta: kh.valyuta || "UZS",
+          summa: kh.summa,
+          kategoriya: "Boshqa daromad",
+          manba_nomi: kh.izoh || "",
+          izoh: kh.izoh || "",
+        });
+      }
+    });
 
     // 5. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
@@ -148,7 +171,7 @@ export default async function handler(req: any, res: any) {
 
     let boshqaKirimUZS = 0, boshqaKirimUSD = 0;
     const boshqaKirimQatorlar: string[] = [];
-    boshqaKirimlar?.forEach((bk) => {
+    allBoshqaKirimlar.forEach((bk) => {
       const s = Number(bk.summa || 0);
       const val = bk.valyuta === "USD" ? "$" : "UZS";
       const nom = bk.kategoriya || "Boshqa tushum";

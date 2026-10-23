@@ -1142,7 +1142,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     const startIso = `${targetDateStr}T00:00:00+05:00`;
     const endIso = `${targetDateStr}T23:59:59.999+05:00`;
 
-    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: boshqaKirimlar }, { data: hisoblar }] = await Promise.all([
+    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: boshqaKirimlar }, { data: kassaBoshqaKirimlar }, { data: hisoblar }] = await Promise.all([
       client
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom)")
@@ -1178,11 +1178,36 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: true }),
       client
+        .from("kassa_harakatlari")
+        .select("*, hisob:hisoblar(nom)")
+        .eq("manba_turi", "boshqa_kirim")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
         .from("hisoblar")
         .select("id, nom, turi, valyuta, balans, faol, masul_xodim")
         .eq("faol", true)
         .order("tartib", { ascending: true }),
     ]);
+
+    // Boshqa kirimlar va kassa harakatlarini birlashtirish (hech qanday kirim tushib qolmasligi uchun)
+    const mergedBoshqaKirimlar = [...(boshqaKirimlar || [])];
+    const bkIds = new Set(mergedBoshqaKirimlar.map((b: any) => b.id));
+    (kassaBoshqaKirimlar || []).forEach((kh: any) => {
+      if (!bkIds.has(kh.manba_id) && !bkIds.has(kh.id)) {
+        mergedBoshqaKirimlar.push({
+          id: kh.id,
+          sana_vaqt: kh.sana_vaqt,
+          summa: kh.summa,
+          valyuta: kh.valyuta || "UZS",
+          kategoriya: "Boshqa daromad",
+          manba_nomi: kh.izoh || "Kassa kirimi",
+          izoh: kh.izoh || "",
+          hisob: kh.hisob,
+        });
+      }
+    });
 
     // Hisob-kitoblar
     let savdoUzs = 0, savdoUsd = 0;
@@ -1237,7 +1262,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     });
 
     let boshqaKirimUzs = 0, boshqaKirimUsd = 0;
-    (boshqaKirimlar || []).forEach((bk: any) => {
+    (mergedBoshqaKirimlar || []).forEach((bk: any) => {
       const sum = Number(bk.summa || 0);
       if (bk.valyuta === "USD") boshqaKirimUsd += sum;
       else boshqaKirimUzs += sum;
@@ -1251,7 +1276,14 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
 
     const [yyyy, mm, dd] = targetDateStr.split("-");
     const kun = `${dd}.${mm}.${yyyy}`;
-    const hozirgiVaqt = new Date().toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" });
+    const hozirgiSanaVaqt = new Date().toLocaleString("ru-RU", {
+      timeZone: "Asia/Tashkent",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
     // Sarlavha
     doc.setFontSize(16);
@@ -1260,10 +1292,10 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
 
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    doc.text(`Sana: ${kun} | Yaratildi: ${kun} ${hozirgiVaqt}`, 14, 25);
+    doc.text(`Sana: ${kun} | Yaratildi: ${hozirgiSanaVaqt}`, 14, 25);
 
     // KPI Kartochkalari (A4 yuqorisida 4 ta yoki 3 ta blok)
-    const hasBoshqaKirim = (boshqaKirimlar || []).length > 0 || boshqaKirimUzs > 0 || boshqaKirimUsd > 0;
+    const hasBoshqaKirim = (mergedBoshqaKirimlar || []).length > 0 || boshqaKirimUzs > 0 || boshqaKirimUsd > 0;
 
     if (hasBoshqaKirim) {
       // 4 ta blok: Savdo, Boshqa kirim, Rasxod, Eski qarz (kengligi 43mm, orasi 3mm)
@@ -1291,7 +1323,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       doc.text(`${pul(boshqaKirimUzs)} so'm`, 63, 42);
       doc.setFontSize(6.5);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Tushumlar: ${(boshqaKirimlar || []).length} ta`, 63, 48);
+      doc.text(`Tushumlar: ${(mergedBoshqaKirimlar || []).length} ta`, 63, 48);
       if (boshqaKirimUsd > 0) doc.text(`Dollar: $${pul(boshqaKirimUsd)}`, 63, 53);
 
       // Blok 3: Chiqimlar (Rasxod)
@@ -1486,16 +1518,16 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     }
 
     // 3.1 Boshqa kirimlar (xizmatlar va boshqa tushumlar) jadvali
-    if ((boshqaKirimlar || []).length > 0) {
+    if ((mergedBoshqaKirimlar || []).length > 0) {
       if (nextY > 230) {
         doc.addPage();
         nextY = 20;
       }
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
-      doc.text(`Boshqa kirimlar / Xizmatlar (${boshqaKirimlar.length} ta)`, 14, nextY);
+      doc.text(`Boshqa kirimlar / Xizmatlar (${mergedBoshqaKirimlar.length} ta)`, 14, nextY);
 
-      const bkRows = boshqaKirimlar.map((bk: any) => [
+      const bkRows = mergedBoshqaKirimlar.map((bk: any) => [
         bk.sana_vaqt ? new Date(bk.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
         bk.kategoriya || "Boshqa kirim",
         bk.manba_nomi || "-",
