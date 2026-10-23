@@ -23,6 +23,7 @@ import {
 import {
   sendMijozQarzPdf,
   sendQarzdorlarPdf,
+  sendQarzdorlarExcel,
   sendKunlikHisobotPdf,
   sendTashqiQarzlarPdf,
   sendTashqiQarzAktSverkaPdf,
@@ -721,6 +722,14 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     });
 
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.0 QARZDORLAR RO'YXATI EXCEL CHIQARISH CALLBACK: dl_qarzdorlar_excel
+  if (data === "dl_qarzdorlar_excel") {
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Qarzdorlar Excel fayli tayyorlanmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendQarzdorlarExcel(chatId);
     return res.status(200).send("OK");
   }
 

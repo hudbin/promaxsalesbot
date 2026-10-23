@@ -37,6 +37,7 @@ import {
 } from "./entities";
 import {
   sendQarzdorlarPdf,
+  sendQarzdorlarExcel,
   sendMijozQarzPdf,
   sendKunlikHisobotPdf,
   sendTashqiQarzlarPdf,
@@ -537,6 +538,22 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       return res.status(200).send("OK");
     }
   } else if (text && !text.startsWith("/")) {
+    // Tezkor tekshiruv: "qarzdor mijozlar hisoboti excel" yoki shunga o'xshash to'g'ridan-to'g'ri so'rovlar
+    const directTextLower = (text || "").toLowerCase().trim();
+    if (
+      directTextLower === "qarzdor mijozlar hisoboti excel" ||
+      directTextLower === "qarzdorlar excel" ||
+      directTextLower === "qarzdorlar hisoboti excel" ||
+      directTextLower === "qarzdorlar ro'yxati excel" ||
+      directTextLower === "qarzdorlar royxati excel" ||
+      directTextLower === "/qarzdorlar_excel" ||
+      (directTextLower.includes("qarzdor") && directTextLower.includes("excel"))
+    ) {
+      await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+      await sendQarzdorlarExcel(chatId);
+      return res.status(200).send("OK");
+    }
+
     await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
     await getSupabase().from("ai_chat_history").insert({
       chat_id: chatId,
@@ -752,6 +769,13 @@ MUHIM QOIDALAR:
             await sendKunlikHisobotPdf(chatId, targetDate);
           } else if (
             !sqlLower.includes("tashqi_qarzlar") &&
+            (parsedData.excel_soraldi === true || /excel|xlsx|jadval/i.test(combinedQueryText)) &&
+            (sqlLower.includes("view_ai_qarzdorlar") || /qarz|qarzdor/i.test(combinedQueryText))
+          ) {
+            await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+            await sendQarzdorlarExcel(chatId);
+          } else if (
+            !sqlLower.includes("tashqi_qarzlar") &&
             (parsedData.pdf_soraldi === true || /pdf|fayl|hujjat/i.test(combinedQueryText)) &&
             (sqlLower.includes("view_ai_qarzdorlar") || /qarz|qarzdor/i.test(combinedQueryText))
           ) {
@@ -958,6 +982,13 @@ MUHIM QOIDALAR:
         } else {
           await sendQarzdorlarPdf(chatId);
         }
+        return res.status(200).send("OK");
+      }
+
+      // QARZ EXCEL
+      if (parsedData.amal === "qarz_excel") {
+        await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+        await sendQarzdorlarExcel(chatId);
         return res.status(200).send("OK");
       }
 

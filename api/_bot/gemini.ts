@@ -162,10 +162,11 @@ Quyidagi 14 ta amal turidan birini aniqlang:
 8. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
 9. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
 10. "qarz_pdf": Mijozlarning qarzdorlik ro'yxati yoki bitta mijozning akt-sverkasini PDF hujjat shaklida so'raganda (masalan: "qarzdorlar ro'yxati pdf", "Ali akt sverka fayl", "Vali qarz hujjati").
-11. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
-12. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
-13. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
-14. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+11. "qarz_excel": Qarzdor mijozlar ro'yxatini Excel (.xlsx) fayl shaklida so'raganda (masalan: "qarzdor mijozlar hisoboti excel", "qarzdorlar excel", "qarzlar excel fayli", "nasiyalar excel jadvali").
+12. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
+13. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
+14. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
+15. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
@@ -254,6 +255,11 @@ JSON strukturasi "qarz_pdf" amali uchun:
   "sana_tugash": "YYYY-MM-DD formatidagi tugash sanasi yoki null"
 }
 
+JSON strukturasi "qarz_excel" amali uchun:
+{
+  "amal": "qarz_excel"
+}
+
 JSON strukturasi "tashqi_qarz_pdf" amali uchun:
 {
   "amal": "tashqi_qarz_pdf",
@@ -275,6 +281,7 @@ JSON strukturasi "savol" amali uchun:
   "izoh": "Siz yaratgan so'rov nimani anglatishini qisqacha izohi",
   "mijoz_nomi": "agar savol bitta mijoz haqida bo'lsa uning ismi, aks holda null",
   "pdf_soraldi": true | false,
+  "excel_soraldi": true | false,
   "sana_boshlanish": "YYYY-MM-DD yoki null",
   "sana_tugash": "YYYY-MM-DD yoki null"
 }

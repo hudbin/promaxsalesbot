@@ -1,4 +1,112 @@
 import { getSupabase, tgPost, pul, TELEGRAM_API } from "./config";
+import * as XLSX from "xlsx";
+
+// -----------------------------------------------------------------------------
+// QARZDORLAR RO'YXATINI AVTOMATIK EXCEL (XLSX) HUJJAT QILIB YUBORISH
+// Jadvalda jami summa bo'lmaydi: faqat mijoz, uning qarzi va telefon raqami
+// -----------------------------------------------------------------------------
+export async function sendQarzdorlarExcel(chatId: number | string): Promise<{ ok: boolean; count?: number; error?: string }> {
+  try {
+    const client = getSupabase();
+    if (!client) throw new Error("Supabase ulanishi mavjud emas");
+
+    const { data: qarzdorlar, error } = await client
+      .from("mijozlar")
+      .select("nom, qarz_uzs, qarz_usd, telefon")
+      .eq("faol", true)
+      .or("qarz_uzs.gt.0,qarz_usd.gt.0")
+      .order("qarz_uzs", { ascending: false });
+
+    if (error) throw error;
+    if (!qarzdorlar || qarzdorlar.length === 0) {
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: "✅ <b>Qarzdor mijozlar mavjud emas!</b> Barcha qarzlar to'liq yopilgan.",
+        parse_mode: "HTML",
+      });
+      return { ok: true, count: 0 };
+    }
+
+    const rows: any[][] = [
+      ["No", "Mijoz", "Qarzi", "Telefon raqami"],
+    ];
+
+    qarzdorlar.forEach((m: any, idx: number) => {
+      const uzs = Number(m.qarz_uzs || 0);
+      const usd = Number(m.qarz_usd || 0);
+
+      const qarzQismlar: string[] = [];
+      if (uzs > 0) qarzQismlar.push(`${pul(uzs)} so'm`);
+      if (usd > 0) qarzQismlar.push(`$${pul(usd)}`);
+      const qarzMatni = qarzQismlar.length > 0 ? qarzQismlar.join(" / ") : "0";
+
+      rows.push([
+        idx + 1,
+        m.nom || "-",
+        qarzMatni,
+        m.telefon ? String(m.telefon) : "",
+      ]);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 32 },
+      { wch: 24 },
+      { wch: 20 },
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Qarzdorlar");
+
+    const excelBuffer = XLSX.write(wb, {
+      bookType: "xlsx",
+      type: "buffer",
+    });
+
+    const sanaStr = new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    const filename = `PROMAX_Qarzdorlar_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      "caption",
+      `📊 <b>PROMAX STORE — QARZDOR MIJOZLAR HISOBOTI (EXCEL)</b>\n\n` +
+      `👥 Qarzdorlar soni: <b>${qarzdorlar.length} ta</b>\n` +
+      `📅 <i>${sanaStr} holatiga</i>`
+    );
+    formData.append("parse_mode", "HTML");
+    formData.append(
+      "document",
+      new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      filename
+    );
+
+    const resp = await fetch(`${TELEGRAM_API}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const resData = await resp.json();
+    if (!resData.ok) {
+      console.error("sendQarzdorlarExcel sendDocument xatosi:", resData);
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text: `❌ <b>Excel yuborishda xatolik:</b>\n<code>${resData.description || "Noma'lum"}</code>`,
+        parse_mode: "HTML",
+      });
+    }
+    return { ok: resData.ok, count: qarzdorlar.length, error: resData.description };
+  } catch (err: any) {
+    console.error("sendQarzdorlarExcel xatosi:", err);
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text: `❌ <b>Excel yaratishda xatolik:</b>\n<code>${err.message}</code>`,
+      parse_mode: "HTML",
+    });
+    return { ok: false, error: err?.message };
+  }
+}
 
 // -----------------------------------------------------------------------------
 // QARZDORLAR RO'YXATINI AVTOMATIK PDF HUJJAT QILIB YUBORISH
