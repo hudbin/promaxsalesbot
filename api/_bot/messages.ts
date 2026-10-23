@@ -555,6 +555,26 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       return res.status(200).send("OK");
     }
 
+    // Tezkor tekshiruv: kunlik hisobot pdf to'g'ridan-to'g'ri so'ralganda
+    if (
+      directTextLower === "kunlik hisobot pdf" ||
+      directTextLower === "bugungi hisobot pdf" ||
+      directTextLower === "hisobot pdf" ||
+      directTextLower === "/kunlik_pdf"
+    ) {
+      await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+      await sendKunlikHisobotPdf(chatId);
+      return res.status(200).send("OK");
+    }
+
+    if (directTextLower === "kechagi hisobot pdf") {
+      const kecha = new Date(Date.now() - 24 * 3600 * 1000);
+      const kechaStr = kecha.toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" });
+      await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+      await sendKunlikHisobotPdf(chatId, kechaStr);
+      return res.status(200).send("OK");
+    }
+
     await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
     await getSupabase().from("ai_chat_history").insert({
       chat_id: chatId,

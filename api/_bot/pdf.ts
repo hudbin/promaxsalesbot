@@ -1251,7 +1251,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
 
     const [yyyy, mm, dd] = targetDateStr.split("-");
     const kun = `${dd}.${mm}.${yyyy}`;
-    const hozirgiVaqt = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    const hozirgiVaqt = new Date().toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" });
 
     // Sarlavha
     doc.setFontSize(16);
@@ -1373,7 +1373,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
 
       const sRows = savdolar.map((s: any) => [
         s.raqam ? `#${s.raqam}` : "-",
-        s.sana_vaqt ? new Date(s.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        s.sana_vaqt ? new Date(s.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
         s.mijoz?.nom || "Chakana xaridor",
         `${pul(s.jami_summa)} ${s.valyuta}`,
         `${pul(s.tolangan_summa)} ${s.valyuta}`,
@@ -1413,7 +1413,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       doc.text(`Xarajatlar (${rasxodlar.length} ta)`, 14, nextY);
 
       const rRows = rasxodlar.map((r: any) => [
-        r.sana_vaqt ? new Date(r.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        r.sana_vaqt ? new Date(r.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
         r.kategoriya || "Chiqim",
         r.izoh || "-",
         `${pul(r.summa)} ${r.valyuta}`,
@@ -1455,7 +1455,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
           : "";
         return [
           v.raqam ? `#${v.raqam}` : "-",
-          v.sana_vaqt ? new Date(v.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+          v.sana_vaqt ? new Date(v.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
           v.mijoz?.nom || "Mijoz",
           qatorMatn || v.izoh || "-",
           `${pul(v.jami_summa)} ${v.valyuta}`,
@@ -1496,7 +1496,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       doc.text(`Boshqa kirimlar / Xizmatlar (${boshqaKirimlar.length} ta)`, 14, nextY);
 
       const bkRows = boshqaKirimlar.map((bk: any) => [
-        bk.sana_vaqt ? new Date(bk.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        bk.sana_vaqt ? new Date(bk.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
         bk.kategoriya || "Boshqa kirim",
         bk.manba_nomi || "-",
         bk.izoh || "-",
