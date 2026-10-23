@@ -1185,10 +1185,9 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: true }),
       client
-        .from("hisoblar")
-        .select("id, nom, turi, valyuta, balans, faol, masul_xodim")
-        .eq("faol", true)
-        .order("tartib", { ascending: true }),
+        .from("view_kassa_balans")
+        .select("*")
+        .order("kassa_nomi", { ascending: true }),
     ]);
 
     // Boshqa kirimlar va kassa harakatlarini birlashtirish (hech qanday kirim tushib qolmasligi uchun)
@@ -1564,29 +1563,27 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       }
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
-      doc.text("Kassalar va xodimlar hisoblari joriy balansi", 14, nextY);
+      doc.text("Kassalar va hisoblar joriy balansi", 14, nextY);
 
       const hRows = hisoblar.map((h: any, idx: number) => [
         String(idx + 1),
-        h.nom || "-",
-        h.masul_xodim || "Asosiy Do'kon",
-        h.turi || "kassa",
-        `${pul(h.balans)} ${h.valyuta || "UZS"}`,
+        h.kassa_nomi || h.nom || "-",
+        h.kassa_turi || h.turi || "kassa",
+        `${pul(h.joriy_balans ?? h.balans ?? 0)} ${h.valyuta || "UZS"}`,
       ]);
 
       autoTable(doc, {
         startY: nextY + 3,
-        head: [["No", "Hisob nomi", "Mas'ul", "Turi", "Joriy balans"]],
+        head: [["No", "Hisob nomi", "Turi", "Joriy balans"]],
         body: hRows,
         theme: "grid",
         headStyles: { fillColor: [79, 70, 229], textColor: 255, fontSize: 8 },
         styles: { fontSize: 7, cellPadding: 1.5 },
         columnStyles: {
           0: { cellWidth: 10, halign: "center" },
-          1: { cellWidth: 54, fontStyle: "bold" },
-          2: { cellWidth: 44 },
-          3: { cellWidth: 30 },
-          4: { cellWidth: 44, halign: "right", fontStyle: "bold" },
+          1: { cellWidth: 84, fontStyle: "bold" },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 48, halign: "right", fontStyle: "bold" },
         },
       });
     }

@@ -12,7 +12,6 @@ BEGIN
     FROM hisoblar 
     WHERE nom ILIKE '%Asosiy Do%Naqd UZS%' 
        OR (turi = 'naqd' AND valyuta = 'UZS')
-    ORDER BY tartib ASC NULLS LAST
     LIMIT 1;
 
     IF v_hisob_id IS NULL THEN
