@@ -1142,7 +1142,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     const startIso = `${targetDateStr}T00:00:00+05:00`;
     const endIso = `${targetDateStr}T23:59:59.999+05:00`;
 
-    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: hisoblar }] = await Promise.all([
+    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: boshqaKirimlar }, { data: hisoblar }] = await Promise.all([
       client
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom)")
@@ -1166,6 +1166,13 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       client
         .from("tovar_qaytarishlar")
         .select("*, mijoz:mijozlar(nom), qatorlar:tovar_qaytarish_qatorlari(tovar_nomi, soni, narx, summa)")
+        .neq("holat", "bekor_qilindi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("boshqa_kirimlar")
+        .select("*, hisob:hisoblar(nom)")
         .neq("holat", "bekor_qilindi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
@@ -1227,6 +1234,13 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         vozvratUzs += sum;
         vozvratQarzdanUzs += qarzdan;
       }
+    });
+
+    let boshqaKirimUzs = 0, boshqaKirimUsd = 0;
+    (boshqaKirimlar || []).forEach((bk: any) => {
+      const sum = Number(bk.summa || 0);
+      if (bk.valyuta === "USD") boshqaKirimUsd += sum;
+      else boshqaKirimUzs += sum;
     });
 
     const { jsPDF } = await import("jspdf");
@@ -1411,6 +1425,45 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
+    // 3.1 Boshqa kirimlar (xizmatlar va boshqa tushumlar) jadvali
+    if ((boshqaKirimlar || []).length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Boshqa kirimlar / Xizmatlar (${boshqaKirimlar.length} ta)`, 14, nextY);
+
+      const bkRows = boshqaKirimlar.map((bk: any) => [
+        bk.sana_vaqt ? new Date(bk.sana_vaqt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "-",
+        bk.kategoriya || "Boshqa kirim",
+        bk.manba_nomi || "-",
+        bk.izoh || "-",
+        `${pul(bk.summa)} ${bk.valyuta}`,
+        bk.hisob?.nom || "Kassa",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["Vaqt", "Kategoriya", "Manba / Kimdan", "Izoh", "Summa", "Hisob / Kassa"]],
+        body: bkRows,
+        theme: "striped",
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 16, halign: "center" },
+          1: { cellWidth: 32, fontStyle: "bold" },
+          2: { cellWidth: 32 },
+          3: { cellWidth: 46 },
+          4: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 28 },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
     // 4. Kassalar balansi jadvali
     if ((hisoblar || []).length > 0) {
       if (nextY > 220) {
@@ -1457,6 +1510,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       `📅 <b>Sana:</b> ${kun}\n` +
       `🛒 <b>Jami savdo:</b> <b>${pul(savdoUzs)} so'm</b>${savdoUsd > 0 ? ` | <b>$${pul(savdoUsd)}</b>` : ""}\n` +
       `💵 <b>Kassaga tushdi:</b> <b>${pul(naqdUzs)} so'm</b>\n` +
+      (boshqaKirimUzs > 0 || boshqaKirimUsd > 0 ? `📥 <b>Boshqa kirimlar:</b> <b>${pul(boshqaKirimUzs)} so'm</b>${boshqaKirimUsd > 0 ? ` | <b>$${pul(boshqaKirimUsd)}</b>` : ""}\n` : "") +
       `🧾 <b>Jami chiqim:</b> <b>${pul(rasxodUzs)} so'm</b>\n` +
       `💳 <b>Qarzdan tushum:</b> <b>${pul(eskiQarzTushdiUzs)} so'm</b>\n\n` +
       `<i>PDF hujjat orqali to'liq tafsilotlarni ko'rishingiz mumkin.</i>`

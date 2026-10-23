@@ -83,6 +83,14 @@ export default async function handler(req: any, res: any) {
       .lte("sana_vaqt", endIso)
       .neq("holat", "bekor_qilindi");
 
+    // 4.1 Boshqa kirimlar (xizmatlar, tanishdan tushum, beg'araz va boshqa tushumlar)
+    const { data: boshqaKirimlar } = await supabase
+      .from("boshqa_kirimlar")
+      .select("valyuta, summa, kategoriya, manba_nomi, izoh")
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso)
+      .neq("holat", "bekor_qilindi");
+
     // 5. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
       supabase.from("view_kassa_balans").select("*"),
@@ -135,6 +143,22 @@ export default async function handler(req: any, res: any) {
         vozvratJamiUZS += jami;
         vozvratQarzdanUZS += qarzdan;
         vozvratNaqdUZS += naqd;
+      }
+    });
+
+    let boshqaKirimUZS = 0, boshqaKirimUSD = 0;
+    const boshqaKirimQatorlar: string[] = [];
+    boshqaKirimlar?.forEach((bk) => {
+      const s = Number(bk.summa || 0);
+      const val = bk.valyuta === "USD" ? "$" : "UZS";
+      const nom = bk.kategoriya || "Boshqa tushum";
+      const manba = bk.manba_nomi ? ` (${bk.manba_nomi})` : "";
+      if (bk.valyuta === "USD") {
+        boshqaKirimUSD += s;
+        boshqaKirimQatorlar.push(`   • ${nom}${manba}: <b>$${pul(s)}</b>`);
+      } else {
+        boshqaKirimUZS += s;
+        boshqaKirimQatorlar.push(`   • ${nom}${manba}: <b>${pul(s)} so'm</b>`);
       }
     });
 
@@ -254,6 +278,14 @@ export default async function handler(req: any, res: any) {
         `\n\n`
       : "";
 
+    const hasBoshqaKirim = (boshqaKirimlar && boshqaKirimlar.length > 0) || boshqaKirimUZS > 0 || boshqaKirimUSD > 0;
+    const boshqaKirimMatn = hasBoshqaKirim
+      ? `📥 <b>BOSHQA KIRIMLAR (XIZMAT VA TUSHUMLAR):</b>\n` +
+        `   • Jami tushum: <b>${pul(boshqaKirimUZS)} so'm</b>${boshqaKirimUSD > 0 ? ` | <b>${formatUsd(boshqaKirimUSD)}</b>` : ""}\n` +
+        (boshqaKirimQatorlar.length > 0 ? `${boshqaKirimQatorlar.join("\n")}\n` : "") +
+        `\n`
+      : "";
+
     const matn =
       `📊 <b>PROMAX · KUNLIK YAKUNIY HISOBOT</b>\n` +
       `📅 <b>Sana: ${kun} (${soat})</b>\n` +
@@ -264,6 +296,7 @@ export default async function handler(req: any, res: any) {
       `   • Qarzga berildi: <b>${pul(qarzBerildiUZS)} so'm</b>${qarzBerildiUSD > 0 ? ` | <b>${formatUsd(qarzBerildiUSD)}</b>` : ""}\n\n` +
       `💳 <b>ESKI QARZDAN TUSHUM:</b>\n` +
       `   • Qaytarilgan qarz: <b>${pul(eskiQarzTushdiUZS)} so'm</b>${eskiQarzTushdiUSD > 0 ? ` | <b>${formatUsd(eskiQarzTushdiUSD)}</b>` : ""}\n\n` +
+      boshqaKirimMatn +
       vozvratMatn +
       `🧾 <b>XARAJATLAR (RASXOD):</b>\n` +
       `   • Jami chiqim: <b>${pul(rasxodUZS)} so'm</b>${rasxodUSD > 0 ? ` | <b>${formatUsd(rasxodUSD)}</b>` : ""}\n` +

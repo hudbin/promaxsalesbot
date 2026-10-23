@@ -72,6 +72,15 @@ export default async function handler(req: any, res: any) {
 
     if (qarzErr) throw qarzErr;
 
+    // 3.1 Boshqa kirimlar
+    const { data: boshqaKirimlar } = await supabase
+      .from("boshqa_kirimlar")
+      .select("*, hisob:hisoblar(nom)")
+      .neq("holat", "bekor_qilindi")
+      .gte("sana_vaqt", startIso)
+      .lte("sana_vaqt", endIso)
+      .order("sana_vaqt", { ascending: true });
+
     // 4. Kassa qoldiqlari va faol hisoblar
     const [{ data: kassaBalans }, { data: faolHisoblar }] = await Promise.all([
       supabase.from("view_kassa_balans").select("*"),
@@ -117,6 +126,13 @@ export default async function handler(req: any, res: any) {
       const s = Number(q.summa || 0);
       if (q.valyuta === "USD") qaytganQarzUSD += s;
       else qaytganQarzUZS += s;
+    });
+
+    let boshqaKirimUZS = 0, boshqaKirimUSD = 0;
+    boshqaKirimlar?.forEach((bk) => {
+      const s = Number(bk.summa || 0);
+      if (bk.valyuta === "USD") boshqaKirimUSD += s;
+      else boshqaKirimUZS += s;
     });
 
     const hisobMap = new Map<string, any>();
@@ -245,6 +261,23 @@ export default async function handler(req: any, res: any) {
       }));
       const wsQarz = XLSX.utils.json_to_sheet(qarzQatorlari);
       XLSX.utils.book_append_sheet(wb, wsQarz, "Qarz To'lovlari");
+    }
+
+    // 5-VARAQ: Boshqa Kirimlar (agar mavjud bo'lsa)
+    if ((boshqaKirimlar || []).length > 0) {
+      const boshqaKirimQatorlari = (boshqaKirimlar || []).map((bk) => ({
+        "ID": bk.id,
+        "Sana va Vaqt": new Date(bk.sana_vaqt).toLocaleString("ru-RU"),
+        "Kategoriya": bk.kategoriya || "Boshqa daromad",
+        "Manba": bk.manba_nomi || "-",
+        "Summa": Number(bk.summa || 0),
+        "Valyuta": bk.valyuta,
+        "Hisob": bk.hisob?.nom || "-",
+        "Xodim": bk.xodim || "-",
+        "Izoh": bk.izoh || "",
+      }));
+      const wsBoshqa = XLSX.utils.json_to_sheet(boshqaKirimQatorlari);
+      XLSX.utils.book_append_sheet(wb, wsBoshqa, "Boshqa Kirimlar");
     }
 
     let fileBuffer: Buffer | Uint8Array;
@@ -405,6 +438,7 @@ export default async function handler(req: any, res: any) {
       `📅 <b>Davr:</b> ${boshlanishSana} dan ${tugashSana} gacha\n\n` +
       `🛒 <b>Jami Savdo:</b> ${pul(jamiSavdoUZS)} so'm ${jamiSavdoUSD > 0 ? `| $${pul(jamiSavdoUSD)}` : ""}\n` +
       `💵 <b>Kassaga Tushum:</b> ${pul(tushganNaqdUZS)} so'm ${tushganNaqdUSD > 0 ? `| $${pul(tushganNaqdUSD)}` : ""}\n` +
+      (boshqaKirimUZS > 0 || boshqaKirimUSD > 0 ? `📥 <b>Boshqa Kirimlar:</b> ${pul(boshqaKirimUZS)} so'm ${boshqaKirimUSD > 0 ? `| $${pul(boshqaKirimUSD)}` : ""}\n` : "") +
       `⏳ <b>Nasiya (Qarz):</b> ${pul(berilganQarzUZS)} so'm ${berilganQarzUSD > 0 ? `| $${pul(berilganQarzUSD)}` : ""}\n` +
       `💳 <b>Eski Qarzlardan:</b> ${pul(qaytganQarzUZS)} so'm ${qaytganQarzUSD > 0 ? `| $${pul(qaytganQarzUSD)}` : ""}\n` +
       `💸 <b>Jami Chiqim:</b> ${pul(jamiChiqimUZS)} so'm ${jamiChiqimUSD > 0 ? `| $${pul(jamiChiqimUSD)}` : ""}\n\n` +
