@@ -26,6 +26,7 @@ import {
   buildQarzEslatmaCard,
   buildBalansSozlashCard,
   buildTashqiQarzCard,
+  buildBoshqaKirimCard,
 } from "./cards";
 import {
   checkUserPermission,
@@ -1046,6 +1047,36 @@ MUHIM QOIDALAR:
         });
 
         const card = buildBalansSozlashCard(draftId, parsedData, hisoblarDB || []);
+
+        await getSupabase().from("ai_chat_history").insert({
+          chat_id: chatId,
+          role: "model",
+          content: card.text.replace(/<[^>]+>/g, ""),
+        });
+
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: card.text,
+          parse_mode: "HTML",
+          reply_markup: card.keyboard,
+        });
+        return res.status(200).send("OK");
+      }
+
+      // BOSHQA KIRIM (DAROMAD / XIZMATLAR UCHUN TUSHGAN PUL)
+      if (parsedData.amal === "boshqa_kirim") {
+        await getSupabase().from("tranzaksiya_qoralama").insert({
+          id: draftId,
+          malumot: parsedData,
+          yaratildi: new Date().toISOString(),
+        });
+
+        const { data: hisoblarDB } = await getSupabase()
+          .from("hisoblar")
+          .select("id, nom, turi, valyuta")
+          .eq("faol", true);
+
+        const card = buildBoshqaKirimCard(draftId, parsedData, hisoblarDB || []);
 
         await getSupabase().from("ai_chat_history").insert({
           chat_id: chatId,

@@ -151,22 +151,23 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 14 ta amal turidan birini aniqlang:
+Quyidagi 16 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi yoki kam berilgan tovar sabab qarzini kamaytirish/korrektirovka so'ralganda (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi", "Ali 10 ta tovar kam berilgan ekan qarzidan ayirib qo'y", "Vali 10 ta mahsulot qaytardi qarzidan ayirilsin").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
 4. "kop_rasxod": Bitta so'rovda BIR NECHTA xarajat aytilganda (masalan: "Obedga 50 ming, taksiga 30 ming, internetga 100 ming" yoki "Kassadan obedga 50 ming, plastikdan internetga 100 ming").
-5. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
-6. "tovar_kirim": Do'konga (omborga) yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
-7. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish.
-8. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
-9. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
-10. "qarz_pdf": Mijozlarning qarzdorlik ro'yxati yoki bitta mijozning akt-sverkasini PDF hujjat shaklida so'raganda (masalan: "qarzdorlar ro'yxati pdf", "Ali akt sverka fayl", "Vali qarz hujjati").
-11. "qarz_excel": Qarzdor mijozlar ro'yxatini Excel (.xlsx) fayl shaklida so'raganda (masalan: "qarzdor mijozlar hisoboti excel", "qarzdorlar excel", "qarzlar excel fayli", "nasiyalar excel jadvali").
-12. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
-13. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
-14. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
-15. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+5. "boshqa_kirim": Do'kon kassasi yoki hisob raqamiga tovar sotilmasdan va qarz olinmasdan boshqa xizmatlar, beg'araz yoki boshqa manbalardan pul tushganda (masalan: "Tanishimdan 10 mln hisob raqamga tushdi", "Xizmat ko'rsatish uchun 500 ming tushdi", "Kartaga xizmat haqqi 2 mln tushdi", "Hisob raqamga beg'araz 5 mln kirim bo'ldi", "Konsultatsiya xizmati uchun 300 ming naqd tushdi").
+6. "qarz_tolov": Mijoz eski qarzini to'ladi / qaytardi (pul bilan).
+7. "tovar_kirim": Do'konga (omborga) yangi tovar keldi, kirim qilindi yoki mahsulot qoldig'i kiritildi.
+8. "pul_otkazma": Kassalar (hisoblar) o'rtasida pul o'tkazish.
+9. "balans_sozlash": Kassa yoki hisobdagi real pul mablag'ini to'g'irlash / balansni sozlash (masalan: "Asosiy kassa naqd pulini 50 mln ga to'g'irla", "Kassadagi pulni 45 million deb qo'y", "Plastikda 10 mln so'm bor", "USD kassani 2500$ ga to'g'irla").
+10. "qarz_eslatma": Mijozga qarzini eslatish, qarzdorlik bo'yicha xabar yuborish yoki tayyorlash.
+11. "qarz_pdf": Mijozlarning qarzdorlik ro'yxati yoki bitta mijozning akt-sverkasini PDF hujjat shaklida so'raganda (masalan: "qarzdorlar ro'yxati pdf", "Ali akt sverka fayl", "Vali qarz hujjati").
+12. "qarz_excel": Qarzdor mijozlar ro'yxatini Excel (.xlsx) fayl shaklida so'raganda (masalan: "qarzdor mijozlar hisoboti excel", "qarzdorlar excel", "qarzlar excel fayli", "nasiyalar excel jadvali").
+13. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
+14. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
+15. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
+16. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
@@ -219,6 +220,17 @@ JSON strukturasi "kop_rasxod" amali uchun (Bir nechta xarajat bo'lsa):
       "izoh": "Qisqa izoh (masalan: Tushlik, Bozorga taksi)"
     }
   ]
+}
+
+JSON strukturasi "boshqa_kirim" amali uchun:
+{
+  "amal": "boshqa_kirim",
+  "summa": 0.0,
+  "valyuta": "UZS" | "USD",
+  "kategoriya": "Xizmat ko'rsatish" | "Tanishdan tushum" | "Investitsiya" | "Ijara" | "Boshqa daromad",
+  "manba_nomi": "Pul tushgan shaxs, tanish yoki tashkilot nomi yoki null (masalan: Tanishim, Akrom)",
+  "hisob_id": "agar xabarda kassa yoki hisob aytilgan bo'lsa hisob UUID, aks holda null",
+  "izoh": "Qisqa izoh yoki sabab"
 }
 
 JSON strukturasi "pul_otkazma" amali uchun:
@@ -397,7 +409,8 @@ O'TA MUHIM SQL VA HISOBOT QOIDALARI:
    - savdolar: (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, tolangan_summa, qarz_summa, tolov_turi, hisob_id, holat, xodim, izoh)
    - rasxodlar: (id, sana_vaqt, summa, valyuta, kategoriya, tolov_turi, hisob_id, izoh, xodim, holat)
    - qarz_tolovlari: (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, hisob_id, xodim, izoh)
-   - kassa_harakatlari: (id, sana_vaqt, amal ['kirim'|'chiqim'], summa, valyuta, manba_turi ['savdo'|'rasxod'|'qarz_tolov'|'transfer'|'boshlangich'], hisob_id, izoh)
+   - kassa_harakatlari: (id, sana_vaqt, amal ['kirim'|'chiqim'], summa, valyuta, manba_turi ['savdo'|'rasxod'|'qarz_tolov'|'transfer'|'boshlangich'|'korrektirovka'|'boshqa_kirim'], hisob_id, izoh)
+   - boshqa_kirimlar: (id, sana_vaqt, summa, valyuta, kategoriya, manba_nomi, hisob_id, izoh, xodim, holat) - tovar va qarzga aloqador bo'lmagan xizmat va boshqa kirimlar daftari!
    - tovarlar: (id, nom, model, shtrixkod, birlik, tannarx, narx_optom, narx_chakana, valyuta, qoldiq, faol, yaratilgan). DIQQAT: tovarlarda 'sana_vaqt' yo'q, 'yaratilgan' bor!
    - mijozlar: (id, nom, nom_norm, telefon, manzil, qarz_uzs, qarz_usd, faol)
    - tashqi_qarzlar: (id, sana_vaqt, shaxs_nomi, shaxs_nomi_norm, amal, summa, valyuta, maqsad, hisob_id, holat)

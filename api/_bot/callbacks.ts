@@ -14,6 +14,7 @@ import {
   buildQarzEslatmaCard,
   buildBalansSozlashCard,
   buildTashqiQarzCard,
+  buildBoshqaKirimCard,
 } from "./cards";
 import {
   checkUserPermission,
@@ -399,6 +400,45 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     });
 
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Mijoz tanlandi!" });
+    return res.status(200).send("OK");
+  }
+
+  // 1.4.0 BOSHQA KIRIM UCHUN HISOB TANLASH (pk:bkh:draftId:hisobId)
+  if (data.startsWith("pk:bkh:")) {
+    const parts = data.split(":");
+    const draftId = parts[2];
+    const hId = parts[3];
+
+    const { data: draft } = await supabase
+      .from("tranzaksiya_qoralama")
+      .select("*")
+      .eq("id", draftId)
+      .maybeSingle();
+
+    if (!draft || !draft.malumot) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "So'rov muddati o'tgan yoki topilmadi." });
+      return res.status(200).send("OK");
+    }
+
+    const p = draft.malumot;
+    p.hisob_id = hId;
+
+    await getSupabase()
+      .from("tranzaksiya_qoralama")
+      .update({ malumot: p })
+      .eq("id", draftId);
+
+    const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
+    const nextCard = buildBoshqaKirimCard(draftId, p, hisoblarDB || []);
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text: nextCard.text,
+      parse_mode: "HTML",
+      reply_markup: nextCard.keyboard,
+    });
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Kirim hisobi tanlandi!" });
     return res.status(200).send("OK");
   }
 
@@ -1387,6 +1427,95 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
         `${qoldiqSatr}` +
         (p.maqsad ? `💬 <b>Maqsad:</b> <i>${p.maqsad}</i>\n` : "") +
         (p.izoh ? `📝 <b>Izoh:</b> <i>${p.izoh}</i>\n` : "") +
+        `✍️ Kiritdi: <b>${fromName}</b>`;
+    }
+
+    // 1.8.H BOSHQA KIRIM (DAROMAD / XIZMATLAR UCHUN TUSHUM) TASDIQLASH
+    else if (p.amal === "boshqa_kirim") {
+      const { data: hisoblarDB } = await getSupabase()
+        .from("hisoblar")
+        .select("id, nom, turi, valyuta")
+        .eq("faol", true);
+
+      // Agar hisob belgilanmagan bo'lsa
+      if (!p.hisob_id) {
+        const nextCard = buildBoshqaKirimCard(draftId, p, hisoblarDB || []);
+        await tgPost("editMessageText", {
+          chat_id: chatId,
+          message_id: msgId,
+          text: nextCard.text,
+          parse_mode: "HTML",
+          reply_markup: nextCard.keyboard,
+        });
+        await tgPost("answerCallbackQuery", {
+          callback_query_id: cq.id,
+          text: "Iltimos, avval kirim hisobini tanlang!",
+        });
+        return res.status(200).send("OK");
+      }
+
+      const valyuta = p.valyuta || "UZS";
+      const summa = Number(p.summa || p.jami_summa) || 0;
+      const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
+      const hisobNomi = tanlanganHisob?.nom || "Kassa";
+      const kategoriya = p.kategoriya || "Boshqa daromad";
+
+      // RPC chaqirish (yoki fallback to'g'ridan-to'g'ri yozish)
+      const { error: rpcErr } = await getSupabase().rpc("fn_boshqa_kirim_yaratish", {
+        p_summa: summa,
+        p_valyuta: valyuta,
+        p_kategoriya: kategoriya,
+        p_manba_nomi: p.manba_nomi || null,
+        p_hisob_id: p.hisob_id,
+        p_izoh: p.izoh || "",
+        p_xodim: fromName,
+        p_telegram_user_id: cq.from?.id,
+      });
+
+      if (rpcErr) {
+        console.warn("fn_boshqa_kirim_yaratish RPC xatosi, fallback to'g'ridan-to'g'ri yozish:", rpcErr.message);
+
+        // Fallback: boshqa_kirimlar jadvaliga yozish
+        const { data: bData } = await getSupabase()
+          .from("boshqa_kirimlar")
+          .insert({
+            summa: summa,
+            valyuta: valyuta,
+            kategoriya: kategoriya,
+            manba_nomi: p.manba_nomi || null,
+            hisob_id: p.hisob_id,
+            izoh: p.izoh || "",
+            xodim: fromName,
+            telegram_user_id: cq.from?.id,
+          })
+          .select("id")
+          .maybeSingle();
+
+        const kirimId = bData?.id || p.hisob_id;
+        let izohMatn = kategoriya;
+        if (p.manba_nomi) izohMatn += ` (${p.manba_nomi})`;
+        if (p.izoh) izohMatn += `: ${p.izoh}`;
+
+        // kassa_harakatlariga kirim yozish
+        await getSupabase().from("kassa_harakatlari").insert({
+          hisob_id: p.hisob_id,
+          kassa_turi: tanlanganHisob?.turi || "naqd",
+          amal: "kirim",
+          summa: summa,
+          valyuta: valyuta,
+          manba_turi: "boshqa_kirim",
+          manba_id: kirimId,
+          izoh: izohMatn,
+        });
+      }
+
+      javobMatn =
+        `✅ <b>MABLAG' KASSA HISOBIGA KIRIM QILINDI</b>\n\n` +
+        `💵 Summa: <b>${pul(summa)} ${valyuta}</b>\n` +
+        `📂 Kategoriya: <b>${kategoriya}</b>\n` +
+        (p.manba_nomi ? `👤 Manba: <b>${p.manba_nomi}</b>\n` : "") +
+        `🏦 Kirim hisobi: <b>${hisobNomi}</b>\n` +
+        (p.izoh ? `💬 Izoh: <i>${p.izoh}</i>\n` : "") +
         `✍️ Kiritdi: <b>${fromName}</b>`;
     }
 

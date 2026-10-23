@@ -745,4 +745,64 @@ export function buildTashqiQarzCard(
   return { text, keyboard: { inline_keyboard: buttons } };
 }
 
+// -----------------------------------------------------------------------------
+// BOSHQA KIRIM (DAROMAD / XIZMAT KO'RSATISH VA BOSHQA TUSHUMLAR) KARTASI
+// -----------------------------------------------------------------------------
+export function buildBoshqaKirimCard(
+  draftId: string,
+  p: any,
+  hisoblar: any[] = []
+): { text: string; keyboard: any } {
+  const valyuta = p.valyuta || "UZS";
+  const summa = Number(p.summa || p.jami_summa) || 0;
+  const kategoriya = p.kategoriya || "Boshqa daromad";
+
+  // 1. Agar hisob tanlanmagan bo'lsa -> Foydalanuvchidan qaysi hisobga tushganini so'raymiz
+  if (!p.hisob_id) {
+    const text =
+      `📥 <b>MABLAG' QAYSI HISOBGA TUSHDI?</b>\n\n` +
+      `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+      `📂 <b>Kategoriya:</b> <b>${kategoriya}</b>\n` +
+      (p.manba_nomi ? `👤 <b>Manba / Kimdan:</b> <b>${formatTelegramHtml(p.manba_nomi)}</b>\n` : "") +
+      (p.izoh ? `💬 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+      `\n❓ Ushbu pul qaysi kassa / hisob raqamga kirim qilinsin?`;
+
+    const mosHisoblar = (hisoblar || []).filter(
+      (h: any) => h.valyuta === valyuta || h.valyuta === "BARCHASI"
+    );
+    const list = mosHisoblar.length > 0 ? mosHisoblar : (hisoblar || []);
+    const buttons: any[] = list.map((h: any) => {
+      let icon = "💵";
+      if (h.valyuta === "USD") icon = "💲";
+      if (h.turi === "plastik") icon = "💳";
+      if (h.turi === "bank") icon = "🏦";
+      return [{ text: `${icon} ${h.nom}`, callback_data: `pk:bkh:${draftId}:${h.id}` }];
+    });
+    buttons.push([
+      { text: `❌ Bekor qilish`, callback_data: `cn:${draftId}` },
+    ]);
+    return { text, keyboard: { inline_keyboard: buttons } };
+  }
+
+  // 2. Hisob tanlangan -> YAKUNIY TASDIQLASH
+  const hisobNomi = hisoblar.find((h: any) => h.id === p.hisob_id)?.nom || p.hisob_id || "Kassa";
+  const text =
+    `📥 <b>BOSHQA KIRIM (TUSHUM)NI TASDIQLASH</b>\n\n` +
+    `💵 <b>Summa:</b> <b>${pul(summa)} ${valyuta}</b>\n` +
+    `📂 <b>Kategoriya:</b> <b>${kategoriya}</b>\n` +
+    (p.manba_nomi ? `👤 <b>Manba / Kimdan:</b> <b>${formatTelegramHtml(p.manba_nomi)}</b>\n` : "") +
+    `🏦 <b>Kirim hisobi:</b> <b>${hisobNomi}</b>\n` +
+    (p.izoh ? `💬 <b>Izoh:</b> <i>${formatTelegramHtml(p.izoh)}</i>\n` : "") +
+    `\n<i>Ushbu mablag' tanlangan hisob balansiga kirim qilinadi. Tasdiqlaysizmi?</i>`;
+
+  const buttons = [
+    [
+      { text: "✅ Tasdiqlash va Kirim qilish", callback_data: `cf:${draftId}` },
+      { text: "❌ Bekor qilish", callback_data: `cn:${draftId}` },
+    ],
+  ];
+
+  return { text, keyboard: { inline_keyboard: buttons } };
+}
+
 
