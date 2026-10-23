@@ -1262,46 +1262,106 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     doc.setTextColor(100, 116, 139);
     doc.text(`Sana: ${kun} | Yaratildi: ${kun} ${hozirgiVaqt}`, 14, 25);
 
-    // KPI Kartochkalari (A4 yuqorisida 3 ta blok)
-    // Blok 1: Savdo
-    doc.setFillColor(240, 253, 244);
-    doc.roundedRect(14, 30, 58, 26, 2, 2, "F");
-    doc.setFontSize(8);
-    doc.setTextColor(22, 101, 52);
-    doc.text("SAVDO TUSHUMI", 18, 36);
-    doc.setFontSize(11);
-    doc.text(`${pul(savdoUzs)} so'm`, 18, 42);
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Kassaga: ${pul(naqdUzs)} | Qarz: ${pul(qarzBerildiUzs)}`, 18, 48);
-    if (savdoUsd > 0) doc.text(`Dollar: $${pul(savdoUsd)}`, 18, 53);
+    // KPI Kartochkalari (A4 yuqorisida 4 ta yoki 3 ta blok)
+    const hasBoshqaKirim = (boshqaKirimlar || []).length > 0 || boshqaKirimUzs > 0 || boshqaKirimUsd > 0;
 
-    // Blok 2: Chiqimlar (Rasxod)
-    doc.setFillColor(254, 242, 242);
-    doc.roundedRect(76, 30, 58, 26, 2, 2, "F");
-    doc.setFontSize(8);
-    doc.setTextColor(159, 18, 57);
-    doc.text("XARAJATLAR (RASXOD)", 80, 36);
-    doc.setFontSize(11);
-    doc.text(`${pul(rasxodUzs)} so'm`, 80, 42);
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    const topKats = Object.entries(katMap).slice(0, 2).map(([k, v]) => `${k}: ${pul(v)}`).join(", ");
-    doc.text(topKats || "Xarajat yo'q", 80, 48);
-    if (rasxodUsd > 0) doc.text(`Dollar: $${pul(rasxodUsd)}`, 80, 53);
+    if (hasBoshqaKirim) {
+      // 4 ta blok: Savdo, Boshqa kirim, Rasxod, Eski qarz (kengligi 43mm, orasi 3mm)
+      // Blok 1: Savdo
+      doc.setFillColor(240, 253, 244);
+      doc.roundedRect(14, 30, 43, 26, 2, 2, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(22, 101, 52);
+      doc.text("SAVDO TUSHUMI", 17, 36);
+      doc.setFontSize(10);
+      doc.text(`${pul(savdoUzs)} so'm`, 17, 42);
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Kassaga: ${pul(naqdUzs)}`, 17, 47);
+      doc.text(`Qarz: ${pul(qarzBerildiUzs)}`, 17, 51);
+      if (savdoUsd > 0) doc.text(`Dollar: $${pul(savdoUsd)}`, 17, 55);
 
-    // Blok 3: Qarzdan tushum
-    doc.setFillColor(254, 243, 199);
-    doc.roundedRect(138, 30, 58, 26, 2, 2, "F");
-    doc.setFontSize(8);
-    doc.setTextColor(146, 64, 14);
-    doc.text("ESKI QARZDAN TUSHUM", 142, 36);
-    doc.setFontSize(11);
-    doc.text(`${pul(eskiQarzTushdiUzs)} so'm`, 142, 42);
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Qaytarilgan qarzlar: ${(qarzTolovlari || []).length} ta`, 142, 48);
-    if (eskiQarzTushdiUsd > 0) doc.text(`Dollar: $${pul(eskiQarzTushdiUsd)}`, 142, 53);
+      // Blok 2: Boshqa Kirimlar
+      doc.setFillColor(239, 246, 255);
+      doc.roundedRect(60, 30, 43, 26, 2, 2, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(29, 78, 216);
+      doc.text("BOSHQA KIRIMLAR", 63, 36);
+      doc.setFontSize(10);
+      doc.text(`${pul(boshqaKirimUzs)} so'm`, 63, 42);
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Tushumlar: ${(boshqaKirimlar || []).length} ta`, 63, 48);
+      if (boshqaKirimUsd > 0) doc.text(`Dollar: $${pul(boshqaKirimUsd)}`, 63, 53);
+
+      // Blok 3: Chiqimlar (Rasxod)
+      doc.setFillColor(254, 242, 242);
+      doc.roundedRect(106, 30, 43, 26, 2, 2, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(159, 18, 57);
+      doc.text("XARAJATLAR (RASXOD)", 109, 36);
+      doc.setFontSize(10);
+      doc.text(`${pul(rasxodUzs)} so'm`, 109, 42);
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      const topKats = Object.entries(katMap).slice(0, 1).map(([k, v]) => `${k}: ${pul(v)}`).join(", ");
+      doc.text(topKats || `Chiqim: ${(rasxodlar || []).length} ta`, 109, 48);
+      if (rasxodUsd > 0) doc.text(`Dollar: $${pul(rasxodUsd)}`, 109, 53);
+
+      // Blok 4: Eski qarzdan tushum
+      doc.setFillColor(254, 243, 199);
+      doc.roundedRect(152, 30, 43, 26, 2, 2, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(146, 64, 14);
+      doc.text("ESKI QARZDAN TUSHUM", 155, 36);
+      doc.setFontSize(10);
+      doc.text(`${pul(eskiQarzTushdiUzs)} so'm`, 155, 42);
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Qaytarilgan: ${(qarzTolovlari || []).length} ta`, 155, 48);
+      if (eskiQarzTushdiUsd > 0) doc.text(`Dollar: $${pul(eskiQarzTushdiUsd)}`, 155, 53);
+    } else {
+      // Standart 3 ta blok (Savdo, Rasxod, Eski qarz)
+      // Blok 1: Savdo
+      doc.setFillColor(240, 253, 244);
+      doc.roundedRect(14, 30, 58, 26, 2, 2, "F");
+      doc.setFontSize(8);
+      doc.setTextColor(22, 101, 52);
+      doc.text("SAVDO TUSHUMI", 18, 36);
+      doc.setFontSize(11);
+      doc.text(`${pul(savdoUzs)} so'm`, 18, 42);
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Kassaga: ${pul(naqdUzs)} | Qarz: ${pul(qarzBerildiUzs)}`, 18, 48);
+      if (savdoUsd > 0) doc.text(`Dollar: $${pul(savdoUsd)}`, 18, 53);
+
+      // Blok 2: Chiqimlar (Rasxod)
+      doc.setFillColor(254, 242, 242);
+      doc.roundedRect(76, 30, 58, 26, 2, 2, "F");
+      doc.setFontSize(8);
+      doc.setTextColor(159, 18, 57);
+      doc.text("XARAJATLAR (RASXOD)", 80, 36);
+      doc.setFontSize(11);
+      doc.text(`${pul(rasxodUzs)} so'm`, 80, 42);
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      const topKats = Object.entries(katMap).slice(0, 2).map(([k, v]) => `${k}: ${pul(v)}`).join(", ");
+      doc.text(topKats || "Xarajat yo'q", 80, 48);
+      if (rasxodUsd > 0) doc.text(`Dollar: $${pul(rasxodUsd)}`, 80, 53);
+
+      // Blok 3: Qarzdan tushum
+      doc.setFillColor(254, 243, 199);
+      doc.roundedRect(138, 30, 58, 26, 2, 2, "F");
+      doc.setFontSize(8);
+      doc.setTextColor(146, 64, 14);
+      doc.text("ESKI QARZDAN TUSHUM", 142, 36);
+      doc.setFontSize(11);
+      doc.text(`${pul(eskiQarzTushdiUzs)} so'm`, 142, 42);
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Qaytarilgan qarzlar: ${(qarzTolovlari || []).length} ta`, 142, 48);
+      if (eskiQarzTushdiUsd > 0) doc.text(`Dollar: $${pul(eskiQarzTushdiUsd)}`, 142, 53);
+    }
 
     let nextY = 62;
 
