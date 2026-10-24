@@ -411,6 +411,8 @@ O'TA MUHIM SQL VA HISOBOT QOIDALARI:
    - qarz_tolovlari: (id, sana_vaqt, mijoz_id, summa, valyuta, tolov_turi, hisob_id, xodim, izoh)
    - kassa_harakatlari: (id, sana_vaqt, amal ['kirim'|'chiqim'], summa, valyuta, manba_turi ['savdo'|'rasxod'|'qarz_tolov'|'transfer'|'boshlangich'|'korrektirovka'|'boshqa_kirim'], hisob_id, izoh)
    - boshqa_kirimlar: (id, sana_vaqt, summa, valyuta, kategoriya, manba_nomi, hisob_id, izoh, xodim, holat) - tovar va qarzga aloqador bo'lmagan xizmat va boshqa kirimlar daftari!
+   - tovar_qaytarishlar: (id, raqam, sana_vaqt, mijoz_id, valyuta, jami_summa, qarzdan_ayirildi, naqd_qaytarildi, hisob_id, izoh, xodim, holat) - tovar qaytarish (vozvrat) hujjatlari!
+   - tovar_qaytarish_qatorlari: (id, qaytarish_id, tovar_id, tovar_nomi, soni, narx, summa) - qaytarilgan tovarlar ro'yxati!
    - tovarlar: (id, nom, model, shtrixkod, birlik, tannarx, narx_optom, narx_chakana, valyuta, qoldiq, faol, yaratilgan). DIQQAT: tovarlarda 'sana_vaqt' yo'q, 'yaratilgan' bor!
    - mijozlar: (id, nom, nom_norm, telefon, manzil, qarz_uzs, qarz_usd, faol)
    - tashqi_qarzlar: (id, sana_vaqt, shaxs_nomi, shaxs_nomi_norm, amal, summa, valyuta, maqsad, hisob_id, holat)

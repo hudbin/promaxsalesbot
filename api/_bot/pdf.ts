@@ -348,11 +348,43 @@ export async function sendMijozQarzPdf(
       vozvratQuery = vozvratQuery.lte("sana_vaqt", tugashSanaIso);
     }
 
-    const [{ data: savdolar }, { data: tolovlar }, { data: vozvratlar }] = await Promise.all([
+    const [{ data: savdolar }, { data: tolovlar }, { data: rawVozvratlar, error: vErr }] = await Promise.all([
       savdoQuery,
       tolovQuery,
       vozvratQuery,
     ]);
+
+    let vozvratlar: any[] = rawVozvratlar || [];
+    if (vErr || !rawVozvratlar) {
+      console.warn("sendMijozQarzPdf vozvrat join xatosi, oddiy so'rov bilan qayta urinish:", vErr?.message);
+      let vq = client
+        .from("tovar_qaytarishlar")
+        .select("id, raqam, sana_vaqt, valyuta, jami_summa, qarzdan_ayirildi, naqd_qaytarildi, izoh, holat")
+        .eq("mijoz_id", mijoz.id)
+        .neq("holat", "bekor_qilindi")
+        .order("sana_vaqt", { ascending: true });
+      if (boshSanaIso) vq = vq.gte("sana_vaqt", boshSanaIso);
+      if (tugashSanaIso) vq = vq.lte("sana_vaqt", tugashSanaIso);
+      const { data: simpleData } = await vq;
+      if (simpleData && simpleData.length > 0) {
+        vozvratlar = simpleData;
+        const vIds = simpleData.map((v: any) => v.id);
+        const { data: qRows } = await client
+          .from("tovar_qaytarish_qatorlari")
+          .select("qaytarish_id, tovar_nomi, soni, narx, summa")
+          .in("qaytarish_id", vIds);
+        if (qRows) {
+          const qMap = new Map<string, any[]>();
+          qRows.forEach((r: any) => {
+            if (!qMap.has(r.qaytarish_id)) qMap.set(r.qaytarish_id, []);
+            qMap.get(r.qaytarish_id)!.push(r);
+          });
+          vozvratlar.forEach((v: any) => {
+            v.qatorlar = qMap.get(v.id) || [];
+          });
+        }
+      }
+    }
 
     // Reverse calculation (agar tugashSanaIso berilgan bo'lsa)
     if (tugashSanaIso) {
@@ -1142,7 +1174,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     const startIso = `${targetDateStr}T00:00:00+05:00`;
     const endIso = `${targetDateStr}T23:59:59.999+05:00`;
 
-    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: vozvratlar }, { data: boshqaKirimlar }, { data: kassaBoshqaKirimlar }, { data: hisoblar }] = await Promise.all([
+    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: rawVozvratlar, error: kvErr }, { data: boshqaKirimlar }, { data: kassaBoshqaKirimlar }, { data: hisoblar }] = await Promise.all([
       client
         .from("savdolar")
         .select("*, mijoz:mijozlar(nom)")
@@ -1189,6 +1221,36 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         .select("*")
         .order("kassa_nomi", { ascending: true }),
     ]);
+
+    let vozvratlar = rawVozvratlar || [];
+    if (kvErr || !rawVozvratlar) {
+      console.warn("sendKunlikHisobotPdf vozvrat join xatosi, oddiy so'rov bilan yuklanmoqda:", kvErr?.message);
+      const { data: simpleVozvrat } = await client
+        .from("tovar_qaytarishlar")
+        .select("*, mijoz:mijozlar(nom)")
+        .neq("holat", "bekor_qilindi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true });
+      if (simpleVozvrat && simpleVozvrat.length > 0) {
+        vozvratlar = simpleVozvrat;
+        const vIds = simpleVozvrat.map((v: any) => v.id);
+        const { data: qRows } = await client
+          .from("tovar_qaytarish_qatorlari")
+          .select("qaytarish_id, tovar_nomi, soni, narx, summa")
+          .in("qaytarish_id", vIds);
+        if (qRows) {
+          const qMap = new Map<string, any[]>();
+          qRows.forEach((r: any) => {
+            if (!qMap.has(r.qaytarish_id)) qMap.set(r.qaytarish_id, []);
+            qMap.get(r.qaytarish_id)!.push(r);
+          });
+          vozvratlar.forEach((v: any) => {
+            v.qatorlar = qMap.get(v.id) || [];
+          });
+        }
+      }
+    }
 
     // Boshqa kirimlar va kassa harakatlarini birlashtirish (hech qanday kirim tushib qolmasligi uchun)
     const mergedBoshqaKirimlar = [...(boshqaKirimlar || [])];

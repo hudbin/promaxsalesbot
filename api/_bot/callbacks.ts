@@ -1116,8 +1116,41 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
 
       if (vozvratErr) {
         console.warn("fn_tovar_vozvrat_yaratish RPC xatosi, fallback:", vozvratErr.message);
+
+        // 1. tovar_qaytarishlar jadvaliga to'g'ridan-to'g'ri yozish
+        const client = getSupabase();
+        const { data: vDoc } = await client
+          .from("tovar_qaytarishlar")
+          .insert({
+            mijoz_id: mijozId,
+            valyuta: valyuta,
+            jami_summa: jami,
+            qarzdan_ayirildi: qarzdanAyirildi,
+            naqd_qaytarildi: naqdQaytarildi,
+            hisob_id: p.hisob_id || null,
+            izoh: p.izoh || "Tovar qaytarildi",
+            xodim: fromName,
+            telegram_user_id: cq.from?.id,
+            holat: "faol",
+          })
+          .select("id")
+          .maybeSingle();
+
+        // 2. tovar_qaytarish_qatorlariga yozish
+        if (vDoc?.id && mappedQatorlar.length > 0) {
+          const insertQatorlar = mappedQatorlar.map((it: any) => ({
+            qaytarish_id: vDoc.id,
+            tovar_id: it.tovar_id || null,
+            tovar_nomi: it.tovar_nomi,
+            soni: it.soni,
+            narx: it.narx,
+            summa: it.summa,
+          }));
+          await client.from("tovar_qaytarish_qatorlari").insert(insertQatorlar);
+        }
+
+        // 3. Mijoz qarzini kamaytirish
         if (mijozId && qarzdanAyirildi > 0) {
-          const client = getSupabase();
           const { data: curM } = await client.from("mijozlar").select("qarz_uzs, qarz_usd").eq("id", mijozId).maybeSingle();
           if (curM) {
             if (valyuta === "USD") {
@@ -1127,9 +1160,10 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
             }
           }
         }
+
+        // 4. Tovarlar qoldig'ini oshirish
         for (const it of mappedQatorlar) {
           if (it.tovar_id && it.soni > 0) {
-            const client = getSupabase();
             const { data: curT } = await client.from("tovarlar").select("qoldiq").eq("id", it.tovar_id).maybeSingle();
             if (curT) {
               await client.from("tovarlar").update({ qoldiq: Number(curT.qoldiq || 0) + it.soni }).eq("id", it.tovar_id);
