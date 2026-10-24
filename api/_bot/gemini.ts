@@ -114,7 +114,7 @@ export async function geminiTahlil(
       .eq("holat", "faol")
       .limit(300);
     const katSet = new Set<string>([
-      "Ovqatlanish", "Taksi", "Elektr", "Ijara", "Oylik", "Xo'jalik"
+      "Ovqatlanish", "Taksi", "Elektr", "Ijara", "Oylik", "Xo'jalik", "Shaxsiy"
     ]);
     if (rKategoriyalar && rKategoriyalar.length > 0) {
       rKategoriyalar.forEach((r: any) => {
@@ -166,7 +166,7 @@ Quyidagi 16 ta amal turidan birini aniqlang:
 12. "qarz_excel": Qarzdor mijozlar ro'yxatini Excel (.xlsx) fayl shaklida so'raganda (masalan: "qarzdor mijozlar hisoboti excel", "qarzdorlar excel", "qarzlar excel fayli", "nasiyalar excel jadvali").
 13. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
 14. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
-15. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi").
+15. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi"). DIQQAT: Faqat xabarda "qarz" so'zi bo'lgandagina tashqi_qarz tanlanadi! Agar xabarda "xarajat" yoki "rasxod" yoki "chiqim" deb yozilgan bo'lsa (masalan: "Xarajat 3 mln som naqd Abdivohid akamga shaxsiyga yoziladi"), bu QARZ EMAS, balki "rasxod" amali hisoblanadi!
 16. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
@@ -206,6 +206,13 @@ JSON strukturasi "tashqi_qarz" amali uchun:
   "hisob_id": "agar kassa/hisob aytilgan bo'lsa hisob UUID, aks holda null",
   "izoh": "Qisqa izoh yoki null"
 }
+
+O'TA MUHIM QOIDA ("RASXOD" VA "TASHQI QARZ" FARQI):
+- Agar foydalanuvchi xabarda "xarajat", "rasxod", "chiqim" deb yozsa yoki biror shaxs nomiga "shaxsiyga yozilsin", "shaxsiy xarajat", "shaxsiyga" deb aytilgan bo'lsa (masalan: "Xarajat 3 mln som naqd Abdivohid akamga shaxsiyga yoziladi", "Sherikning shaxsiy xarajati 1 mln", "Shaxsiyga 500 ming rasxod"):
+  * Bu mutlaqo "tashqi_qarz" EMAS! Bu "amal": "rasxod"!
+  * "kategoriya": "Shaxsiy" (yoki "Shaxsiy xarajat")
+  * "izoh": Matndagi barcha tafsilotlar (masalan: "Abdivohid akamga shaxsiyga yoziladi")
+- "tashqi_qarz" amali FAQAT xabarda "qarz oldim", "qarz berdim", "qarzga", "qarz qaytardim", "qarzini berdi" deb QARZ so'zi aniq qatnashganda tanlanadi! Agar "qarz" so'zi bo'lmasa va "xarajat/rasxod" deyilsa, aslo tashqi_qarz deb hisoblamang!
 
 JSON strukturasi "kop_rasxod" amali uchun (Bir nechta xarajat bo'lsa):
 {
@@ -427,7 +434,8 @@ BAZADAGI MAVJUD CHIQIM (RASXOD) KATEGORIYALARI:
 
 CHIQIM (RASXOD) KATEGORIYASI QOIDALARI:
 1. Agar xarajat mavjud kategoriyalarga to'g'ri kelsa (yoki sinonimi bo'lsa, masalan: tushlik/obed -> "Ovqatlanish", yandex/yo'lkira -> "Taksi"), o'sha kategoriyani tanlang.
-2. AGAR MAVJUD KATEGORIYALARGA MOS KELMASA:
+2. Agar biror shaxs nomiga yoki shaxsiy ehtiyojga qilingan chiqim bo'lsa ("shaxsiyga yoziladi", "shaxsiy xarajat", "rahbarga shaxsiy") -> kategoriya: "Shaxsiy" deb tanlang.
+3. AGAR MAVJUD KATEGORIYALARGA MOS KELMASA:
    HECH QACHON "Boshqa" DEB YOZMANG!
    Buning o'rniga aniq 1-2 so'zli yangi o'zbekcha kategoriya yarating (masalan: "Reklama", "Kanselyariya", "Ta'mirlash", "Logistika", "Qadoqlash", "Kommunal", "Internet").
 

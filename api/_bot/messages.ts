@@ -853,6 +853,26 @@ MUHIM QOIDALAR:
         parsedData.amal = "kop_rasxod";
       }
 
+      // Xavfsiz avto-tuzatish: Agar foydalanuvchi "xarajat" yoki "rasxod" deb yozgan bo'lsa-yu, AI yanglishib "tashqi_qarz" deb olgan bo'lsa
+      if (parsedData.amal === "tashqi_qarz") {
+        const textLower = (text || "").toLowerCase();
+        const hasXarajatWord = /\b(xarajat|rasxod|chiqim)\b/i.test(textLower);
+        const hasQarzWord = /\b(qarz|nasiya)\b/i.test(textLower);
+        if (hasXarajatWord && !hasQarzWord) {
+          parsedData.amal = "rasxod";
+          parsedData.jami_summa = Number(parsedData.summa) || Number(parsedData.jami_summa) || 0;
+          parsedData.kategoriya = parsedData.maqsad || "Shaxsiy";
+          let izohMatni = "";
+          if (parsedData.shaxs_nomi) {
+            izohMatni = `${parsedData.shaxs_nomi}ga shaxsiyga yoziladi`;
+          }
+          if (parsedData.izoh && !izohMatni.includes(parsedData.izoh)) {
+            izohMatni = izohMatni ? `${izohMatni} (${parsedData.izoh})` : parsedData.izoh;
+          }
+          parsedData.izoh = izohMatni || text || "Shaxsiy xarajat";
+        }
+      }
+
       // SAVDO AMALI
       if (parsedData.amal === "savdo") {
         await resolveSavdoEntities(parsedData);
