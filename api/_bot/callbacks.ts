@@ -29,6 +29,20 @@ import {
   sendTashqiQarzlarPdf,
   sendTashqiQarzAktSverkaPdf,
 } from "./pdf";
+import {
+  getHisobotlarKeyboard,
+  getReportActionsKeyboard,
+  buildNaqdReport,
+  buildPlastikReport,
+  buildQarzReport,
+  buildSavdoReport,
+  buildRasxodReport,
+  buildUmumiyXulosaReport,
+  sendReportExcel,
+  sendReportPdf,
+  ReportType,
+  ReportPeriod,
+} from "./reports";
 
 export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
   const data = cq.data || "";
@@ -805,6 +819,128 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Akt-sverka PDF tayyorlanmoqda..." });
     await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
     await sendTashqiQarzAktSverkaPdf(chatId, shaxsNomi);
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.0.1 QARZDORLAR RO'YXATI PDF CHIQARISH CALLBACK: dl_qarzdorlar_pdf
+  if (data === "dl_qarzdorlar_pdf") {
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Qarzdorlar PDF tayyorlanmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendQarzdorlarPdf(chatId);
+    return res.status(200).send("OK");
+  }
+
+  // 1.7.4 YANGI HISOBOTLAR MENYUSI CALLBACKLARI
+  // rpt:menu - Asosiy hisobotlar menyusiga qaytish
+  if (data === "rpt:menu") {
+    const senderId = cq.from?.id;
+    const perm = await checkUserPermission(senderId);
+    if (!perm.isAllowed) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Sizga ruxsat berilmagan." });
+      return res.status(200).send("OK");
+    }
+    const kb = getHisobotlarKeyboard(perm.role);
+    const roleTitle = perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi";
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text:
+        `📊 <b>PROMAX SAVDO VA KASSA HISOBOTLARI</b>\n\n` +
+        `👤 Xodim: <b>${perm.xodim?.ism || fromName}</b> (${roleTitle})\n\n` +
+        `<i>Quyidagi hisobotlardan birini tanlang. Har bir hisobot uchun bugungi, kechagi va oylik ko'rsatkichlarni ko'rishingiz hamda Excel/PDF formatda yuklab olishingiz mumkin:</i>`,
+      parse_mode: "HTML",
+      reply_markup: kb,
+    });
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id });
+    return res.status(200).send("OK");
+  }
+
+  // rpt:v:<type>:<period> - Hisobotni ko'rish (masalan: rpt:v:naqd:bugun)
+  if (data.startsWith("rpt:v:")) {
+    const parts = data.split(":");
+    const rType = parts[2] as ReportType;
+    const rPeriod = (parts[3] || "bugun") as ReportPeriod;
+
+    const senderId = cq.from?.id;
+    const perm = await checkUserPermission(senderId);
+    if (!perm.isAllowed) {
+      await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Sizga ruxsat berilmagan." });
+      return res.status(200).send("OK");
+    }
+
+    if ((rType === "rasxod" || rType === "xulosa") && perm.role !== "admin") {
+      await tgPost("answerCallbackQuery", {
+        callback_query_id: cq.id,
+        text: "Ushbu hisobot faqat administrator uchun ruxsat etilgan.",
+        show_alert: true,
+      });
+      return res.status(200).send("OK");
+    }
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Hisobot tayyorlanmoqda..." });
+
+    let reportText = "";
+    if (rType === "naqd") reportText = await buildNaqdReport(rPeriod);
+    else if (rType === "plastik") reportText = await buildPlastikReport(rPeriod);
+    else if (rType === "qarz") reportText = await buildQarzReport(rPeriod);
+    else if (rType === "savdo") reportText = await buildSavdoReport(rPeriod);
+    else if (rType === "rasxod") reportText = await buildRasxodReport(rPeriod);
+    else if (rType === "xulosa") reportText = await buildUmumiyXulosaReport(rPeriod);
+
+    const kb = getReportActionsKeyboard(rType, rPeriod, perm.role);
+    await tgPost("editMessageText", {
+      chat_id: chatId,
+      message_id: msgId,
+      text: reportText,
+      parse_mode: "HTML",
+      reply_markup: kb,
+    });
+    return res.status(200).send("OK");
+  }
+
+  // rpt:xl:<type>:<period> - Excel yuklab olish
+  if (data.startsWith("rpt:xl:")) {
+    const parts = data.split(":");
+    const rType = parts[2] as ReportType;
+    const rPeriod = (parts[3] || "bugun") as ReportPeriod;
+
+    const senderId = cq.from?.id;
+    const perm = await checkUserPermission(senderId);
+    if (!perm.isAllowed || ((rType === "rasxod" || rType === "xulosa") && perm.role !== "admin")) {
+      await tgPost("answerCallbackQuery", {
+        callback_query_id: cq.id,
+        text: "Sizga ruxsat berilmagan.",
+        show_alert: true,
+      });
+      return res.status(200).send("OK");
+    }
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Excel fayl shakllantirilmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendReportExcel(chatId, rType, rPeriod);
+    return res.status(200).send("OK");
+  }
+
+  // rpt:pdf:<type>:<period> - PDF yuklab olish
+  if (data.startsWith("rpt:pdf:")) {
+    const parts = data.split(":");
+    const rType = parts[2] as ReportType;
+    const rPeriod = (parts[3] || "bugun") as ReportPeriod;
+
+    const senderId = cq.from?.id;
+    const perm = await checkUserPermission(senderId);
+    if (!perm.isAllowed || ((rType === "rasxod" || rType === "xulosa") && perm.role !== "admin")) {
+      await tgPost("answerCallbackQuery", {
+        callback_query_id: cq.id,
+        text: "Sizga ruxsat berilmagan.",
+        show_alert: true,
+      });
+      return res.status(200).send("OK");
+    }
+
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "PDF hujjat shakllantirilmoqda..." });
+    await tgPost("sendChatAction", { chat_id: chatId, action: "upload_document" });
+    await sendReportPdf(chatId, rType, rPeriod);
     return res.status(200).send("OK");
   }
 

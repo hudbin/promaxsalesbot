@@ -151,7 +151,7 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 16 ta amal turidan birini aniqlang:
+Quyidagi 17 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi yoki kam berilgan tovar sabab qarzini kamaytirish/korrektirovka so'ralganda (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi", "Ali 10 ta tovar kam berilgan ekan qarzidan ayirib qo'y", "Vali 10 ta mahsulot qaytardi qarzidan ayirilsin").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
@@ -167,7 +167,8 @@ Quyidagi 16 ta amal turidan birini aniqlang:
 13. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
 14. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
 15. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi"). DIQQAT: Faqat xabarda "qarz" so'zi bo'lgandagina tashqi_qarz tanlanadi! Agar xabarda "xarajat" yoki "rasxod" yoki "chiqim" deb yozilgan bo'lsa (masalan: "Xarajat 3 mln som naqd Abdivohid akamga shaxsiyga yoziladi"), bu QARZ EMAS, balki "rasxod" amali hisoblanadi!
-16. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+16. "hisobotlar_menyu": Foydalanuvchi hisobotlar menyusini, hisobotlar ro'yxatini yoki inline hisobotlar tugmalarini ochishni so'raganda (masalan: "hisobotlar", "hisobotlar menyusini och", "menga hisobotlarni ko'rsat", "qanday hisobotlar bor").
+17. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
@@ -291,6 +292,11 @@ JSON strukturasi "kunlik_hisobot_pdf" amali uchun:
 {
   "amal": "kunlik_hisobot_pdf",
   "sana": "YYYY-MM-DD formatidagi sana (agar aytilmagan bo'lsa bugungi sana)"
+}
+
+JSON strukturasi "hisobotlar_menyu" amali uchun:
+{
+  "amal": "hisobotlar_menyu"
 }
 
 JSON strukturasi "savol" amali uchun:

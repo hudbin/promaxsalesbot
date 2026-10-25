@@ -44,6 +44,7 @@ import {
   sendTashqiQarzlarPdf,
   sendTashqiQarzAktSverkaPdf,
 } from "./pdf";
+import { getHisobotlarKeyboard } from "./reports";
 import { geminiTahlil, geminiTabiiyJavob } from "./gemini";
 
 export async function handleMessage(message: any, res: any): Promise<any> {
@@ -311,9 +312,42 @@ export async function handleMessage(message: any, res: any): Promise<any> {
   if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n📊 <i>Hisobotlar menyusi:</i> /hisobotlar\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
+    });
+    return res.status(200).send("OK");
+  }
+
+  // 4.1 PROFESSIONAL HISOBOTLAR MENYUSI BUYRUG'I
+  const normText = text.trim().toLowerCase();
+  const isHisobotlarCmd =
+    text === "/hisobotlar" ||
+    text === "/hisobot" ||
+    text.startsWith("/hisobotlar ") ||
+    text.startsWith("/hisobot ") ||
+    text.startsWith("/hisobotlar@") ||
+    text.startsWith("/hisobot@") ||
+    normText === "hisobotlar" ||
+    normText === "hisobot" ||
+    normText === "hisobotlar menyusi" ||
+    normText === "hisobotlar ro'yxati" ||
+    normText === "hisobotlar royxati" ||
+    normText === "hisobotlar ro'yxatini och" ||
+    normText === "hisobotlarni ko'rsat" ||
+    normText === "hisobotlarni korsat";
+
+  if (isHisobotlarCmd) {
+    const kb = getHisobotlarKeyboard(perm.role);
+    const roleTitle = perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi";
+    await tgPost("sendMessage", {
+      chat_id: chatId,
+      text:
+        `📊 <b>PROMAX SAVDO VA KASSA HISOBOTLARI</b>\n\n` +
+        `👤 Xodim: <b>${perm.xodim?.ism || senderName}</b> (${roleTitle})\n\n` +
+        `<i>Quyidagi hisobotlardan birini tanlang. Har bir hisobot uchun bugungi, kechagi va oylik ko'rsatkichlarni ko'rishingiz hamda Excel/PDF formatda yuklab olishingiz mumkin:</i>`,
+      parse_mode: "HTML",
+      reply_markup: kb,
     });
     return res.status(200).send("OK");
   }
@@ -349,7 +383,6 @@ export async function handleMessage(message: any, res: any): Promise<any> {
   }
 
   // 5. TOVARLARNI OPTIMALLASHTIRISH (ADMIN)
-  const normText = text.trim().toLowerCase();
   const isOptCmd =
     text === "/optimallashtirish" ||
     text === "/birlashtirish" ||
@@ -624,6 +657,22 @@ export async function handleMessage(message: any, res: any): Promise<any> {
     }
 
     const parsedData = geminiRes.data;
+
+    // 7.0 HISOBOTLAR MENYUSI SO'RALGANDA
+    if (parsedData && parsedData.amal === "hisobotlar_menyu") {
+      const kb = getHisobotlarKeyboard(perm.role);
+      const roleTitle = perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi";
+      await tgPost("sendMessage", {
+        chat_id: chatId,
+        text:
+          `📊 <b>PROMAX SAVDO VA KASSA HISOBOTLARI</b>\n\n` +
+          `👤 Xodim: <b>${perm.xodim?.ism || senderName}</b> (${roleTitle})\n\n` +
+          `<i>Quyidagi hisobotlardan birini tanlang. Har bir hisobot uchun bugungi, kechagi va oylik ko'rsatkichlarni ko'rishingiz hamda Excel/PDF formatda yuklab olishingiz mumkin:</i>`,
+        parse_mode: "HTML",
+        reply_markup: kb,
+      });
+      return res.status(200).send("OK");
+    }
 
     // 7.1 SAVOL / TAHLIL / SQL SO'ROVI
     if (parsedData && parsedData.amal === "savol") {
