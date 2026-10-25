@@ -1174,10 +1174,20 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
     const startIso = `${targetDateStr}T00:00:00+05:00`;
     const endIso = `${targetDateStr}T23:59:59.999+05:00`;
 
-    const [{ data: savdolar }, { data: rasxodlar }, { data: qarzTolovlari }, { data: rawVozvratlar, error: kvErr }, { data: boshqaKirimlar }, { data: kassaBoshqaKirimlar }, { data: hisoblar }] = await Promise.all([
+    const [
+      { data: rawSavdolar, error: sErr },
+      { data: rasxodlar },
+      { data: rawQarzTolovlari, error: qtErr },
+      { data: rawVozvratlar, error: kvErr },
+      { data: boshqaKirimlar },
+      { data: kassaBoshqaKirimlar },
+      { data: rawTransferlar },
+      { data: rawTashqiQarzlar },
+      { data: hisoblar }
+    ] = await Promise.all([
       client
         .from("savdolar")
-        .select("*, mijoz:mijozlar(nom)")
+        .select("*, mijoz:mijozlar(nom), qatorlar:savdo_qatorlari(tovar_nomi, soni, narx, summa)")
         .eq("holat", "yakunlandi")
         .gte("sana_vaqt", startIso)
         .lte("sana_vaqt", endIso)
@@ -1217,10 +1227,70 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         .lte("sana_vaqt", endIso)
         .order("sana_vaqt", { ascending: true }),
       client
+        .from("kassa_harakatlari")
+        .select("id, sana_vaqt, amal, summa, valyuta, manba_turi, manba_id, izoh, hisob_id, hisob:hisoblar(nom)")
+        .in("manba_turi", ["transfer", "kassalar_aro"])
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
+        .from("tashqi_qarzlar")
+        .select("id, sana_vaqt, shaxs_nomi, amal, summa, valyuta, maqsad, izoh, hisob:hisoblar(nom)")
+        .neq("holat", "bekor_qilindi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true }),
+      client
         .from("view_kassa_balans")
         .select("*")
         .order("kassa_nomi", { ascending: true }),
     ]);
+
+    let savdolar = rawSavdolar || [];
+    if (sErr || !rawSavdolar) {
+      console.warn("sendKunlikHisobotPdf savdolar join xatosi, oddiy so'rov bilan yuklanmoqda:", sErr?.message);
+      const { data: simpleSavdolar } = await client
+        .from("savdolar")
+        .select("*, mijoz:mijozlar(nom)")
+        .eq("holat", "yakunlandi")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true });
+      if (simpleSavdolar) {
+        savdolar = simpleSavdolar;
+        const sIds = simpleSavdolar.map((s: any) => s.id);
+        if (sIds.length > 0) {
+          const { data: qRows } = await client
+            .from("savdo_qatorlari")
+            .select("savdo_id, tovar_nomi, soni, narx, summa")
+            .in("savdo_id", sIds);
+          if (qRows) {
+            const sqMap = new Map<string, any[]>();
+            qRows.forEach((r: any) => {
+              if (!sqMap.has(r.savdo_id)) sqMap.set(r.savdo_id, []);
+              sqMap.get(r.savdo_id)!.push(r);
+            });
+            savdolar.forEach((s: any) => {
+              s.qatorlar = sqMap.get(s.id) || [];
+            });
+          }
+        }
+      }
+    }
+
+    let qarzTolovlari = rawQarzTolovlari || [];
+    if (qtErr || !rawQarzTolovlari) {
+      console.warn("sendKunlikHisobotPdf qarz to'lovlari join xatosi, oddiy so'rov bilan yuklanmoqda:", qtErr?.message);
+      const { data: simpleQT } = await client
+        .from("qarz_tolovlari")
+        .select("*, mijoz:mijozlar(nom)")
+        .gte("sana_vaqt", startIso)
+        .lte("sana_vaqt", endIso)
+        .order("sana_vaqt", { ascending: true });
+      if (simpleQT && simpleQT.length > 0) {
+        qarzTolovlari = simpleQT;
+      }
+    }
 
     let vozvratlar = rawVozvratlar || [];
     if (kvErr || !rawVozvratlar) {
@@ -1328,6 +1398,51 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       if (bk.valyuta === "USD") boshqaKirimUsd += sum;
       else boshqaKirimUzs += sum;
     });
+
+    // 1. Sotilgan tovarlar aylanmasini hisoblash
+    const tovarMap = new Map<string, { nomi: string; soni: number; summa: number; valyuta: string }>();
+    (savdolar || []).forEach((s: any) => {
+      (s.qatorlar || []).forEach((q: any) => {
+        const nomi = q.tovar_nomi || "Noma'lum tovar";
+        if (!tovarMap.has(nomi)) {
+          tovarMap.set(nomi, { nomi, soni: 0, summa: 0, valyuta: s.valyuta || "UZS" });
+        }
+        const t = tovarMap.get(nomi)!;
+        t.soni += Number(q.soni || 0);
+        t.summa += Number(q.summa || (Number(q.soni || 0) * Number(q.narx || 0)));
+      });
+    });
+    const topTovarlar = Array.from(tovarMap.values()).sort((a, b) => b.summa - a.summa);
+
+    // 2. Bugungi yangi nasiyalarni ajratish
+    const yangiNasiyalar = (savdolar || []).filter((s: any) => Number(s.qarz_summa || 0) > 0);
+
+    // 3. Kassalararo o'tkazmalarni (transferlarni) guruhlash
+    const transferMap = new Map<string, any>();
+    (rawTransferlar || []).forEach((kh: any) => {
+      const key = kh.manba_id || kh.id;
+      if (!transferMap.has(key)) {
+        transferMap.set(key, {
+          id: key,
+          sana_vaqt: kh.sana_vaqt,
+          summa: kh.summa,
+          valyuta: kh.valyuta || "UZS",
+          qayerdan: "-",
+          qayerga: "-",
+          izoh: (kh.izoh || "").replace(/^O'tkazma:\s*/i, "").trim() || "-",
+        });
+      }
+      const item = transferMap.get(key)!;
+      if (kh.amal === "chiqim") {
+        item.qayerdan = kh.hisob?.nom || "Hisob";
+      } else if (kh.amal === "kirim") {
+        item.qayerga = kh.hisob?.nom || "Hisob";
+      }
+    });
+    const transferlar = Array.from(transferMap.values());
+
+    // 4. Tashqi qarzlar
+    const tashqiQarzlar = rawTashqiQarzlar || [];
 
     const { jsPDF } = await import("jspdf");
     const autoTableModule = await import("jspdf-autotable");
@@ -1495,7 +1610,189 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
-    // 2. Chiqimlar jadvali
+    // 2. Sotilgan tovarlar aylanmasi jadvali
+    if (topTovarlar.length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Sotilgan tovarlar aylanmasi (${topTovarlar.length} turdagi tovar)`, 14, nextY);
+
+      let jamiDona = 0;
+      let jamiTovarSummaUzs = 0;
+      let jamiTovarSummaUsd = 0;
+
+      const ttRows = topTovarlar.map((t: any, idx: number) => {
+        jamiDona += t.soni;
+        if (t.valyuta === "USD") jamiTovarSummaUsd += t.summa;
+        else jamiTovarSummaUzs += t.summa;
+
+        const ortachaNarx = t.soni > 0 ? Math.round(t.summa / t.soni) : 0;
+        return [
+          String(idx + 1),
+          t.nomi,
+          `${pul(t.soni)} dona`,
+          `${pul(ortachaNarx)} ${t.valyuta}`,
+          `${pul(t.summa)} ${t.valyuta}`,
+        ];
+      });
+
+      if (ttRows.length > 1) {
+        const tSumParts: string[] = [];
+        if (jamiTovarSummaUzs > 0) tSumParts.push(`${pul(jamiTovarSummaUzs)} UZS`);
+        if (jamiTovarSummaUsd > 0) tSumParts.push(`$${pul(jamiTovarSummaUsd)}`);
+        ttRows.push(["", "JAMI:", `${pul(jamiDona)} dona`, "", tSumParts.join(" / ")]);
+      }
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["№", "Tovar nomi", "Sotilgan miqdori", "O'rtacha narxi", "Jami tushum"]],
+        body: ttRows,
+        theme: "striped",
+        headStyles: { fillColor: [13, 148, 136], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 76, fontStyle: "bold" },
+          2: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 34, halign: "right", fontStyle: "bold" },
+        },
+        didParseCell: (data: any) => {
+          if (ttRows.length > 1 && data.row.index === ttRows.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [204, 251, 241];
+          }
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 3. Bugungi yangi nasiyalar jadvali
+    if (yangiNasiyalar.length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Bugungi yangi nasiyalar (${yangiNasiyalar.length} ta)`, 14, nextY);
+
+      let jamiYangiNasiyaUzs = 0;
+      let jamiYangiNasiyaUsd = 0;
+
+      const ynRows = yangiNasiyalar.map((s: any) => {
+        const qSum = Number(s.qarz_summa || 0);
+        if (s.valyuta === "USD") jamiYangiNasiyaUsd += qSum;
+        else jamiYangiNasiyaUzs += qSum;
+
+        return [
+          s.raqam ? `#${s.raqam}` : "-",
+          s.sana_vaqt ? new Date(s.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
+          s.mijoz?.nom || "Mijoz",
+          `${pul(s.qarz_summa)} ${s.valyuta}`,
+          `${pul(s.tolangan_summa)} ${s.valyuta}`,
+          `${pul(s.jami_summa)} ${s.valyuta}`,
+          s.tolov_turi || "nasiya",
+        ];
+      });
+
+      if (ynRows.length > 1) {
+        const ynSumParts: string[] = [];
+        if (jamiYangiNasiyaUzs > 0) ynSumParts.push(`${pul(jamiYangiNasiyaUzs)} UZS`);
+        if (jamiYangiNasiyaUsd > 0) ynSumParts.push(`$${pul(jamiYangiNasiyaUsd)}`);
+        ynRows.push(["", "", "JAMI NASIYA:", ynSumParts.join(" / "), "", "", ""]);
+      }
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["Chek", "Vaqt", "Mijoz", "Nasiya summasi", "To'landi", "Jami savdo", "To'lov turi"]],
+        body: ynRows,
+        theme: "striped",
+        headStyles: { fillColor: [225, 29, 72], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 16, halign: "center" },
+          1: { cellWidth: 14, halign: "center" },
+          2: { cellWidth: 48, fontStyle: "bold" },
+          3: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 26, halign: "right" },
+          5: { cellWidth: 26, halign: "right" },
+          6: { cellWidth: 20, halign: "center" },
+        },
+        didParseCell: (data: any) => {
+          if (ynRows.length > 1 && data.row.index === ynRows.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [255, 228, 230];
+          }
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 4. Qaytarilgan qarzlar jadvali
+    if ((qarzTolovlari || []).length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Qaytarilgan qarzlar (${qarzTolovlari.length} ta)`, 14, nextY);
+
+      const qRows = qarzTolovlari.map((q: any, idx: number) => [
+        String(idx + 1),
+        q.sana_vaqt ? new Date(q.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
+        q.mijoz?.nom || "Mijoz",
+        `${pul(q.summa)} ${q.valyuta || "UZS"}`,
+        q.hisob?.nom || q.tolov_turi || "Naqd",
+        q.izoh || "-",
+      ]);
+
+      if (qRows.length > 1) {
+        let totalUzs = 0;
+        let totalUsd = 0;
+        qarzTolovlari.forEach((q: any) => {
+          if (q.valyuta === "USD") totalUsd += Number(q.summa || 0);
+          else totalUzs += Number(q.summa || 0);
+        });
+        const totalParts: string[] = [];
+        if (totalUzs > 0) totalParts.push(`${pul(totalUzs)} UZS`);
+        if (totalUsd > 0) totalParts.push(`$${pul(totalUsd)}`);
+        qRows.push(["", "", "JAMI:", totalParts.join(" / "), "", ""]);
+      }
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["No", "Vaqt", "Mijoz", "To'langan summa", "Hisob / Kassa", "Izoh"]],
+        body: qRows,
+        theme: "striped",
+        headStyles: { fillColor: [217, 119, 6], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 16, halign: "center" },
+          2: { cellWidth: 50, fontStyle: "bold" },
+          3: { cellWidth: 34, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 36 },
+          5: { cellWidth: 36 },
+        },
+        didParseCell: (data: any) => {
+          if (qRows.length > 1 && data.row.index === qRows.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [254, 243, 199];
+          }
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 5. Chiqimlar jadvali
     if ((rasxodlar || []).length > 0) {
       if (nextY > 230) {
         doc.addPage();
@@ -1532,7 +1829,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
-    // 3. Tovar qaytarishlar / Korrektirovkalar jadvali
+    // 6. Tovar qaytarishlar / Korrektirovkalar jadvali
     if ((vozvratlar || []).length > 0) {
       if (nextY > 230) {
         doc.addPage();
@@ -1578,7 +1875,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
-    // 3.1 Boshqa kirimlar (xizmatlar va boshqa tushumlar) jadvali
+    // 7. Boshqa kirimlar (xizmatlar va boshqa tushumlar) jadvali
     if ((mergedBoshqaKirimlar || []).length > 0) {
       if (nextY > 230) {
         doc.addPage();
@@ -1617,7 +1914,98 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
       nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
     }
 
-    // 4. Kassalar balansi jadvali
+    // 8. Kassalararo o'tkazmalar (Transfer / Inkassatsiya) jadvali
+    if (transferlar.length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Kassalararo o'tkazmalar / Inkassatsiya (${transferlar.length} ta)`, 14, nextY);
+
+      const trRows = transferlar.map((tr: any, idx: number) => [
+        String(idx + 1),
+        tr.sana_vaqt ? new Date(tr.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
+        tr.qayerdan,
+        tr.qayerga,
+        `${pul(tr.summa)} ${tr.valyuta}`,
+        tr.izoh || "-",
+      ]);
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["№", "Vaqt", "Qayerdan (Chiqim)", "Qayerga (Kirim)", "Summa", "Izoh"]],
+        body: trRows,
+        theme: "striped",
+        headStyles: { fillColor: [14, 165, 233], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 16, halign: "center" },
+          2: { cellWidth: 42, fontStyle: "bold" },
+          3: { cellWidth: 42, fontStyle: "bold" },
+          4: { cellWidth: 36, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 36 },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 9. Tashqi qarzlar (Hamkorlar / Ta'minotchilar bilan amallar) jadvali
+    if (tashqiQarzlar.length > 0) {
+      if (nextY > 230) {
+        doc.addPage();
+        nextY = 20;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Tashqi qarzlar (Hamkorlar / Ta'minotchilar) (${tashqiQarzlar.length} ta)`, 14, nextY);
+
+      const amalNomi = (a: string) => {
+        if (a === "oldim") return "Qarz oldik";
+        if (a === "qaytardim") return "Qarz qaytardik";
+        if (a === "berdim") return "Qarz berdik";
+        if (a === "qaytdi") return "Qarz qaytdi";
+        return a || "-";
+      };
+
+      const tqRows = tashqiQarzlar.map((tq: any, idx: number) => {
+        const izohMatni = tq.maqsad ? `${tq.maqsad}${tq.izoh ? ` (${tq.izoh})` : ""}` : (tq.izoh || "-");
+        return [
+          String(idx + 1),
+          tq.sana_vaqt ? new Date(tq.sana_vaqt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" }) : "-",
+          tq.shaxs_nomi || "Hamkor",
+          amalNomi(tq.amal),
+          `${pul(tq.summa)} ${tq.valyuta || "UZS"}`,
+          tq.hisob?.nom || "-",
+          izohMatni,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: nextY + 3,
+        head: [["№", "Vaqt", "Hamkor / Shaxs", "Harakat turi", "Summa", "Hisob / Kassa", "Izoh"]],
+        body: tqRows,
+        theme: "striped",
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 16, halign: "center" },
+          2: { cellWidth: 42, fontStyle: "bold" },
+          3: { cellWidth: 30, halign: "center" },
+          4: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 26 },
+          6: { cellWidth: 26 },
+        },
+      });
+
+      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : nextY + 40;
+    }
+
+    // 10. Kassalar balansi jadvali
     if ((hisoblar || []).length > 0) {
       if (nextY > 220) {
         doc.addPage();
