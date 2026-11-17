@@ -650,14 +650,6 @@ export async function handleMessage(message: any, res: any): Promise<any> {
     const parsedData = geminiRes.data;
     const effectiveText = (text || String(parsedData?.transkript || "")).trim();
 
-    if (effectiveText) {
-      await getSupabase().from("ai_chat_history").insert({
-        chat_id: chatId,
-        role: "user",
-        content: effectiveText,
-      });
-    }
-
     // 7.0 HISOBOTLAR MENYUSI SO'RALGANDA
     if (parsedData && parsedData.amal === "hisobotlar_menyu") {
       const kb = getHisobotlarKeyboard(perm.role);
@@ -759,12 +751,6 @@ MUHIM QOIDALAR:
    - Matnda bare '&' belgisini ishlatmang (doimo 'va' deb yozing). Barcha ochilgan teglarni albatta yoping.`;
 
         const finalAns = await geminiTabiiyJavob(answerPrompt);
-        
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: finalAns
-        });
 
         const formattedHtml = formatTelegramHtml(finalAns);
         let sendRes = await tgPost("sendMessage", {
@@ -902,33 +888,51 @@ MUHIM QOIDALAR:
         parsedData.amal = "kop_rasxod";
       }
 
-      // Xavfsiz avto-tuzatish: Matn yoki ovozli transkriptda "xarajat/rasxod/shaxsiyga" bo'lib, "qarz" bo'lmasa -> "rasxod"
-      if (parsedData.amal === "tashqi_qarz") {
-        const textLower = `${effectiveText} ${parsedData.izoh || ""}`.toLowerCase();
-        const hasXarajatWord = /(xarajat|rasxod|chiqim)/i.test(textLower);
-        const hasShaxsiyPattern = /shaxsiy(ga|xarajat|\s+yoz)/i.test(textLower);
-        const hasQarzWord = /(qarz|nasiya|berib\s+tur|olib\s+tur)/i.test(textLower);
-        if ((hasXarajatWord || hasShaxsiyPattern) && !hasQarzWord) {
-          parsedData.amal = "rasxod";
-          parsedData.jami_summa =
-            parseAmount(parsedData.summa) ||
-            parseAmount(parsedData.jami_summa) ||
-            extractAmountFromText(effectiveText);
-          parsedData.kategoriya = parsedData.maqsad || "Shaxsiy";
-          let izohMatni = "";
-          if (parsedData.shaxs_nomi) {
-            izohMatni = `${parsedData.shaxs_nomi}ga shaxsiyga yoziladi`;
-          }
-          if (parsedData.izoh && !izohMatni.includes(parsedData.izoh)) {
-            izohMatni = izohMatni ? `${izohMatni} (${parsedData.izoh})` : parsedData.izoh;
-          }
-          parsedData.izoh = izohMatni || effectiveText || "Shaxsiy xarajat";
+      // Xavfsiz avto-tuzatish: Matn yoki ovozli transkriptda "xarajat/rasxod/chiqim/shaxsiyga" bo'lib, foydalanuvchi xabarida "qarz" bo'lmasa -> "rasxod"
+      const userTextLower = effectiveText.toLowerCase();
+      const combinedLower = `${effectiveText} ${parsedData.izoh || ""} ${parsedData.maqsad || ""}`.toLowerCase();
+      const hasXarajatWord = /(xarajat|rasxod|chiqim)/i.test(userTextLower);
+      const hasShaxsiyPattern = /shaxsiy(ga|xarajat|\s+yoz)/i.test(combinedLower);
+      // DIQQAT: "qarz" so'zini faqat foydalanuvchi aytgan matndan tekshiramiz (AI o'zi to'qib yozgan izohdan EMAS!)
+      const hasQarzWordInUserText = /(qarz|nasiya|berib\s+tur|olib\s+tur)/i.test(userTextLower);
+      const isReportRequest = /(hisobot|ro['’`]?yxat|royxat|pdf|excel|jadval|qancha)/i.test(userTextLower);
+
+      if (
+        (parsedData.amal === "tashqi_qarz" || parsedData.amal === "tovar_kirim" || parsedData.amal === "boshqa_kirim") &&
+        (hasXarajatWord || hasShaxsiyPattern) &&
+        !hasQarzWordInUserText &&
+        !isReportRequest
+      ) {
+        parsedData.amal =
+          Array.isArray(parsedData.xarajatlar) && parsedData.xarajatlar.length > 1 ? "kop_rasxod" : "rasxod";
+        parsedData.jami_summa =
+          parseAmount(parsedData.jami_summa) ||
+          parseAmount(parsedData.summa) ||
+          parseAmount(parsedData.tannarx) ||
+          extractAmountFromText(effectiveText);
+        if (!parsedData.kategoriya) {
+          parsedData.kategoriya = hasShaxsiyPattern ? "Shaxsiy" : parsedData.maqsad || "Xom ashyo";
         }
+        let izohMatni = "";
+        if (parsedData.shaxs_nomi) {
+          izohMatni = `${parsedData.shaxs_nomi}ga shaxsiyga yoziladi`;
+        } else if (parsedData.tovar_nomi) {
+          izohMatni = `${parsedData.tovar_nomi} olindi`;
+        }
+        if (parsedData.izoh && !izohMatni.includes(parsedData.izoh)) {
+          izohMatni = izohMatni ? `${izohMatni} (${parsedData.izoh})` : parsedData.izoh;
+        }
+        parsedData.izoh = izohMatni || effectiveText || "Xarajat";
       }
 
       // Summa normalizatsiyasi: AI matnli summa qaytargan yoki jami_summa/summa maydonlarini almashtirgan bo'lsa
       if (parsedData.amal === "rasxod") {
-        let s = parseAmount(parsedData.jami_summa) || parseAmount(parsedData.summa);
+        let s =
+          parseAmount(parsedData.jami_summa) ||
+          parseAmount(parsedData.summa) ||
+          parseAmount(parsedData.tolangan_summa) ||
+          parseAmount(parsedData.tannarx) ||
+          parseAmount(parsedData.narx_optom);
         if (s <= 0 && Array.isArray(parsedData.qatorlar) && parsedData.qatorlar.length > 0) {
           s = parsedData.qatorlar.reduce(
             (acc: number, it: any) =>
@@ -972,12 +976,6 @@ MUHIM QOIDALAR:
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         const card = buildSavdoCard(draftId, parsedData, hisoblarDB || []);
 
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
-
         await tgPost("sendMessage", {
           chat_id: chatId,
           text: card.text,
@@ -997,12 +995,6 @@ MUHIM QOIDALAR:
         });
 
         const card = buildVozvratCard(draftId, parsedData);
-
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
 
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -1025,12 +1017,6 @@ MUHIM QOIDALAR:
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         const card = buildQarzTolovCard(draftId, parsedData, hisoblarDB || []);
 
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
-
         await tgPost("sendMessage", {
           chat_id: chatId,
           text: card.text,
@@ -1050,12 +1036,6 @@ MUHIM QOIDALAR:
 
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         const card = buildRasxodCard(draftId, parsedData, hisoblarDB || []);
-
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
 
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -1077,12 +1057,6 @@ MUHIM QOIDALAR:
         const { data: hisoblarDB } = await getSupabase().from("hisoblar").select("id, nom, turi, valyuta").eq("faol", true);
         const card = buildMultiRasxodCard(draftId, parsedData, hisoblarDB || []);
 
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
-
         await tgPost("sendMessage", {
           chat_id: chatId,
           text: card.text,
@@ -1102,12 +1076,6 @@ MUHIM QOIDALAR:
         });
 
         const card = buildQarzEslatmaCard(draftId, parsedData);
-
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
 
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -1191,12 +1159,6 @@ MUHIM QOIDALAR:
 
         const card = buildBalansSozlashCard(draftId, parsedData, hisoblarDB || []);
 
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
-
         await tgPost("sendMessage", {
           chat_id: chatId,
           text: card.text,
@@ -1221,12 +1183,6 @@ MUHIM QOIDALAR:
 
         const card = buildBoshqaKirimCard(draftId, parsedData, hisoblarDB || []);
 
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
-
         await tgPost("sendMessage", {
           chat_id: chatId,
           text: card.text,
@@ -1250,12 +1206,6 @@ MUHIM QOIDALAR:
           .eq("faol", true);
 
         const card = buildTashqiQarzCard(draftId, parsedData, hisoblarDB || []);
-
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "model",
-          content: card.text.replace(/<[^>]+>/g, ""),
-        });
 
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -1295,12 +1245,6 @@ MUHIM QOIDALAR:
       }
 
       preview += `\n<i>Ma'lumot to'g'ri bo'lsa, tasdiqlang:</i>`;
-
-      await getSupabase().from("ai_chat_history").insert({
-        chat_id: chatId,
-        role: "model",
-        content: preview.replace(/<[^>]+>/g, '')
-      });
 
       await tgPost("sendMessage", {
         chat_id: chatId,

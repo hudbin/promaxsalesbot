@@ -53,6 +53,10 @@ export async function callGeminiRaw(
           const errMsg = data?.error?.message || JSON.stringify(data?.error || data);
           oxirgiXato = errMsg;
           console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) xato berdi (${resp.status}): ${errMsg}`);
+          // Agar model topilmasa (404) yoki so'rov formati mos kelmasa (400), boshqa kalitlarni behuda aylantirmasdan keyingi modelga o'tamiz
+          if (resp.status === 404 || resp.status === 400) {
+            break;
+          }
           continue;
         }
 
@@ -200,9 +204,26 @@ Quyidagi 17 ta amal turidan birini aniqlang:
 16. "hisobotlar_menyu": Foydalanuvchi hisobotlar menyusini, hisobotlar ro'yxatini yoki inline hisobotlar tugmalarini ochishni so'raganda (masalan: "hisobotlar", "hisobotlar menyusini och", "menga hisobotlarni ko'rsat", "qanday hisobotlar bor").
 17. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
 
-JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
+JSON strukturasi "rasxod" (Yagona xarajat / chiqim) amali uchun:
 {
-  "amal": "savdo" | "tovar_vozvrat" | "rasxod" | "qarz_tolov" | "tovar_kirim",
+  "amal": "rasxod",
+  "transkript": "Ovozli xabar bo'lsa so'zma-so'z o'zbekcha matni, matn bo'lsa foydalanuvchi matni",
+  "valyuta": "UZS" | "USD",
+  "jami_summa": 0.0,
+  "kategoriya": "Xarajat kategoriyasi nomi (masalan: Xom ashyo, Ovqatlanish, Taksi, Shaxsiy)",
+  "tolov_turi": "naqd" | "plastik" | "perechisleniya",
+  "hisob_id": "eng mos hisob UUID raqami yoki null",
+  "izoh": "Xarajat tafsiloti (masalan: Flizirin olindi, Abdivohid akamga shaxsiyga yoziladi)"
+}
+
+O'TA MUHIM QOIDA ("RASXOD" SUMMASI VA TURI BO'YICHA):
+- Agar xabarda "Xarajat", "Rasxod", "Chiqim" deyilgan bo'lsa yoki do'kon ehtiyoji uchun xom ashyo/material/xizmat sotib olingan bo'lsa (masalan: "Xarajat. Flizirin olindi. 240000 som", "Paket olindi 150 ming", "Skotchga 50 ming"):
+  * Bu "amal": "rasxod"! ("tovar_kirim", "savdo" yoki "tashqi_qarz" EMAS).
+  * Xabardagi pul miqdorini ALBATTA sof son (number) ko'rinishida "jami_summa" maydoniga yozing (masalan: 240000, "3 mln" bo'lsa 3000000). Hech qachon "jami_summa": 0 qoldirmang!
+
+JSON strukturasi 1, 2, 6, 7 ("savdo", "tovar_vozvrat", "qarz_tolov", "tovar_kirim") amallari uchun:
+{
+  "amal": "savdo" | "tovar_vozvrat" | "qarz_tolov" | "tovar_kirim",
   "transkript": "Ovozli xabar bo'lsa so'zma-so'z o'zbekcha matni, matn bo'lsa foydalanuvchi matni",
   "valyuta": "UZS" | "USD",
   "jami_summa": 0.0,
@@ -210,7 +231,6 @@ JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
   "tolov_turi": "naqd" | "plastik" | "perechisleniya",
   "hisob_id": "eng mos hisob UUID raqami yoki null",
   "mijoz_nomi": "Mijoz ismi yoki do'koni" (agar savdo, vozvrat yoki qarz to'lovi bo'lsa, aks holda null),
-  "kategoriya": "Xarajat kategoriyasi nomi (string)" (agar rasxod bo'lsa),
   "tovar_nomi": "Tovar nomi" (agar tovar_kirim bo'lsa),
   "soni": 0.0 (agar tovar_kirim bo'lsa),
   "tannarx": 0.0 (agar tovar_kirim bo'lsa),
@@ -225,12 +245,6 @@ JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
     }
   ]
 }
-
-O'TA MUHIM QOIDA ("RASXOD" SUMMASI VA TURI BO'YICHA):
-- Agar xabarda "Xarajat", "Rasxod", "Chiqim" deyilgan bo'lsa yoki do'kon ehtiyoji uchun xom ashyo/material/xizmat sotib olingan bo'lsa (masalan: "Xarajat. Flizirin olindi. 240000 som", "Paket olindi 150 ming", "Skotchga 50 ming"):
-  * Bu "amal": "rasxod"! ("tovar_kirim" yoki "savdo" EMAS).
-  * Xabardagi pul miqdorini ALBATTA sof son (number) ko'rinishida "jami_summa" maydoniga yozing (masalan: 240000). Hech qachon 0 qoldirmang va matn/valyuta qo'shmang!
-  * "qatorlar" bo'sh [] bo'lishi mumkin.
 
 JSON strukturasi "tashqi_qarz" amali uchun:
 {
@@ -492,33 +506,7 @@ O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
 - Har qanday JSON javobingizda (ayniqsa ovozli xabarlarda) "transkript" maydoniga xabarning aniq matnini kiriting.
 `;
 
-  // Xotirani (history) faqat davomiy savollar uchun yengil kontekst sifatida yuklaymiz
-  // (Avvalgi noto'g'ri bot kartalari yoki takroriy xabarlar hech qachon model turn sifatida berilmaydi!)
-  let oldingiKontekst = "";
-  if (chatId) {
-    try {
-      const { data: history } = await getSupabase()
-        .from("ai_chat_history")
-        .select("role, content")
-        .eq("chat_id", chatId)
-        .eq("role", "user")
-        .order("created_at", { ascending: false })
-        .limit(3);
-
-      if (history && history.length > 0) {
-        const normCurrent = (matn || "").trim().toLowerCase();
-        const foydali = history
-          .map((m: any) => String(m.content || "").trim())
-          .filter((c: string) => c && c !== "[Ovozli xabar yuborildi]" && c.toLowerCase() !== normCurrent);
-        if (foydali.length > 0) {
-          oldingiKontekst = `\nOldingi foydalanuvchi xabari (FAQAT joriy xabar uning davomi bo'lgan savol bo'lsa hisobga oling; agar joriy xabar alohida yangi tranzaksiya bo'lsa mutlaqo e'tibor bermang): "${foydali[0]}"`;
-        }
-      }
-    } catch (err) {
-      console.error("Xotirani yuklashda xato:", err);
-    }
-  }
-
+  // Har bir xabar alohida va mustaqil tahlil qilinadi (avvalgi xabarlar tarixi aralashtirilmaydi)
   const currentParts: any[] = [];
   if (audioBase64) {
     const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
@@ -529,11 +517,11 @@ O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
       },
     });
     currentParts.push({
-      text: `Ushbu ovozli xabarni diqqat bilan tinglang, "transkript" maydoniga o'zbekcha matnini yozing va FAQAT toza JSON formatida javob bering.${oldingiKontekst}`,
+      text: `Ushbu ovozli xabarni diqqat bilan tinglang, "transkript" maydoniga o'zbekcha matnini yozing va FAQAT toza JSON formatida javob bering.`,
     });
   } else if (matn) {
     currentParts.push({
-      text: `Foydalanuvchi xabari: "${matn}"\n\nFAQAT toza JSON formatida javob bering.${oldingiKontekst}`,
+      text: `Foydalanuvchi xabari: "${matn}"\n\nFAQAT toza JSON formatida javob bering.`,
     });
   }
 
