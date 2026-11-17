@@ -14,8 +14,12 @@ const supabaseAnonKey =
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export function pul(n: number | string | null | undefined): string {
-  const num = Number(n) || 0;
-  return Math.round(num).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "0";
+  const rounded = Math.round(num * 100) / 100 || 0;
+  return rounded
+    .toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    .replace(/\u00a0/g, " ");
 }
 
 export function haptic(type: "light" | "medium" | "heavy" | "success" | "error" | "warning" = "light") {

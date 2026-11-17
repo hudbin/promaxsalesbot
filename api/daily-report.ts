@@ -2,6 +2,7 @@
 // PROMAX B2B STORE: KUNLIK 21:00 HISOBOTI (VERCEL CRON & API)
 
 import { createClient } from "@supabase/supabase-js";
+import { pul } from "./_bot/config";
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "8909794013:AAEJB9hhM3OpIQoKRYlyML-gDodXgOgGDn0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -11,12 +12,9 @@ const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-function pul(n: number): string {
-  return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
-}
-
 function formatUsd(n: number): string {
-  const num = Math.round(n || 0);
+  const raw = Number(n);
+  const num = Number.isFinite(raw) ? Math.round(raw * 100) / 100 || 0 : 0;
   if (num < 0) return `-$${pul(Math.abs(num))}`;
   return `$${pul(num)}`;
 }

@@ -3,6 +3,7 @@ import {
   supabase,
   tgPost,
   pul,
+  parseAmount,
   normalizeTolovTuri,
   GROUP_CHAT_ID,
 } from "./config";
@@ -979,9 +980,10 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
 
       const tanlanganHisob = hisoblarDB?.find((h: any) => h.id === p.hisob_id);
       const tolovTuriNorm = normalizeTolovTuri(p.tolov_turi, tanlanganHisob?.turi);
+      const rasxodSumma = parseAmount(p.jami_summa) || parseAmount(p.summa);
 
       const { error: rasxodErr } = await getSupabase().rpc("fn_rasxod_yaratish_v2", {
-        p_summa: p.jami_summa,
+        p_summa: rasxodSumma,
         p_valyuta: p.valyuta || "UZS",
         p_kategoriya: p.kategoriya || "Boshqa",
         p_tolov_turi: tolovTuriNorm,
@@ -1004,7 +1006,7 @@ export async function handleCallbackQuery(cq: any, res: any): Promise<any> {
       }
 
       const hisobNom = tanlanganHisob?.nom || "Kassa";
-      javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(p.jami_summa)} ${p.valyuta || "UZS"}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n💳 Chiqim hisobi: <b>${hisobNom}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
+      javobMatn = `✅ <b>RASXOD SAQLANDI</b>\n\n💵 Summa: <b>${pul(rasxodSumma)} ${p.valyuta || "UZS"}</b>\n📂 Kategoriya: <b>${p.kategoriya}</b>\n💳 Chiqim hisobi: <b>${hisobNom}</b>\n✍️ Kiritdi: <b>${fromName}</b>`;
     }
 
     // 1.8.B BIR NECHTA RASXODLAR (KO'P RASXOD)

@@ -1,4 +1,4 @@
-import { pul, formatTelegramHtml } from "./config";
+import { pul, parseAmount, formatTelegramHtml } from "./config";
 
 // -----------------------------------------------------------------------------
 // SAVDO KARTASI
@@ -126,7 +126,7 @@ export function buildSavdoCard(draftId: string, p: any, hisoblar: any[] = []): {
 // -----------------------------------------------------------------------------
 export function buildRasxodCard(draftId: string, p: any, hisoblar: any[] = []): { text: string; keyboard: any } {
   const valyuta = p.valyuta || "UZS";
-  const summa = Number(p.jami_summa) || 0;
+  const summa = parseAmount(p.jami_summa) || parseAmount(p.summa);
 
   // 1. Agar hisob aniqlanmagan bo'lsa -> FOYDALANUVCHIDAN HISOBNI SO'RAYMIZ!
   if (!p.hisob_id) {

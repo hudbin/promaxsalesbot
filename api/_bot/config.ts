@@ -19,11 +19,12 @@ export const GEMINI_API_KEY = GEMINI_API_KEYS[0] || "";
 export const GEMINI_MODELS = Array.from(
   new Set(
     [
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash",
       process.env.GEMINI_MODEL,
       "gemini-3.8-flash",
+      "gemini-4-hydrogen",
+      "gemini-3.5-flash",
       "gemini-2.5-flash",
+      "gemini-3.1-flash-lite",
     ].filter(Boolean)
   )
 ) as string[];
@@ -79,9 +80,72 @@ export async function tgPost(method: string, body: Record<string, any>) {
   }
 }
 
-// Yordamchi: Pulni chiroyli formatlash (1 500 000)
-export function pul(n: number): string {
-  return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+// Yordamchi: Pulni chiroyli formatlash (1 500 000 yoki 905,2)
+export function pul(n: number | string | null | undefined): string {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "0";
+  const rounded = Math.round(num * 100) / 100 || 0;
+  return rounded
+    .toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    .replace(/\u00a0/g, " ");
+}
+
+// Yordamchi: Matn yoki son ko'rinishidagi summani xavfsiz raqamga o'girish
+export function parseAmount(val: unknown): number {
+  if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+  if (typeof val !== "string") return 0;
+
+  let s = val.trim().toLowerCase();
+  if (!s) return 0;
+
+  let mult = 1;
+  if (/(?:mln|million)\b/.test(s)) mult = 1_000_000;
+  else if (/ming\b/.test(s)) mult = 1_000;
+
+  s = s
+    .replace(/(?:mln|million|ming|so['’`]?m|som|uzs|usd|\$)/gi, "")
+    .replace(/[\s\u00a0]+/g, "");
+
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(s)) {
+    s = s.replace(/,/g, "");
+  } else if (/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(s)) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",") && !s.includes(".")) {
+    s = s.replace(",", ".");
+  } else if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/,/g, "");
+  }
+
+  s = s.replace(/[^0-9.-]/g, "");
+  const num = Number(s);
+  return Number.isFinite(num) ? num * mult : 0;
+}
+
+// Yordamchi: AI summani 0 qilib qo'yganda matndan summani tiklash
+export function extractAmountFromText(text: string): number {
+  if (!text) return 0;
+  const re = /(?:\$\s*)?(\d+(?:[ \u00a0.,]\d+)*)\s*(mln|million|ming|so['’`]?m|som|uzs|usd|\$)?/gi;
+  const withUnit: number[] = [];
+  const plainNums: number[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const rawNum = m[1];
+    const unit = (m[2] || "").trim();
+    const fullPrefixDollar = m[0].trim().startsWith("$");
+    const parsed = parseAmount(`${rawNum} ${unit}`);
+    if (parsed <= 0) continue;
+    if (unit || fullPrefixDollar) {
+      withUnit.push(parsed);
+    } else {
+      plainNums.push(parsed);
+    }
+  }
+
+  if (withUnit.length > 0) return withUnit[0];
+  const large = plainNums.filter((n) => n >= 100);
+  if (large.length > 0) return large[large.length - 1];
+  return plainNums.length > 0 ? plainNums[plainNums.length - 1] : 0;
 }
 
 // Yordamchi: HTML teglarni butunlay tozalab oddiy matnga aylantirish (Fallback uchun)

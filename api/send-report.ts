@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
+import { pul } from "./_bot/config";
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -8,10 +9,6 @@ const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
-function pul(n: number): string {
-  return Math.round(n || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
-}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {

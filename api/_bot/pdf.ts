@@ -1629,7 +1629,7 @@ export async function sendKunlikHisobotPdf(chatId: number | string, dateStr?: st
         if (t.valyuta === "USD") jamiTovarSummaUsd += t.summa;
         else jamiTovarSummaUzs += t.summa;
 
-        const ortachaNarx = t.soni > 0 ? Math.round(t.summa / t.soni) : 0;
+        const ortachaNarx = t.soni > 0 ? Math.round((t.summa / t.soni) * 100) / 100 : 0;
         return [
           String(idx + 1),
           t.nomi,

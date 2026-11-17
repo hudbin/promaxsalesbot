@@ -3,6 +3,8 @@ import {
   supabase,
   tgPost,
   pul,
+  parseAmount,
+  extractAmountFromText,
   normalizePhone,
   normalizeTolovTuri,
   formatTelegramHtml,
@@ -550,12 +552,6 @@ export async function handleMessage(message: any, res: any): Promise<any> {
         const arrayBuffer = await audioRes.arrayBuffer();
         const base64Audio = Buffer.from(arrayBuffer).toString("base64");
         geminiRes = await geminiTahlil("", base64Audio, voice.mime_type || "audio/ogg", chatId);
-        
-        await getSupabase().from("ai_chat_history").insert({
-          chat_id: chatId,
-          role: "user",
-          content: "[Ovozli xabar yuborildi]"
-        });
       } else {
         await tgPost("sendMessage", {
           chat_id: chatId,
@@ -625,11 +621,6 @@ export async function handleMessage(message: any, res: any): Promise<any> {
     }
 
     await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
-    await getSupabase().from("ai_chat_history").insert({
-      chat_id: chatId,
-      role: "user",
-      content: text
-    });
     geminiRes = await geminiTahlil(text, undefined, undefined, chatId);
   }
 
@@ -657,6 +648,15 @@ export async function handleMessage(message: any, res: any): Promise<any> {
     }
 
     const parsedData = geminiRes.data;
+    const effectiveText = (text || String(parsedData?.transkript || "")).trim();
+
+    if (effectiveText) {
+      await getSupabase().from("ai_chat_history").insert({
+        chat_id: chatId,
+        role: "user",
+        content: effectiveText,
+      });
+    }
 
     // 7.0 HISOBOTLAR MENYUSI SO'RALGANDA
     if (parsedData && parsedData.amal === "hisobotlar_menyu") {
@@ -703,7 +703,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
         if (dbErr) {
           console.warn("AI SQL xatosi, Gemini orqali qayta urinish:", dbErr.message);
           const fixPrompt = `Siz yozgan Postgres SQL so'rov xatolik berdi: "${dbErr.message}".
-Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
+Foydalanuvchi savoli: "${effectiveText || "[Ovozli xabar]"}"
 Noto'g'ri SQL: "${cleanSql}"
 
 DIQQAT TIZIM QOIDALARI:
@@ -742,7 +742,7 @@ Iltimos, FAQAT to'g'rilangan toza SELECT SQL yozing (hech qanday izohsiz, markdo
         const kechaStrAns = kechaDateAns.toISOString().slice(0, 10);
 
         const answerPrompt = `Siz PROMAX ulgurji do'koni uchun professional Shaxsiy Yordamchi (Personal Assistant) va Bosh buxgalter-tahlilchi AIsiz.
-Foydalanuvchi savoli: "${text || "[Ovozli xabar]"}"
+Foydalanuvchi savoli: "${effectiveText || "[Ovozli xabar]"}"
 Bazadan (PostgreSQL) olingan ma'lumotlar: ${JSON.stringify(dbResult || [])}
 Bugungi sana: ${bugunStrAns}, Kechagi sana: ${kechaStrAns}
 
@@ -785,7 +785,7 @@ MUHIM QOIDALAR:
         // PDF talab qilingan bo'lsa
         const sqlLower = cleanSql.toLowerCase();
         const izohLower = (parsedData.izoh || "").toLowerCase();
-        const textLower = (text || "").toLowerCase();
+        const textLower = effectiveText.toLowerCase();
         const combinedQueryText = `${textLower} ${izohLower}`;
 
         const isMijozOrQarzQuery =
@@ -872,7 +872,7 @@ MUHIM QOIDALAR:
       } catch (err: any) {
         console.error("AI SQL xatosi:", err);
         const errMsg = err?.message || String(err);
-        const rawTextLower = (text || "").toLowerCase();
+        const rawTextLower = effectiveText.toLowerCase();
         const isSanaQuery = /\b(\d{1,2}[-./]\d{1,2}(?:[-./]\d{2,4})?|kecha|o'tgan\s+hafta|o'tgan\s+oy|bugun)\b/i.test(rawTextLower);
         let tushunarliXabar = `Kechirasiz, so'ralgan ma'lumotni tahlil qilishda qiyinchilik yuz berdi.`;
 
@@ -902,14 +902,18 @@ MUHIM QOIDALAR:
         parsedData.amal = "kop_rasxod";
       }
 
-      // Xavfsiz avto-tuzatish: Agar foydalanuvchi "xarajat" yoki "rasxod" deb yozgan bo'lsa-yu, AI yanglishib "tashqi_qarz" deb olgan bo'lsa
+      // Xavfsiz avto-tuzatish: Matn yoki ovozli transkriptda "xarajat/rasxod/shaxsiyga" bo'lib, "qarz" bo'lmasa -> "rasxod"
       if (parsedData.amal === "tashqi_qarz") {
-        const textLower = (text || "").toLowerCase();
-        const hasXarajatWord = /\b(xarajat|rasxod|chiqim)\b/i.test(textLower);
-        const hasQarzWord = /\b(qarz|nasiya)\b/i.test(textLower);
-        if (hasXarajatWord && !hasQarzWord) {
+        const textLower = `${effectiveText} ${parsedData.izoh || ""}`.toLowerCase();
+        const hasXarajatWord = /(xarajat|rasxod|chiqim)/i.test(textLower);
+        const hasShaxsiyPattern = /shaxsiy(ga|xarajat|\s+yoz)/i.test(textLower);
+        const hasQarzWord = /(qarz|nasiya|berib\s+tur|olib\s+tur)/i.test(textLower);
+        if ((hasXarajatWord || hasShaxsiyPattern) && !hasQarzWord) {
           parsedData.amal = "rasxod";
-          parsedData.jami_summa = Number(parsedData.summa) || Number(parsedData.jami_summa) || 0;
+          parsedData.jami_summa =
+            parseAmount(parsedData.summa) ||
+            parseAmount(parsedData.jami_summa) ||
+            extractAmountFromText(effectiveText);
           parsedData.kategoriya = parsedData.maqsad || "Shaxsiy";
           let izohMatni = "";
           if (parsedData.shaxs_nomi) {
@@ -918,8 +922,42 @@ MUHIM QOIDALAR:
           if (parsedData.izoh && !izohMatni.includes(parsedData.izoh)) {
             izohMatni = izohMatni ? `${izohMatni} (${parsedData.izoh})` : parsedData.izoh;
           }
-          parsedData.izoh = izohMatni || text || "Shaxsiy xarajat";
+          parsedData.izoh = izohMatni || effectiveText || "Shaxsiy xarajat";
         }
+      }
+
+      // Summa normalizatsiyasi: AI matnli summa qaytargan yoki jami_summa/summa maydonlarini almashtirgan bo'lsa
+      if (parsedData.amal === "rasxod") {
+        let s = parseAmount(parsedData.jami_summa) || parseAmount(parsedData.summa);
+        if (s <= 0 && Array.isArray(parsedData.qatorlar) && parsedData.qatorlar.length > 0) {
+          s = parsedData.qatorlar.reduce(
+            (acc: number, it: any) =>
+              acc + (parseAmount(it.summa) || (parseAmount(it.soni) || 1) * parseAmount(it.narx)),
+            0
+          );
+          if (!parsedData.izoh && parsedData.qatorlar[0]?.nom) {
+            parsedData.izoh = String(parsedData.qatorlar[0].nom);
+          }
+        }
+        if (s <= 0 && Array.isArray(parsedData.xarajatlar) && parsedData.xarajatlar.length > 0) {
+          s = parsedData.xarajatlar.reduce((acc: number, it: any) => acc + parseAmount(it.summa), 0);
+        }
+        if (s <= 0 && effectiveText) {
+          s = extractAmountFromText(effectiveText);
+        }
+        parsedData.jami_summa = s;
+      } else if (parsedData.amal === "boshqa_kirim" || parsedData.amal === "tashqi_qarz") {
+        const s =
+          parseAmount(parsedData.summa) ||
+          parseAmount(parsedData.jami_summa) ||
+          extractAmountFromText(effectiveText);
+        parsedData.summa = s;
+      } else if (parsedData.amal === "qarz_tolov") {
+        const s =
+          parseAmount(parsedData.jami_summa) ||
+          parseAmount(parsedData.summa) ||
+          extractAmountFromText(effectiveText);
+        parsedData.jami_summa = s;
       }
 
       // SAVDO AMALI

@@ -3,7 +3,16 @@ import { GEMINI_API_KEYS, GEMINI_API_KEY, GEMINI_MODELS, getSupabase } from "./c
 // -----------------------------------------------------------------------------
 // GEMINI API GA SO'ROV YUBORISH (Ko'p akkauntli va zaxira modellar bilan)
 // -----------------------------------------------------------------------------
-export async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; text?: string; error?: string }> {
+export interface GeminiCallOptions {
+  systemPrompt?: string;
+  jsonMode?: boolean;
+  temperature?: number;
+}
+
+export async function callGeminiRaw(
+  contents: any[],
+  options: GeminiCallOptions = {}
+): Promise<{ ok: boolean; text?: string; error?: string }> {
   if (GEMINI_API_KEYS.length === 0) {
     return {
       ok: false,
@@ -12,6 +21,19 @@ export async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; tex
   }
 
   let oxirgiXato = "";
+
+  const requestBody: Record<string, any> = {
+    contents,
+    generationConfig: {
+      temperature: options.temperature ?? (options.jsonMode ? 0 : 0.2),
+    },
+  };
+  if (options.jsonMode) {
+    requestBody.generationConfig.responseMimeType = "application/json";
+  }
+  if (options.systemPrompt) {
+    requestBody.systemInstruction = { parts: [{ text: options.systemPrompt }] };
+  }
 
   // 1-bosqich: Eng yaxshi modeldan boshlab tekshiramiz
   for (const model of GEMINI_MODELS) {
@@ -23,12 +45,12 @@ export async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; tex
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents }),
+          body: JSON.stringify(requestBody),
         });
 
         const data = await resp.json();
-        if (data?.error) {
-          const errMsg = data.error.message || JSON.stringify(data.error);
+        if (!resp.ok || data?.error) {
+          const errMsg = data?.error?.message || JSON.stringify(data?.error || data);
           oxirgiXato = errMsg;
           console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) xato berdi (${resp.status}): ${errMsg}`);
           continue;
@@ -52,17 +74,25 @@ export async function callGeminiRaw(contents: any[]): Promise<{ ok: boolean; tex
 }
 
 // JSON qaytaruvchi yordamchi
-export async function callGeminiJson(contents: any[]): Promise<{ ok: boolean; data?: any; error?: string }> {
-  const res = await callGeminiRaw(contents);
+export async function callGeminiJson(
+  contents: any[],
+  systemPrompt?: string
+): Promise<{ ok: boolean; data?: any; error?: string }> {
+  const res = await callGeminiRaw(contents, { systemPrompt, jsonMode: true, temperature: 0 });
   if (!res.ok || !res.text) {
     return { ok: false, error: res.error };
   }
 
+  const tozalangan = res.text.replace(/```json/gi, "").replace(/```/g, "").trim();
   try {
-    const tozalangan = res.text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(tozalangan);
-    return { ok: true, data: parsed };
-  } catch (err: any) {
+    return { ok: true, data: JSON.parse(tozalangan) };
+  } catch {
+    const match = tozalangan.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return { ok: true, data: JSON.parse(match[0]) };
+      } catch {}
+    }
     return { ok: false, error: "AI javobini JSON formatida o'qib bo'lmadi: " + res.text };
   }
 }
@@ -173,6 +203,7 @@ Quyidagi 17 ta amal turidan birini aniqlang:
 JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
 {
   "amal": "savdo" | "tovar_vozvrat" | "rasxod" | "qarz_tolov" | "tovar_kirim",
+  "transkript": "Ovozli xabar bo'lsa so'zma-so'z o'zbekcha matni, matn bo'lsa foydalanuvchi matni",
   "valyuta": "UZS" | "USD",
   "jami_summa": 0.0,
   "tolangan_summa": 0.0,
@@ -195,9 +226,16 @@ JSON strukturasi 1, 2, 3, 5, 6 amallar uchun:
   ]
 }
 
+O'TA MUHIM QOIDA ("RASXOD" SUMMASI VA TURI BO'YICHA):
+- Agar xabarda "Xarajat", "Rasxod", "Chiqim" deyilgan bo'lsa yoki do'kon ehtiyoji uchun xom ashyo/material/xizmat sotib olingan bo'lsa (masalan: "Xarajat. Flizirin olindi. 240000 som", "Paket olindi 150 ming", "Skotchga 50 ming"):
+  * Bu "amal": "rasxod"! ("tovar_kirim" yoki "savdo" EMAS).
+  * Xabardagi pul miqdorini ALBATTA sof son (number) ko'rinishida "jami_summa" maydoniga yozing (masalan: 240000). Hech qachon 0 qoldirmang va matn/valyuta qo'shmang!
+  * "qatorlar" bo'sh [] bo'lishi mumkin.
+
 JSON strukturasi "tashqi_qarz" amali uchun:
 {
   "amal": "tashqi_qarz",
+  "transkript": "Ovozli xabar bo'lsa so'zma-so'z o'zbekcha matni, matn bo'lsa foydalanuvchi matni",
   "qarz_amali": "oldim" | "qaytardim" | "berdim" | "qaytdi",
   "shaxs_nomi": "Shaxs ismi (masalan: Ali aka, Akmal, Bobur)",
   "summa": 0.0,
@@ -450,27 +488,31 @@ ${hisoblarRoyxatiText}
 
 O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
 - Agar matnda pul QAYSI HISOBGA tushgani yoki QAYSI HISOBDAN chiqqani ANIQ aytilgan bo'lsa, mos hisobning UUID sini "hisob_id" ga yozing.
-- AGAR QAYSI HISOB EKANLIGI ANIQ AYTILMAGAN BO'LSA: "hisob_id": null deb qaytaring!
+- AGAR QAYSI HISOB EKANLIGI ANIQ AYTILMAGAN BO'LSA: "hisob_id": null deb qaytaring! Hech qachon taxminan hisob tanlamang.
+- Har qanday JSON javobingizda (ayniqsa ovozli xabarlarda) "transkript" maydoniga xabarning aniq matnini kiriting.
 `;
 
-  const contents: any[] = [];
-  contents.push({ role: "user", parts: [{ text: prompt }] });
-  contents.push({ role: "model", parts: [{ text: "Tushundim. Men FAQAT toza JSON formatida javob beraman. Qolgan narsalarni qo'shmayman." }] });
-
-  // Xotirani (history) yuklash
+  // Xotirani (history) faqat davomiy savollar uchun yengil kontekst sifatida yuklaymiz
+  // (Avvalgi noto'g'ri bot kartalari yoki takroriy xabarlar hech qachon model turn sifatida berilmaydi!)
+  let oldingiKontekst = "";
   if (chatId) {
     try {
       const { data: history } = await getSupabase()
         .from("ai_chat_history")
         .select("role, content")
         .eq("chat_id", chatId)
+        .eq("role", "user")
         .order("created_at", { ascending: false })
-        .limit(2);
-      
+        .limit(3);
+
       if (history && history.length > 0) {
-        history.reverse().forEach((msg: any) => {
-          contents.push({ role: msg.role, parts: [{ text: msg.content }] });
-        });
+        const normCurrent = (matn || "").trim().toLowerCase();
+        const foydali = history
+          .map((m: any) => String(m.content || "").trim())
+          .filter((c: string) => c && c !== "[Ovozli xabar yuborildi]" && c.toLowerCase() !== normCurrent);
+        if (foydali.length > 0) {
+          oldingiKontekst = `\nOldingi foydalanuvchi xabari (FAQAT joriy xabar uning davomi bo'lgan savol bo'lsa hisobga oling; agar joriy xabar alohida yangi tranzaksiya bo'lsa mutlaqo e'tibor bermang): "${foydali[0]}"`;
+        }
       }
     } catch (err) {
       console.error("Xotirani yuklashda xato:", err);
@@ -486,12 +528,14 @@ O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
         data: audioBase64,
       },
     });
-    currentParts.push({ text: "DIQQAT: Javobingiz orqadagi xotirani hisobga olgan holda faqat toza JSON bo'lishi shart!" });
+    currentParts.push({
+      text: `Ushbu ovozli xabarni diqqat bilan tinglang, "transkript" maydoniga o'zbekcha matnini yozing va FAQAT toza JSON formatida javob bering.${oldingiKontekst}`,
+    });
   } else if (matn) {
-    currentParts.push({ text: `Foydalanuvchi xabari: "${matn}"\n\nDIQQAT: Javobingiz orqadagi xotirani hisobga olgan holda faqat toza JSON bo'lishi shart!` });
+    currentParts.push({
+      text: `Foydalanuvchi xabari: "${matn}"\n\nFAQAT toza JSON formatida javob bering.${oldingiKontekst}`,
+    });
   }
 
-  contents.push({ role: "user", parts: currentParts });
-
-  return await callGeminiJson(contents);
+  return await callGeminiJson([{ role: "user", parts: currentParts }], prompt);
 }
