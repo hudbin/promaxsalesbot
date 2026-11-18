@@ -4,28 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 export const BOT_TOKEN = process.env.BOT_TOKEN || "";
 export const SUPABASE_URL = process.env.SUPABASE_URL || "";
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-export const GEMINI_API_KEYS = Array.from(
-  new Set(
-    [
-      ...(process.env.GEMINI_API_KEYS || "").split(","),
-      process.env.GEMINI_API_KEY,
-      process.env.GEMINI_API_KEY_BACKUP,
-    ]
-      .map((k) => k?.trim())
-      .filter(Boolean)
-  )
-) as string[];
-export const GEMINI_API_KEY = GEMINI_API_KEYS[0] || "";
-export const GEMINI_MODELS = Array.from(
-  new Set(
-    [
-      "gemini-3.8-flash",
-      "gemini-3.5-flash",
-      "gemini-3.5-flash-lite",
-      process.env.GEMINI_MODEL,
-    ].filter((m): m is string => Boolean(m) && !m.includes("2.0") && !m.includes("2.5") && !m.includes("1.5"))
-  )
-);
+export const GEMINI_API_KEY = (
+  process.env.GEMINI_API_KEY ||
+  (process.env.GEMINI_API_KEYS || "").split(",")[0] ||
+  ""
+).trim();
+export const GEMINI_API_KEYS = GEMINI_API_KEY ? [GEMINI_API_KEY] : [];
+export const GEMINI_MODEL = "gemini-3.8-flash";
+export const GEMINI_MODELS = [GEMINI_MODEL];
 export const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID || "";
 export const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "580858047";
 export const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "promax2026";

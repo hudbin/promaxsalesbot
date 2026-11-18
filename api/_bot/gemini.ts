@@ -1,65 +1,48 @@
-import { GEMINI_API_KEYS, GEMINI_API_KEY, GEMINI_MODELS, getSupabase } from "./config";
+import { GEMINI_API_KEY, GEMINI_MODEL, getSupabase } from "./config";
 
 // -----------------------------------------------------------------------------
-// GEMINI API GA SO'ROV YUBORISH (Ko'p akkauntli va zaxira modellar bilan)
+// GEMINI API GA SO'ROV YUBORISH (Yagona barqaror model va yagona pullik API kalit)
 // -----------------------------------------------------------------------------
 export async function callGeminiRaw(
   contents: any[]
 ): Promise<{ ok: boolean; text?: string; error?: string }> {
-  if (GEMINI_API_KEYS.length === 0) {
+  if (!GEMINI_API_KEY) {
     return {
       ok: false,
       error: "Google Gemini API kaliti (GEMINI_API_KEY) kiritilmagan. Iltimos, Environment Variables ga qo'shing.",
     };
   }
 
-  let oxirgiXato = "";
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents }),
+    });
 
-  // 1-bosqich: Eng yaxshi modeldan boshlab tekshiramiz
-  for (const model of GEMINI_MODELS) {
-    // 2-bosqich: Har bir model uchun barcha kalitlarni sinab ko'ramiz
-    for (let keyIndex = 0; keyIndex < GEMINI_API_KEYS.length; keyIndex++) {
-      const apiKey = GEMINI_API_KEYS[keyIndex];
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents }),
-        });
-
-        const data = await resp.json();
-        if (!resp.ok || data?.error) {
-          const errMsg = data?.error?.message || JSON.stringify(data?.error || data);
-          if (!oxirgiXato || resp.status !== 404) {
-            oxirgiXato = errMsg;
-          }
-          console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) xato berdi (${resp.status}): ${errMsg}`);
-          if (resp.status === 404 || resp.status === 400) {
-            break;
-          }
-          continue;
-        }
-
-        const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
-        const textPart =
-          [...parts].reverse().find((p: any) => typeof p?.text === "string" && !p?.thought) ||
-          parts.find((p: any) => typeof p?.text === "string");
-        const javob = textPart?.text;
-        if (javob) {
-          return { ok: true, text: javob };
-        }
-      } catch (e: any) {
-        oxirgiXato = e?.message || "Ulanish xatosi";
-        console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) ulanish xatosi:`, oxirgiXato);
-      }
+    const data = await resp.json();
+    if (!resp.ok || data?.error) {
+      const errMsg = data?.error?.message || JSON.stringify(data?.error || data);
+      console.error(`[Gemini Xato] Model ${GEMINI_MODEL} (${resp.status}): ${errMsg}`);
+      return { ok: false, error: errMsg };
     }
-  }
 
-  return {
-    ok: false,
-    error: oxirgiXato || "Barcha Gemini API kalitlari va zaxira modellari band yoki limit tugagan.",
-  };
+    const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
+    const textPart =
+      [...parts].reverse().find((p: any) => typeof p?.text === "string" && !p?.thought) ||
+      parts.find((p: any) => typeof p?.text === "string");
+    const javob = textPart?.text;
+    if (javob) {
+      return { ok: true, text: javob };
+    }
+
+    return { ok: false, error: "Modeldan bo'sh javob qaytdi." };
+  } catch (e: any) {
+    const errMsg = e?.message || "Ulanish xatosi";
+    console.error(`[Gemini Tarmoq Xatosi] Model ${GEMINI_MODEL}:`, errMsg);
+    return { ok: false, error: errMsg };
+  }
 }
 
 // JSON qaytaruvchi yordamchi
@@ -110,27 +93,22 @@ export async function geminiTahlil(
     };
   }
 
-  // Hisoblarni bazadan olish
-  let hisoblarRoyxatiText = "";
+  // Hisoblar va chiqim kategoriyalarini bazadan parallel olish (tezlik uchun)
+  let hisoblarRoyxatiText = "Hisoblar topilmadi.";
+  let mavjudKategoriyalarText = "Ovqatlanish, Taksi, Elektr, Ijara, Oylik, Xo'jalik, Shaxsiy";
   try {
-    const { data: hisoblar } = await getSupabase().from("hisoblar").select("id, nom").eq("faol", true);
+    const db = getSupabase();
+    const [hisoblarRes, rKategoriyalarRes] = await Promise.all([
+      db.from("hisoblar").select("id, nom").eq("faol", true),
+      db.from("rasxodlar").select("kategoriya").eq("holat", "faol").limit(300),
+    ]);
+
+    const hisoblar = hisoblarRes?.data;
     if (hisoblar && hisoblar.length > 0) {
       hisoblarRoyxatiText = hisoblar.map((h: any, i: number) => `${i + 1}. ${h.nom} (ID: ${h.id})`).join("\n");
-    } else {
-      hisoblarRoyxatiText = "Hisoblar topilmadi.";
     }
-  } catch (err) {
-    hisoblarRoyxatiText = "Hisoblar ro'yxatini olishda xato.";
-  }
 
-  // Chiqim (rasxod) kategoriyalarini bazadan olish
-  let mavjudKategoriyalarText = "";
-  try {
-    const { data: rKategoriyalar } = await getSupabase()
-      .from("rasxodlar")
-      .select("kategoriya")
-      .eq("holat", "faol")
-      .limit(300);
+    const rKategoriyalar = rKategoriyalarRes?.data;
     const katSet = new Set<string>([
       "Ovqatlanish", "Taksi", "Elektr", "Ijara", "Oylik", "Xo'jalik", "Shaxsiy"
     ]);
@@ -143,7 +121,7 @@ export async function geminiTahlil(
     }
     mavjudKategoriyalarText = Array.from(katSet).join(", ");
   } catch (err) {
-    mavjudKategoriyalarText = "Ovqatlanish, Taksi, Elektr, Ijara, Oylik, Xo'jalik";
+    console.error("Bazadan hisob/kategoriyalarni olishda xato:", err);
   }
 
   // Toshkent vaqti bo'yicha joriy sana va vaqtni aniqlash (UTC+5)

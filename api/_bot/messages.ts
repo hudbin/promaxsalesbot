@@ -371,7 +371,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       `🤖 <b>Telegram Bot:</b> ✅ Faol (${botUsername})\n` +
       `👤 <b>Sizning profilingiz:</b> ✅ Ruxsat berilgan (${perm.role === "admin" ? "👑 Admin" : "💼 Sotuvchi"})\n` +
       `🆔 <b>Telegram ID:</b> <code>${senderId}</code>\n` +
-      `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (${GEMINI_API_KEYS.length} ta API kalit, ${GEMINI_MODELS.length} ta zaxira model)` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
+      `🧠 <b>Google Gemini AI:</b> ${isGeminiSet ? `✅ Ulangan (Model: <code>${GEMINI_MODELS[0]}</code>)` : "❌ Kiritilmagan (GEMINI_API_KEY yo'q)"}\n` +
       `🗄 <b>Supabase Baza:</b> ${isSupabaseSet ? "✅ Ulangan" : "❌ Kiritilmagan (SUPABASE_URL yo'q)"}\n` +
       `👥 <b>Guruh xabarnomasi:</b> ${isGroupSet ? `✅ Guruh ID: <code>${GROUP_CHAT_ID}</code>` : "⚠️ Sozlanmagan"}\n\n` +
       (!isGeminiSet ? `⚠️ <i>Gemini AI ishlashi uchun aistudio.google.com dan bepul kalit olib Netlify/Vercel'ga qo'shing.</i>` : `✅ AI ovozli va matnli xabarlarni qabul qilishga tayyor! (Kunlik limitlar himoyalangan)`);
