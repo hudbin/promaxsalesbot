@@ -884,8 +884,32 @@ MUHIM QOIDALAR:
       const draftId = Math.random().toString(36).substring(2, 10);
 
       // Agar amal "rasxod" bo'lib, lekin ichida bir nechta xarajat qaytgan bo'lsa -> "kop_rasxod" ga o'tkazish
-      if (parsedData.amal === "rasxod" && Array.isArray(parsedData.xarajatlar) && parsedData.xarajatlar.length > 1) {
-        parsedData.amal = "kop_rasxod";
+      if (parsedData.amal === "rasxod") {
+        if (Array.isArray(parsedData.xarajatlar) && parsedData.xarajatlar.length > 1) {
+          parsedData.amal = "kop_rasxod";
+        } else if (
+          (!Array.isArray(parsedData.xarajatlar) || parsedData.xarajatlar.length === 0) &&
+          Array.isArray(parsedData.qatorlar) &&
+          parsedData.qatorlar.length > 1
+        ) {
+          parsedData.amal = "kop_rasxod";
+          parsedData.xarajatlar = parsedData.qatorlar.map((it: any) => ({
+            kategoriya: it.nom || parsedData.kategoriya || "Xarajat",
+            summa: parseAmount(it.summa) || (parseAmount(it.soni) || 1) * parseAmount(it.narx),
+            hisob_id: parsedData.hisob_id || null,
+            izoh: it.nom || "",
+          }));
+        }
+      }
+
+      if (parsedData.amal === "kop_rasxod" && Array.isArray(parsedData.xarajatlar)) {
+        parsedData.xarajatlar = parsedData.xarajatlar.map((it: any) => ({
+          ...it,
+          summa:
+            parseAmount(it.summa) ||
+            parseAmount(it.jami_summa) ||
+            extractAmountFromText(String(it.izoh || it.kategoriya || "")),
+        }));
       }
 
       // Xavfsiz avto-tuzatish: Matn yoki ovozli transkriptda "xarajat/rasxod/chiqim/shaxsiyga" bo'lib, foydalanuvchi xabarida "qarz" bo'lmasa -> "rasxod"
@@ -923,6 +947,42 @@ MUHIM QOIDALAR:
           izohMatni = izohMatni ? `${izohMatni} (${parsedData.izoh})` : parsedData.izoh;
         }
         parsedData.izoh = izohMatni || effectiveText || "Xarajat";
+      }
+
+      // Agar bir nechta qatorda alohida xarajatlar yozilgan bo'lsa (masalan: Masjid. 357000 \n Gazchiga. 500000 \n Diezel. 1200000),
+      // lekin AI "rasxod" deb qaytargan bo'lsa -> avtomatik "kop_rasxod" ga o'tkazamiz
+      if (
+        parsedData.amal === "rasxod" &&
+        (!Array.isArray(parsedData.xarajatlar) || parsedData.xarajatlar.length <= 1) &&
+        effectiveText
+      ) {
+        const rawLines = effectiveText
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l && !/^(xarajat|rasxod|chiqim)[.:!]?$/i.test(l));
+        if (rawLines.length >= 2) {
+          const lineItems: any[] = [];
+          for (const line of rawLines) {
+            const amt = extractAmountFromText(line);
+            const label = line
+              .replace(/(?:\$\s*)?\d+(?:[ \u00a0.,]\d+)*\s*(?:mln|million|ming|so['’`]?m|som|uzs|usd|\$)?/gi, "")
+              .replace(/^[-•*.\s:]+|[-•*.\s:]+$/g, "")
+              .trim();
+            if (amt > 0 && label && !/^(naqd|plastik|karta|perechisleniya)$/i.test(label)) {
+              lineItems.push({
+                kategoriya: label,
+                summa: amt,
+                hisob_id: parsedData.hisob_id || null,
+                izoh: label,
+              });
+            }
+          }
+          if (lineItems.length >= 2) {
+            parsedData.amal = "kop_rasxod";
+            parsedData.xarajatlar = lineItems;
+            parsedData.jami_summa = lineItems.reduce((acc, it) => acc + it.summa, 0);
+          }
+        }
       }
 
       // Summa normalizatsiyasi: AI matnli summa qaytargan yoki jami_summa/summa maydonlarini almashtirgan bo'lsa

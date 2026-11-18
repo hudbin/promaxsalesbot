@@ -3,15 +3,8 @@ import { GEMINI_API_KEYS, GEMINI_API_KEY, GEMINI_MODELS, getSupabase } from "./c
 // -----------------------------------------------------------------------------
 // GEMINI API GA SO'ROV YUBORISH (Ko'p akkauntli va zaxira modellar bilan)
 // -----------------------------------------------------------------------------
-export interface GeminiCallOptions {
-  systemPrompt?: string;
-  jsonMode?: boolean;
-  temperature?: number;
-}
-
 export async function callGeminiRaw(
-  contents: any[],
-  options: GeminiCallOptions = {}
+  contents: any[]
 ): Promise<{ ok: boolean; text?: string; error?: string }> {
   if (GEMINI_API_KEYS.length === 0) {
     return {
@@ -21,19 +14,6 @@ export async function callGeminiRaw(
   }
 
   let oxirgiXato = "";
-
-  const requestBody: Record<string, any> = {
-    contents,
-    generationConfig: {
-      temperature: options.temperature ?? (options.jsonMode ? 0 : 0.2),
-    },
-  };
-  if (options.jsonMode) {
-    requestBody.generationConfig.responseMimeType = "application/json";
-  }
-  if (options.systemPrompt) {
-    requestBody.systemInstruction = { parts: [{ text: options.systemPrompt }] };
-  }
 
   // 1-bosqich: Eng yaxshi modeldan boshlab tekshiramiz
   for (const model of GEMINI_MODELS) {
@@ -45,22 +25,27 @@ export async function callGeminiRaw(
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({ contents }),
         });
 
         const data = await resp.json();
         if (!resp.ok || data?.error) {
           const errMsg = data?.error?.message || JSON.stringify(data?.error || data);
-          oxirgiXato = errMsg;
+          if (!oxirgiXato || resp.status !== 404) {
+            oxirgiXato = errMsg;
+          }
           console.warn(`[Gemini Fallback] Model ${model} (Kalit #${keyIndex + 1}) xato berdi (${resp.status}): ${errMsg}`);
-          // Agar model topilmasa (404) yoki so'rov formati mos kelmasa (400), boshqa kalitlarni behuda aylantirmasdan keyingi modelga o'tamiz
           if (resp.status === 404 || resp.status === 400) {
             break;
           }
           continue;
         }
 
-        const javob = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
+        const textPart =
+          [...parts].reverse().find((p: any) => typeof p?.text === "string" && !p?.thought) ||
+          parts.find((p: any) => typeof p?.text === "string");
+        const javob = textPart?.text;
         if (javob) {
           return { ok: true, text: javob };
         }
@@ -79,10 +64,9 @@ export async function callGeminiRaw(
 
 // JSON qaytaruvchi yordamchi
 export async function callGeminiJson(
-  contents: any[],
-  systemPrompt?: string
+  contents: any[]
 ): Promise<{ ok: boolean; data?: any; error?: string }> {
-  const res = await callGeminiRaw(contents, { systemPrompt, jsonMode: true, temperature: 0 });
+  const res = await callGeminiRaw(contents);
   if (!res.ok || !res.text) {
     return { ok: false, error: res.error };
   }
@@ -507,6 +491,11 @@ O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
 `;
 
   // Har bir xabar alohida va mustaqil tahlil qilinadi (avvalgi xabarlar tarixi aralashtirilmaydi)
+  const contents: any[] = [
+    { role: "user", parts: [{ text: prompt }] },
+    { role: "model", parts: [{ text: "Tushundim. Men FAQAT toza JSON formatida javob beraman. Qolgan narsalarni qo'shmayman." }] },
+  ];
+
   const currentParts: any[] = [];
   if (audioBase64) {
     const cleanMimeType = (mimeType || "audio/ogg").split(";")[0].trim();
@@ -525,5 +514,7 @@ O'TA MUHIM QOIDALAR (HISOBLAR / KASSA BO'YICHA):
     });
   }
 
-  return await callGeminiJson([{ role: "user", parts: currentParts }], prompt);
+  contents.push({ role: "user", parts: currentParts });
+
+  return await callGeminiJson(contents);
 }
