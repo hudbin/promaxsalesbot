@@ -396,6 +396,22 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       const autoTableModule = await import("jspdf-autotable");
       const autoTable = (autoTableModule.default || autoTableModule) as any;
 
+      const pdfSafeText = (text: string | null | undefined): string => {
+        if (!text) return "";
+        const map: Record<string, string> = {
+          А: "A", Б: "B", В: "V", Г: "G", Д: "D", Е: "E", Ё: "Yo", Ж: "J", З: "Z", И: "I", Й: "Y",
+          К: "K", Л: "L", М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T", У: "U", Ф: "F",
+          Х: "X", Ц: "Ts", Ч: "Ch", Ш: "Sh", Щ: "Sh", Ъ: "'", Ы: "I", Ь: "", Э: "E", Ю: "Yu", Я: "Ya",
+          Ў: "O'", Қ: "Q", Ғ: "G'", Ҳ: "H",
+          а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "j", з: "z", и: "i", й: "y",
+          к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
+          х: "x", ц: "ts", ч: "ch", ш: "sh", щ: "sh", ъ: "'", ы: "i", ь: "", э: "e", ю: "yu", я: "ya",
+          ў: "o'", қ: "q", ғ: "g'", ҳ: "h",
+          "«": '"', "»": '"', "“": '"', "”": '"', "‘": "'", "’": "'", "—": "-", "–": "-", "№": "No",
+        };
+        return String(text).replace(/[\u0400-\u04FF«»“”‘’—–№]/g, (ch) => (map[ch] !== undefined ? map[ch] : ch));
+      };
+
       // Mijozning barcha savdo, to'lov va vozvratlarini to'liq yuklash
       const [{ data: barchaSavdolar }, { data: barchaTolovlar }, { data: barchaVozvratlar }] = await Promise.all([
         supabase
@@ -422,8 +438,14 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       let jamiSavdoUsd = 0;
       let jamiTolandiUzs = 0;
       let jamiTolandiUsd = 0;
+      let davrdagiQarzSavdoUzs = 0;
+      let davrdagiQarzSavdoUsd = 0;
+      let davrdagiQarzTolovUzs = 0;
+      let davrdagiQarzTolovUsd = 0;
       let jamiVozvratUzs = 0;
       let jamiVozvratUsd = 0;
+      let jamiVozvratQarzUzs = 0;
+      let jamiVozvratQarzUsd = 0;
 
       if (barchaSavdolar) {
         barchaSavdolar.forEach((s: any) => {
@@ -434,9 +456,11 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           if (val === "USD") {
             jamiSavdoUsd += jami;
             jamiTolandiUsd += tolandi;
+            davrdagiQarzSavdoUsd += qarz;
           } else {
             jamiSavdoUzs += jami;
             jamiTolandiUzs += tolandi;
+            davrdagiQarzSavdoUzs += qarz;
           }
           const qatorMatn =
             Array.isArray(s.qatorlar) && s.qatorlar.length > 0
@@ -445,18 +469,19 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                     const qSoni = Number(q.soni || 1);
                     const qNarx = Number(q.narx || 0);
                     const qSum = Number(q.summa || qSoni * qNarx);
-                    return `${q.tovar_nomi}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
+                    return `${pdfSafeText(q.tovar_nomi)}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
                   })
                   .join("; ")
               : "";
+          const joyidaTolovMatn = tolandi > 0 ? ` (Joyida to'landi: ${pul(tolandi)} ${val})` : "";
           hodisalar.push({
             sana: s.sana_vaqt,
             turi: "Savdo",
-            tafsilot: `Savdo #${s.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}`,
-            izoh: s.izoh || "-",
+            tafsilot: pdfSafeText(`Savdo #${s.raqam || ""}${qatorMatn ? ` - ${qatorMatn}` : ""}${joyidaTolovMatn}`),
+            izoh: pdfSafeText(s.izoh || "-"),
             valyuta: val,
             berilganQarz: qarz,
-            tolanganQarz: tolandi,
+            tolanganQarz: 0,
           });
         });
       }
@@ -467,14 +492,16 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           const val = t.valyuta || "UZS";
           if (val === "USD") {
             jamiTolandiUsd += summa;
+            davrdagiQarzTolovUsd += summa;
           } else {
             jamiTolandiUzs += summa;
+            davrdagiQarzTolovUzs += summa;
           }
           hodisalar.push({
             sana: t.sana_vaqt,
             turi: "Qarz to'lovi",
-            tafsilot: `Qarz to'landi (${t.tolov_turi || "naqd"})`,
-            izoh: t.izoh || "-",
+            tafsilot: pdfSafeText(`Qarz to'landi (${t.tolov_turi || "naqd"})`),
+            izoh: pdfSafeText(t.izoh || "-"),
             valyuta: val,
             berilganQarz: 0,
             tolanganQarz: summa,
@@ -490,8 +517,10 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           const val = v.valyuta || "UZS";
           if (val === "USD") {
             jamiVozvratUsd += jami;
+            jamiVozvratQarzUsd += qarzdan;
           } else {
             jamiVozvratUzs += jami;
+            jamiVozvratQarzUzs += qarzdan;
           }
 
           const qatorMatn =
@@ -501,7 +530,7 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
                     const qSoni = Number(q.soni || 1);
                     const qNarx = Number(q.narx || 0);
                     const qSum = Number(q.summa || qSoni * qNarx);
-                    return `${q.tovar_nomi}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
+                    return `${pdfSafeText(q.tovar_nomi)}: ${qSoni} dona x ${pul(qNarx)} = ${pul(qSum)} ${val}`;
                   })
                   .join("; ")
               : "";
@@ -511,8 +540,8 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           hodisalar.push({
             sana: v.sana_vaqt,
             turi: "Vozvrat",
-            tafsilot: `Vozvrat #${v.raqam || ""}${qatorMatn ? ` — ${qatorMatn}` : ""}${naqdQoshimcha}`,
-            izoh: v.izoh || "-",
+            tafsilot: pdfSafeText(`Vozvrat #${v.raqam || ""}${qatorMatn ? ` - ${qatorMatn}` : ""}${naqdQoshimcha}`),
+            izoh: pdfSafeText(v.izoh || "-"),
             valyuta: val,
             berilganQarz: 0,
             tolanganQarz: qarzdan,
@@ -522,13 +551,18 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
 
       hodisalar.sort((a, b) => new Date(a.sana).getTime() - new Date(b.sana).getTime());
 
+      const qarzUzs = Number(mijoz.qarz_uzs || 0);
+      const qarzUsd = Number(mijoz.qarz_usd || 0);
+      const boshlangichQarzUzs = Math.max(0, qarzUzs - davrdagiQarzSavdoUzs + davrdagiQarzTolovUzs + jamiVozvratQarzUzs);
+      const boshlangichQarzUsd = Math.max(0, qarzUsd - davrdagiQarzSavdoUsd + davrdagiQarzTolovUsd + jamiVozvratQarzUsd);
+
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
       // Sarlavha
       doc.setFillColor(30, 41, 59);
       doc.rect(0, 0, 210, 26, "F");
 
-      doc.setFontSize(15);
+      doc.setFontSize(14);
       doc.setTextColor(255, 255, 255);
       doc.text("PROMAX STORE - MIJOZ QARZ HISOBOTI (AKT-SVERKA)", 14, 12);
 
@@ -539,22 +573,19 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
 
       // Mijoz kartasi
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, 31, 182, 32, 2, 2, "F");
+      doc.roundedRect(14, 31, 182, 34, 2, 2, "F");
       doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(14, 31, 182, 32, 2, 2, "S");
+      doc.roundedRect(14, 31, 182, 34, 2, 2, "S");
 
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setTextColor(15, 23, 42);
-      doc.text(`Mijoz: ${mijoz.nom || "Noma'lum"}`, 18, 38);
+      doc.text(`Mijoz: ${pdfSafeText(mijoz.nom || "Noma'lum")}`, 18, 38);
 
       doc.setFontSize(8.5);
       doc.setTextColor(71, 85, 105);
-      doc.text(`Telefon: ${mijoz.telefon || "Kiritilmagan"}`, 18, 45);
-      doc.text(`Telegram: ${mijoz.telegram || "Mavjud emas"}`, 18, 51);
-      doc.text(`Manzil: ${mijoz.manzil || "Ko'rsatilmagan"}`, 18, 57);
-
-      const qarzUzs = Number(mijoz.qarz_uzs || 0);
-      const qarzUsd = Number(mijoz.qarz_usd || 0);
+      doc.text(`Telefon: ${pdfSafeText(mijoz.telefon || "Kiritilmagan")}`, 18, 45);
+      doc.text(`Telegram: ${pdfSafeText(mijoz.telegram || "Mavjud emas")}`, 18, 51);
+      doc.text(`Manzil: ${pdfSafeText(mijoz.manzil || "Ko'rsatilmagan")}`, 18, 57);
 
       doc.setFontSize(8.5);
       doc.setTextColor(100, 116, 139);
@@ -563,12 +594,60 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
       doc.setFontSize(11);
       doc.setTextColor(185, 28, 28);
       doc.text(`UZS: ${pul(qarzUzs)} so'm`, 120, 46);
-      doc.text(`USD: $${pul(qarzUsd)}`, 120, 54);
+      let nextY = 52;
+      if (qarzUsd > 0) {
+        doc.text(`USD: $${pul(qarzUsd)}`, 120, nextY);
+        nextY += 6;
+      }
+      if (boshlangichQarzUzs > 0 || boshlangichQarzUsd > 0) {
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        const boshMatn = boshlangichQarzUzs > 0
+          ? `${pul(boshlangichQarzUzs)} UZS` + (boshlangichQarzUsd > 0 ? ` / $${pul(boshlangichQarzUsd)}` : "")
+          : `$${pul(boshlangichQarzUsd)}`;
+        doc.text(`Avvalgi qoldiq: ${boshMatn}`, 120, nextY);
+      }
 
-      // Jadval
-      const tableRows = hodisalar.map((h, idx) => {
+      // Jadval va har bir jarayon uchun joriy qarz qoldig'i
+      const tableRows: any[] = [];
+      let joriyUzs = boshlangichQarzUzs;
+      let joriyUsd = boshlangichQarzUsd;
+      const hasBoshlangichQator = Boolean(boshlangichQarzUzs > 0 || boshlangichQarzUsd > 0);
+
+      const formatJoriyQarz = (uzs: number, usd: number, rowVal: string) => {
+        if (rowVal === "USD") {
+          return usd > 0 || uzs === 0 ? `$${pul(usd)}` : `${pul(uzs)}`;
+        }
+        if (uzs > 0 && usd > 0) {
+          return `${pul(uzs)} / $${pul(usd)}`;
+        }
+        return `${pul(uzs)}`;
+      };
+
+      if (hasBoshlangichQator) {
+        const boshVal = boshlangichQarzUsd > 0 && boshlangichQarzUzs === 0 ? "USD" : "UZS";
+        tableRows.push([
+          "•",
+          "Boshlang'ich",
+          "Boshlang'ich qoldiq",
+          "Avvalgi (boshlang'ich) qarz qoldig'i",
+          "-",
+          boshVal,
+          "-",
+          "-",
+          formatJoriyQarz(joriyUzs, joriyUsd, boshVal),
+        ]);
+      }
+
+      hodisalar.forEach((h, idx) => {
+        if (h.valyuta === "USD") {
+          joriyUsd = Math.max(0, joriyUsd + Number(h.berilganQarz || 0) - Number(h.tolanganQarz || 0));
+        } else {
+          joriyUzs = Math.max(0, joriyUzs + Number(h.berilganQarz || 0) - Number(h.tolanganQarz || 0));
+        }
+
         const sanaFormatted = new Date(h.sana).toLocaleDateString("ru-RU") + " " + new Date(h.sana).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-        return [
+        tableRows.push([
           String(idx + 1),
           sanaFormatted,
           h.turi,
@@ -577,53 +656,79 @@ export function MijozDetailsModal({ mijoz, onClose, onTolovOchish, onMijozYangil
           h.valyuta,
           h.berilganQarz > 0 ? `${pul(h.berilganQarz)}` : "-",
           h.tolanganQarz > 0 ? `${pul(h.tolanganQarz)}` : "-",
-        ];
+          formatJoriyQarz(joriyUzs, joriyUsd, h.valyuta),
+        ]);
       });
 
       const vozvratQator = jamiVozvratUzs > 0 ? ` | Vozvrat: ${pul(jamiVozvratUzs)}` : "";
+      const jamiAyirildiUzs = davrdagiQarzTolovUzs + jamiVozvratQarzUzs;
 
       tableRows.push([
         "",
         "JAMI:",
         `${hodisalar.length} ta amal`,
         `Savdolar: ${pul(jamiSavdoUzs)} | To'lov: ${pul(jamiTolandiUzs)}${vozvratQator} UZS`,
-        "",
-        "",
         "Qolgan qarz:",
-        `${pul(qarzUzs)} UZS / $${pul(qarzUsd)}`,
+        "UZS",
+        davrdagiQarzSavdoUzs > 0 ? `+${pul(davrdagiQarzSavdoUzs)}` : "-",
+        jamiAyirildiUzs > 0 ? `-${pul(jamiAyirildiUzs)}` : "-",
+        `${pul(qarzUzs)} UZS` + (qarzUsd > 0 ? ` / $${pul(qarzUsd)}` : ""),
       ]);
 
       autoTable(doc, {
-        startY: 68,
-        head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Mahsulotlar", "Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi (-)"]],
+        startY: 70,
+        margin: { left: 14, right: 14 },
+        head: [["No", "Sana / Vaqt", "Amal turi", "Tafsilot / Mahsulotlar", "Izoh", "Valyuta", "Qarzga berildi (+)", "Qaytarildi / Chegirildi (-)", "Joriy qarz"]],
         body: tableRows,
         theme: "grid",
         headStyles: {
           fillColor: [79, 70, 229],
           textColor: 255,
           fontStyle: "bold",
-          fontSize: 7.5,
+          fontSize: 6.8,
+          cellPadding: 1.5,
           halign: "center",
+          valign: "middle",
         },
         styles: {
-          fontSize: 7,
-          cellPadding: 1.8,
+          fontSize: 6.8,
+          cellPadding: 1.5,
           textColor: [30, 41, 59],
+          valign: "middle",
         },
         columnStyles: {
           0: { cellWidth: 7, halign: "center" },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 18, fontStyle: "bold" },
-          3: { cellWidth: 46 },
-          4: { cellWidth: 32 },
-          5: { cellWidth: 12, halign: "center" },
-          6: { cellWidth: 21, halign: "right", textColor: [185, 28, 28] },
-          7: { cellWidth: 21, halign: "right", textColor: [16, 149, 90] },
+          1: { cellWidth: 21 },
+          2: { cellWidth: 16, fontStyle: "bold" },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 13, halign: "center" },
+          6: { cellWidth: 20, halign: "right", textColor: [185, 28, 28] },
+          7: { cellWidth: 20, halign: "right", textColor: [16, 149, 90] },
+          8: { cellWidth: 20, halign: "right", fontStyle: "bold", textColor: [15, 23, 42] },
         },
         didParseCell: (data: any) => {
-          if (data.row.index === tableRows.length - 1) {
+          if (data.section !== "body") return;
+          if (data.row.index === tableRows.length - 1 || (hasBoshlangichQator && data.row.index === 0)) {
             data.cell.styles.fontStyle = "bold";
             data.cell.styles.fillColor = [241, 245, 249];
+            if (data.row.index === tableRows.length - 1 && data.column.index === 8) {
+              data.cell.styles.textColor = [185, 28, 28];
+            }
+          } else {
+            const turi = data.row.raw?.[2];
+            if (data.column.index === 2) {
+              if (turi === "Vozvrat") {
+                data.cell.styles.textColor = [147, 51, 234];
+                data.cell.styles.fontStyle = "bold";
+              } else if (turi === "Qarz to'lovi") {
+                data.cell.styles.textColor = [16, 149, 90];
+                data.cell.styles.fontStyle = "bold";
+              }
+            }
+            if (data.column.index === 7 && turi === "Vozvrat") {
+              data.cell.styles.textColor = [147, 51, 234];
+            }
           }
         },
       });
