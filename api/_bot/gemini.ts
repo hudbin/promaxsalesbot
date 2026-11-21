@@ -147,7 +147,7 @@ BUGUNGI REAL KALENDAR SANASI VA VAQTI (O'zbekiston / Toshkent vaqti UTC+5):
 
 Xabardan tranzaksiyani aniqlab, FAQAT toza JSON formatida javob bering. Hech qanday markdown (\`\`\`json) yoki ortiqcha so'z qo'shmang!
 
-Quyidagi 17 ta amal turidan birini aniqlang:
+Quyidagi 18 ta amal turidan birini aniqlang:
 1. "savdo": Mahsulot sotildi yoki mijozga tovar berildi.
 2. "tovar_vozvrat": Mijoz tovar qaytardi / vozvrat qildi yoki kam berilgan tovar sabab qarzini kamaytirish/korrektirovka so'ralganda (masalan: "Akrom aka 50 ta Hudi vozvrat qildi", "Bobojon og'adan 20 ta 3008 qaytdi", "Ali 10 ta tovar kam berilgan ekan qarzidan ayirib qo'y", "Vali 10 ta mahsulot qaytardi qarzidan ayirilsin").
 3. "rasxod": Yagona xarajat qilindi (masalan: "Obedga 60 ming ketdi").
@@ -161,10 +161,11 @@ Quyidagi 17 ta amal turidan birini aniqlang:
 11. "qarz_pdf": Mijozlarning qarzdorlik ro'yxati yoki bitta mijozning akt-sverkasini PDF hujjat shaklida so'raganda (masalan: "qarzdorlar ro'yxati pdf", "Ali akt sverka fayl", "Vali qarz hujjati").
 12. "qarz_excel": Qarzdor mijozlar ro'yxatini Excel (.xlsx) fayl shaklida so'raganda (masalan: "qarzdor mijozlar hisoboti excel", "qarzdorlar excel", "qarzlar excel fayli", "nasiyalar excel jadvali").
 13. "tashqi_qarz_pdf": Bizning qarzlarimiz (hamkorlar/tanishlar bilan qarz balansi) yoki biror sherik bilan hisob-kitobni PDF formatida so'raganda (masalan: "bizning qarzlar pdf", "tashqi qarzlar ro'yxati pdf", "Akmal aka bilan hisob-kitob fayli", "hamkorlar bilan akt-sverka pdf").
-14. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni PDF hujjat shaklida so'raganda (masalan: "bugungi hisobot pdf", "17-oktyabr hisobotini faylda ber", "kunlik hisobot pdf").
-15. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi"). DIQQAT: Faqat xabarda "qarz" so'zi bo'lgandagina tashqi_qarz tanlanadi! Agar xabarda "xarajat" yoki "rasxod" yoki "chiqim" deb yozilgan bo'lsa (masalan: "Xarajat 3 mln som naqd Abdivohid akamga shaxsiyga yoziladi"), bu QARZ EMAS, balki "rasxod" amali hisoblanadi!
-16. "hisobotlar_menyu": Foydalanuvchi hisobotlar menyusini, hisobotlar ro'yxatini yoki inline hisobotlar tugmalarini ochishni so'raganda (masalan: "hisobotlar", "hisobotlar menyusini och", "menga hisobotlarni ko'rsat", "qanday hisobotlar bor").
-17. "savol": Foydalanuvchi bazadagi holat, hisobot, qarzlar, qoldiqlarga doir ma'lumot so'ramoqda (tranzaksiya emas).
+14. "davr_hisoboti": Foydalanuvchi kunlik, haftalik, oylik yoki maxsus davr (sana oralig'i) hisobotini so'raganda (matn, Excel .xlsx yoki PDF shaklida). Masalan: "noyabr oyi hisobotini ber", "oktyabr oyi hisoboti pdf", "noyabr hisobotini excelda ber", "1-noyabrdan 20-noyabrgacha hisobotni ber", "bugungi hisobotni ber", "kechagi hisobot", "shu hafta savdo hisobotini ber", "noyabr oyi xarajatlar hisobotini ber", "17-oktyabr hisobotini ber".
+15. "kunlik_hisobot_pdf": Kunlik yakuniy hisobotni maxsus PDF hujjat shaklida so'raganda (masalan: "bugungi kunlik hisobot pdf", "17-oktyabr kunlik yakuniy hisobot pdf").
+16. "tashqi_qarz": Tanish/sherik/hamkor bilan shaxsiy qarz oldi-berdisi (masalan: "Ali akadan oylik uchun 63 mln oldim", "Akmaldan 50 mln qarz oldim", "Ali akaga 20 mln qaytardim", "Boburga 10 mln qarz berdim", "Bobur 10 mln qarzini qaytardi"). DIQQAT: Faqat xabarda "qarz" so'zi bo'lgandagina tashqi_qarz tanlanadi! Agar xabarda "xarajat" yoki "rasxod" yoki "chiqim" deb yozilgan bo'lsa (masalan: "Xarajat 3 mln som naqd Abdivohid akamga shaxsiyga yoziladi"), bu QARZ EMAS, balki "rasxod" amali hisoblanadi!
+17. "hisobotlar_menyu": Foydalanuvchi aniq davr/sana aytmasdan faqat hisobotlar menyusini, hisobotlar ro'yxatini yoki inline hisobotlar tugmalarini ochishni so'raganda (masalan: "hisobotlar", "hisobotlar menyusini och", "menga hisobotlarni ko'rsat", "qanday hisobotlar bor").
+18. "savol": Foydalanuvchi bazadagi holat, qoldiqlar, mijoz qarzi yoki analitik savol so'ramoqda (tranzaksiya emas).
 
 JSON strukturasi "rasxod" (Yagona xarajat / chiqim) amali uchun:
 {
@@ -301,6 +302,35 @@ JSON strukturasi "tashqi_qarz_pdf" amali uchun:
   "sana_boshlanish": "YYYY-MM-DD formatidagi boshlanish sanasi yoki null",
   "sana_tugash": "YYYY-MM-DD formatidagi tugash sanasi yoki null"
 }
+
+JSON strukturasi "davr_hisoboti" amali uchun (Kunlik, haftalik, oylik yoki maxsus davr hisoboti so'ralganda):
+{
+  "amal": "davr_hisoboti",
+  "transkript": "Ovozli xabar bo'lsa so'zma-so'z o'zbekcha matni, matn bo'lsa foydalanuvchi matni",
+  "hisobot_turi": "xulosa" | "savdo" | "rasxod" | "qarz" | "naqd" | "plastik",
+  "sana_boshlanish": "YYYY-MM-DD formatidagi boshlanish sanasi",
+  "sana_tugash": "YYYY-MM-DD formatidagi tugash sanasi",
+  "format": "matn" | "xlsx" | "pdf" | "ikkisi"
+}
+
+"davr_hisoboti" QOIDALARI:
+- Foydalanuvchi biror oy, kun, hafta yoki sana oralig'i bo'yicha hisobot so'raganda (masalan: "noyabr oyi hisobotini ber", "oktyabr hisoboti pdf", "1-noyabrdan 20-noyabrgacha hisobotni excelda ber", "bugungi hisobotni ber", "kechagi hisobot", "shu hafta savdo hisobotini ber", "noyabr oyi xarajatlar hisoboti") ALBATTA "amal": "davr_hisoboti" tanlansin!
+- "hisobot_turi":
+  * Umumiy moliyaviy hisobot ("noyabr oyi hisobotini ber", "bugungi hisobot", "oylik hisobot") -> "xulosa"
+  * Savdolar/sotuvlar hisoboti ("noyabr oyi savdo hisoboti") -> "savdo"
+  * Xarajatlar/rasxodlar/chiqimlar hisoboti ("noyabr oyi xarajatlar hisoboti") -> "rasxod"
+  * Nasiya/qarz harakatlari hisoboti ("noyabr oyi qarzlar hisoboti") -> "qarz"
+  * Naqd pul tushumlari hisoboti ("noyabr oyi naqd kirimlar hisoboti") -> "naqd"
+  * Plastik/karta tushumlari hisoboti ("noyabr oyi plastik tushumlar hisoboti") -> "plastik"
+- "sana_boshlanish" va "sana_tugash":
+  * Oy nomi aytilsa (masalan: "noyabr oyi hisobotini ber"): o'sha oyning 1-sanasidan ("2026-11-01") oxirgi sanasigacha ("2026-11-30"). Oktyabr bo'lsa "2026-10-01" dan "2026-10-31" gacha va h.k.
+  * Bitta kun aytilsa ("bugungi hisobot" -> "${bugunStr}" va "${bugunStr}", "kechagi hisobot" -> "${kechaStr}" va "${kechaStr}", "15-noyabr hisoboti" -> "2026-11-15" va "2026-11-15").
+  * Maxsus davr aytilsa ("1-noyabrdan 20-noyabrgacha"): "2026-11-01" va "2026-11-20".
+- "format":
+  * Xabarda "excel", "xlsx", "jadval" so'zi bo'lsa -> "xlsx"
+  * Xabarda "pdf" so'zi bo'lsa -> "pdf"
+  * Xabarda "excel va pdf" yoki "faylda" / "hujjatda" deyilgan bo'lsa -> "ikkisi"
+  * Format aytilmagan bo'lsa (masalan: "noyabr oyi hisobotini ber") -> "matn"
 
 JSON strukturasi "kunlik_hisobot_pdf" amali uchun:
 {

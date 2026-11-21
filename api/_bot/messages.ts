@@ -46,7 +46,14 @@ import {
   sendTashqiQarzlarPdf,
   sendTashqiQarzAktSverkaPdf,
 } from "./pdf";
-import { getHisobotlarKeyboard } from "./reports";
+import {
+  getHisobotlarKeyboard,
+  parseUzbekReportRequest,
+  normalizeReportPeriod,
+  handlePeriodReportRequest,
+  ReportType,
+  ReportFormat,
+} from "./reports";
 import { geminiTahlil, geminiTabiiyJavob } from "./gemini";
 
 export async function handleMessage(message: any, res: any): Promise<any> {
@@ -314,7 +321,7 @@ export async function handleMessage(message: any, res: any): Promise<any> {
   if (isStartCmd) {
     await tgPost("sendMessage", {
       chat_id: chatId,
-      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat va tovar kirimlarini yozishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n\n📊 <i>Hisobotlar menyusi:</i> /hisobotlar\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
+      text: `👋 <b>Assalomu alaykum, ${perm.xodim?.ism || senderName}!</b>\n🎭 Roli: <b>${perm.role === "admin" ? "👑 Administrator" : "💼 Sotuvchi"}</b>\n\nPROMAX Savdo va Kassa tizimi faol. Siz bu yerda:\n🎙 <b>Ovozli xabar</b> yoki matn orqali tezkor savdo, xarajat, tovar kirimlari va hisobotlarni olishingiz mumkin.\n\n<i>Masalan:</i>\n• <i>"Ovqatlanishga 75 ming naqd ketdi"</i> (Xarajat)\n• <i>"Tushlikka 50 ming, taksiga 30 ming, qadoqlashga 100 ming"</i> (Bir nechta xarajat)\n• <i>"Akrom akaga 50 ta velikan berdim 200$ naqd 100$ qarz"</i> (Savdo)\n• <i>"Murodjon aka 500$ qarzini berdi"</i> (Qarz to'lovi)\n• <i>"Akrom akadan 20 ta velikan vozvrat bo'ldi"</i> (Tovar qaytarish)\n• <i>"Do'konga yangi tovar keldi: Velikan uzun, 200 dona, tannarxi 1.5$, sotish narxi 2$"</i> (Tovar kirimi)\n• <i>"Noyabr oyi hisobotini ber"</i> yoki <i>"1-noyabrdan 20-noyabrgacha hisobot excel/pdf"</i> (Davr hisoboti)\n\n📊 <i>Hisobotlar menyusi:</i> /hisobotlar\n⚙️ <i>Tizim holatini tekshirish:</i> /status${perm.role === "admin" ? "\n⚖️ <i>Kassa balansini to'g'irlash:</i> /balans_sozlash\n📦 <i>Tovarlarni optimallashtirish (ranglarni modelga birlashtirish):</i> /optimallashtirish" : ""}`,
       parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
@@ -620,6 +627,17 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       return res.status(200).send("OK");
     }
 
+    // Tezkor tekshiruv: kunlik, oylik yoki maxsus davr hisoboti matn orqali so'ralganda (masalan: "noyabr oyi hisobotini ber")
+    const directReportReq = parseUzbekReportRequest(text);
+    if (directReportReq) {
+      await tgPost("sendChatAction", {
+        chat_id: chatId,
+        action: directReportReq.format === "matn" ? "typing" : "upload_document",
+      });
+      await handlePeriodReportRequest(chatId, perm.role, directReportReq);
+      return res.status(200).send("OK");
+    }
+
     await tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
     geminiRes = await geminiTahlil(text, undefined, undefined, chatId);
   }
@@ -666,8 +684,79 @@ export async function handleMessage(message: any, res: any): Promise<any> {
       return res.status(200).send("OK");
     }
 
+    // 7.0.1 KUNLIK, OYLIK YOKI MAXSUS DAVR HISOBOTI SO'RALGANDA (MATN YOKI OVOZLI XABAR ORQALI)
+    if (parsedData && parsedData.amal === "davr_hisoboti") {
+      const fallbackParsed = parseUzbekReportRequest(effectiveText);
+      const validTypes: ReportType[] = ["naqd", "plastik", "qarz", "savdo", "rasxod", "xulosa"];
+      const rawType = String(parsedData.hisobot_turi || "").toLowerCase() as ReportType;
+      const rType: ReportType = validTypes.includes(rawType)
+        ? rawType
+        : (fallbackParsed?.type || "xulosa");
+
+      const rPeriod =
+        parsedData.sana_boshlanish || parsedData.sana_tugash
+          ? normalizeReportPeriod(parsedData.sana_boshlanish, parsedData.sana_tugash, fallbackParsed?.period)
+          : (fallbackParsed?.period || "bugun");
+
+      let rFormat: ReportFormat = "matn";
+      const rawFmt = String(parsedData.format || "").toLowerCase();
+      if (rawFmt === "xlsx" || rawFmt === "excel") rFormat = "xlsx";
+      else if (rawFmt === "pdf") rFormat = "pdf";
+      else if (rawFmt === "ikkisi" || rawFmt === "both") rFormat = "ikkisi";
+      else if (fallbackParsed?.format) rFormat = fallbackParsed.format;
+
+      if (voice && parsedData.transkript) {
+        await tgPost("sendMessage", {
+          chat_id: chatId,
+          text: `🎙 <i>"${parsedData.transkript}"</i>`,
+          parse_mode: "HTML",
+        });
+      }
+
+      await handlePeriodReportRequest(chatId, perm.role, {
+        type: rType,
+        period: rPeriod,
+        format: rFormat,
+      });
+      return res.status(200).send("OK");
+    }
+
     // 7.1 SAVOL / TAHLIL / SQL SO'ROVI
     if (parsedData && parsedData.amal === "savol") {
+      // Agar foydalanuvchi ovozli yoki matnli xabarda davr hisobotini so'ragan bo'lsa-yu, Gemini uni "savol" deb qaytargan bo'lsa
+      const fallbackReportReq =
+        !parsedData.mijoz_nomi && !parsedData.shaxs_nomi
+          ? parseUzbekReportRequest(effectiveText)
+          : null;
+      if (fallbackReportReq) {
+        if (voice && parsedData.transkript) {
+          await tgPost("sendMessage", {
+            chat_id: chatId,
+            text: `🎙 <i>"${parsedData.transkript}"</i>`,
+            parse_mode: "HTML",
+          });
+        }
+        if (
+          fallbackReportReq.period === "bugun" &&
+          (parsedData.sana_boshlanish || parsedData.sana_tugash)
+        ) {
+          fallbackReportReq.period = normalizeReportPeriod(
+            parsedData.sana_boshlanish,
+            parsedData.sana_tugash,
+            fallbackReportReq.period
+          );
+        }
+        if (parsedData.excel_soraldi && parsedData.pdf_soraldi) {
+          fallbackReportReq.format = "ikkisi";
+        } else if (parsedData.excel_soraldi && fallbackReportReq.format === "matn") {
+          fallbackReportReq.format = "xlsx";
+        } else if (parsedData.pdf_soraldi && fallbackReportReq.format === "matn") {
+          fallbackReportReq.format = "pdf";
+        }
+        await handlePeriodReportRequest(chatId, perm.role, fallbackReportReq);
+        return res.status(200).send("OK");
+      }
+
       await tgPost("sendMessage", {
         chat_id: chatId,
         text: `🔍 <i>Tahlil qilinmoqda...</i>\n<code>${parsedData.izoh || "Ma'lumotlar o'qilmoqda"}</code>`,
